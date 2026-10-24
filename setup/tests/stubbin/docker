@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Test stub for the docker CLI: records calls, never touches anything.
+echo "docker $*" >> "${STUB_DOCKER_LOG:-/dev/null}"
+case "$*" in
+  *"config --services"*) printf '%s\n' setup docker-socket-proxy caddy prometheus netbox; exit 0 ;;
+  *"up -d"*) [ "${STUB_UP_FAIL:-0}" = 1 ] && { echo "stub: up failed"; exit 1; }; echo "stub: up ok"; exit 0 ;;
+esac
+exit 0

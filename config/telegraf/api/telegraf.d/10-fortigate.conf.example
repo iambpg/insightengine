@@ -1,0 +1,18 @@
+# Firewall REST API - example of the pattern (read-only API token in the
+# secret file "fortigate_token"). TODO(Phindani): confirm endpoints, VDOMs and
+# the exact API user/profile for your firewall model before enabling.
+[[inputs.http]]
+  urls = ["https://firewall-1.example.invalid/api/v2/monitor/system/resource/usage?scope=global"]
+  method = "GET"
+  headers = {"Authorization" = "Bearer @{docker_secrets:fortigate_token}"}
+  data_format = "json_v2"
+  tls_ca = "/etc/telegraf/ca.crt"          # use your device CA bundle here if it differs
+  timeout = "20s"
+  interval = "60s"
+  name_override = "firewall_resource"
+  [inputs.http.tags]
+    device_role = "firewall"
+  [[inputs.http.json_v2]]
+    [[inputs.http.json_v2.object]]
+      path = "results"
+      disable_prepend_keys = true

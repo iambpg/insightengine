@@ -1,0 +1,43 @@
+# snmp_exporter generator input. UNTESTED here (needs the snmp-generator image
+# and the vendor MIB files in ./snmp/mibs). TODO(Phindani): choose the MIB set
+# per vendor/device class and add modules below; then run
+#   docker compose --profile tools run --rm snmp-generator
+# which writes snmp/out/snmp.yml. Restart/reload the exporters afterwards
+# (docker compose restart snmp-exporter-1 snmp-exporter-2 ...).
+#
+# Credentials stay out of this file: the exporters expand ${...} from their
+# environment (values come from .env).
+auths:
+  default_auth:
+    version: 2
+    community: ${SNMP_V2_COMMUNITY}
+  v3_auth:
+    version: 3
+    security_level: authPriv
+    username: ${SNMP_V3_USER}
+    password: ${SNMP_V3_AUTH_PASSWORD}
+    auth_protocol: SHA
+    priv_protocol: AES
+    priv_password: ${SNMP_V3_PRIV_PASSWORD}
+
+modules:
+  if_mib:
+    walk: [sysUpTime, interfaces, ifXTable]
+    lookups:
+      - source_indexes: [ifIndex]
+        lookup: ifAlias
+      - source_indexes: [ifIndex]
+        lookup: ifDescr
+      - source_indexes: [ifIndex]
+        lookup: ifName
+    overrides:
+      ifAlias:  {ignore: true}
+      ifDescr:  {ignore: true}
+      ifName:   {ignore: true}
+      ifType:   {type: EnumAsInfo}
+  system:
+    walk: [system]
+  # TODO(Phindani): add vendor/device-class modules here, for example
+  # wireless-controller and access-point tables, once the MIB set is chosen:
+  # wireless_controller:
+  #   walk: [<OIDs or object names from your vendor MIBs>]

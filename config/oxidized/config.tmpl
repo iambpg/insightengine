@@ -1,0 +1,66 @@
+---
+# Rendered by render.sh at start-up into the oxidized-config volume.
+# Placeholders @@LIKE_THIS@@ are replaced from environment / secret files, so
+# no credential lives in this repository file.
+interval: @@INTERVAL@@
+threads: @@THREADS@@
+use_syslog: false
+debug: false
+timeout: 20
+retries: 2
+prompt: !ruby/regexp /^([\w.@()-]+[#>]\s?)$/
+rest: 0.0.0.0:8888
+next_adds_job: false
+vars: {}
+groups: {}
+pid: /tmp/oxidized.pid
+crash:
+  directory: /home/oxidized/.config/oxidized/crashes
+  hostnames: false
+stats:
+  history_size: 10
+input:
+  default: ssh, telnet
+  debug: false
+  ssh:
+    secure: false          # many network devices use legacy host keys; TODO(Phindani): tighten per device class
+output:
+  default: git
+  git:
+    user: oxidized
+    email: oxidized@@@CLIENT_SLUG@@.invalid
+    repo: /home/oxidized/.config/oxidized/oxidized.git
+username: '@@DEVICE_USERNAME@@'
+password: '@@DEVICE_PASSWORD@@'
+model: ios
+source:
+  default: http
+  http:
+    # Device list straight from NetBox (same CA-verified internal endpoint).
+    # Only devices matching OXIDIZED_NETBOX_FILTER are backed up.
+    # TODO(Phindani): NetBox platform names/slugs must match Oxidized model
+    # names (ios, junos, fortios, panos, ...). Verify the 'model' mapping.
+    url: https://caddy:8443/api/dcim/devices/?@@NETBOX_FILTER@@&limit=1000
+    scheme: https
+    secure: true
+    map:
+      name: name
+      model: platform.slug
+      group: site.slug
+    headers:
+      Authorization: 'Token @@NETBOX_TOKEN@@'
+    pagination: true
+    pagination_key_name: next
+hooks:
+  config_changed:
+    type: exec
+    events: [post_store]
+    cmd: '/home/oxidized/.config/oxidized/hooks/notify-change.sh'
+    async: true
+    timeout: 30
+  backup_failed:
+    type: exec
+    events: [node_fail]
+    cmd: '/home/oxidized/.config/oxidized/hooks/notify-change.sh'
+    async: true
+    timeout: 30

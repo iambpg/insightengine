@@ -1,0 +1,33 @@
+# Alertmanager only ever talks to the internal relay. Outside webhook URLs are
+# managed in config/alert-relay/destinations.json (later: by the UI), so this
+# file does not need to change when destinations change.
+global:
+  resolve_timeout: 5m
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+route:
+  receiver: relay
+  group_by: [alertname, client, site, device_role]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: relay
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  - name: relay
+    webhook_configs:
+      - url: http://alert-relay:8080/alert
+        send_resolved: true
+        max_alerts: 100
+
+inhibit_rules:
+  # a down device makes its own SNMP failures redundant
+  - source_matchers: [alertname="DeviceUnreachable"]
+    target_matchers: [alertname="SnmpScrapeFailing"]
+    equal: [hostname]

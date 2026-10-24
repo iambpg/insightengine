@@ -1,0 +1,38 @@
+# Internal-only load balancer in front of the exporter instances.
+# uri_hash keeps a given target (and module) on the same exporter.
+# Instances that are not running (profile "scale" off) are marked unhealthy
+# by the active health check and skipped.
+{
+	auto_https off
+	admin localhost:2019
+}
+
+http://:9116 {
+	reverse_proxy snmp-exporter-1:9116 snmp-exporter-2:9116 snmp-exporter-3:9116 snmp-exporter-4:9116 {
+		lb_policy uri_hash
+		lb_try_duration 3s
+		health_uri /-/healthy
+		health_interval 10s
+		health_timeout 3s
+		fail_duration 30s
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 150s
+		}
+	}
+}
+
+http://:9115 {
+	reverse_proxy blackbox-exporter-1:9115 blackbox-exporter-2:9115 blackbox-exporter-3:9115 {
+		lb_policy uri_hash
+		lb_try_duration 3s
+		health_uri /-/healthy
+		health_interval 10s
+		health_timeout 3s
+		fail_duration 30s
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 30s
+		}
+	}
+}

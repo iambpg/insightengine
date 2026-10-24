@@ -1,0 +1,12 @@
+# Netdisco site settings (example). Copy to deployment.yml and edit.
+# The database connection comes from the NETDISCO_DB_* environment variables in
+# docker-compose.yml, so no credentials belong in this file.
+# TODO(Phindani): add the settings you use today (device_auth, discover_*), taken
+# from your current /opt/netdisco/... configuration. Credentials for devices go
+# in device_auth; keep this file out of git (see .gitignore note in README).
+#
+# schedule:
+#   discoverall:
+#     when:
+#       min: 0
+#       hour: 2

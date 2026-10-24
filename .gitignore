@@ -1,0 +1,15 @@
+# secrets and per-client state - never commit
+.env
+secrets/*
+!secrets/.gitkeep
+certs/*
+!certs/.gitkeep
+data/*
+!data/migration/
+data/migration/*
+!data/migration/.gitkeep
+migration/migrate.conf
+migration/imported/
+*.dump
+*.key
+*.pem

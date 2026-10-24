@@ -1,0 +1,26 @@
+#!/bin/sh
+# Oxidized exec hook. Oxidized sets OX_EVENT, OX_NODE_NAME, OX_NODE_IP,
+# OX_NODE_MODEL, OX_NODE_GROUP, ... in the environment. Hooks do NOT see the
+# container environment, so the two values below were baked in by render.sh.
+# Sends an alert to Alertmanager; the alert-relay forwards it to destinations.
+AM_URL='@@ALERTMANAGER_URL@@'
+CLIENT='@@CLIENT_SLUG@@'
+TTL=${OX_ALERT_TTL_SECONDS:-3600}
+
+esc() { printf '%s' "$1" | tr -d '\000-\037"\\' ; }
+
+case "${OX_EVENT:-}" in
+  post_store) NAME="DeviceConfigChanged"; SEV="warning"; SUM="Configuration changed on $(esc "${OX_NODE_NAME:-unknown}")" ;;
+  node_fail)  NAME="DeviceBackupFailed";  SEV="warning"; SUM="Config backup failed for $(esc "${OX_NODE_NAME:-unknown}")" ;;
+  *) exit 0 ;;
+esac
+
+START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+END=$(date -u -d "@$(( $(date +%s) + TTL ))" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v+1H +%Y-%m-%dT%H:%M:%SZ)
+
+BODY=$(printf '[{"labels":{"alertname":"%s","severity":"%s","client":"%s","hostname":"%s","instance":"%s","model":"%s","source":"oxidized"},"annotations":{"summary":"%s","commit":"%s"},"startsAt":"%s","endsAt":"%s"}]' \
+  "$NAME" "$SEV" "$(esc "$CLIENT")" "$(esc "${OX_NODE_NAME:-}")" "$(esc "${OX_NODE_IP:-}")" "$(esc "${OX_NODE_MODEL:-}")" \
+  "$SUM" "$(esc "${OX_REPO_COMMITREF:-}")" "$START" "$END")
+
+# TODO(Phindani): confirm curl exists in the pinned Oxidized image (else use ruby net/http).
+curl -fsS -m 10 -X POST -H 'Content-Type: application/json' -d "$BODY" "$AM_URL/api/v2/alerts" >/dev/null 2>&1 || exit 0

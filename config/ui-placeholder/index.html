@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>InsightEngine</title></head>
+<body>
+<h1>InsightEngine</h1>
+<p>Placeholder page: the custom UI image has not been installed yet (set IE_UI_IMAGE in .env).</p>
+<p id="s"></p>
+<script>
+// UI CONTRACT (see docs/setup-api.md): on load, ask the setup service for the state and
+// go to /setup/ unless it is "complete". Caddy already enforces this server-side.
+fetch('/setup/state',{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+  if (j.state !== 'complete') { location.replace('/setup/'); }
+  else { document.getElementById('s').textContent = 'Setup state: complete.'; }
+}).catch(function(){ document.getElementById('s').textContent = 'Could not read setup state.'; });
+</script>
+</body></html>
