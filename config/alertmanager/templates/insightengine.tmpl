@@ -1,0 +1,5 @@
+{{/* Titles use the client name carried by Prometheus external_labels
+     (client, client_name) - nothing client-specific is hard-coded. */}}
+{{ define "ie.title" -}}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.client_name }} - {{ .CommonLabels.alertname }}
+{{- end }}

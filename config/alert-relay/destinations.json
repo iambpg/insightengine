@@ -1,0 +1,6 @@
+{
+  "_comment": "PLACEHOLDER. The InsightEngine UI will later write this file. Each destination receives the Alertmanager webhook payload plus 'client', 'client_name' and 'title'. URLs may contain secrets: they are never logged.",
+  "destinations": [
+    {"name": "example-disabled", "enabled": false, "url": "https://hooks.example.invalid/replace-me", "type": "webhook"}
+  ]
+}

@@ -1,0 +1,16 @@
+# Firewall XML API - example of the pattern (API key in secret "panos_api_key").
+# TODO(Phindani): confirm the operational command and response layout.
+[[inputs.http]]
+  urls = ["https://firewall-2.example.invalid/api/?type=op&cmd=%3Cshow%3E%3Csystem%3E%3Cresources%3E%3C/resources%3E%3C/system%3E%3C/show%3E"]
+  method = "GET"
+  headers = {"X-PAN-KEY" = "@{docker_secrets:panos_api_key}"}
+  data_format = "xml"
+  name_override = "firewall_system"
+  timeout = "20s"
+  interval = "60s"
+  [inputs.http.tags]
+    device_role = "firewall"
+  [[inputs.http.xpath]]
+    metric_name = "'firewall_system'"
+    [inputs.http.xpath.fields]
+      resources = "/response/result"

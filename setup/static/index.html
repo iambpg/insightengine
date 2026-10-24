@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InsightEngine - first-run setup</title>
+<link rel="stylesheet" href="/setup/style.css">
+</head>
+<body>
+<main>
+  <h1>InsightEngine first-run setup</h1>
+  <p class="muted">This page has no secrets in it. Database passwords are given as file paths only.</p>
+
+  <section id="s-token">
+    <h2>0. Setup token</h2>
+    <p>Paste the setup token (on the server: <code>secrets/setup/token</code>). It is kept in this page's memory only.</p>
+    <input id="token" type="password" autocomplete="off" placeholder="setup token">
+    <button id="btn-token">Continue</button>
+    <p id="token-msg" class="err"></p>
+  </section>
+
+  <section id="s-status" hidden>
+    <p>State: <strong id="st-state">?</strong> &middot; step: <strong id="st-step">?</strong> &middot; client: <strong id="st-client">?</strong></p>
+    <p id="st-error" class="err"></p>
+  </section>
+
+  <section id="s-client" hidden>
+    <h2>1. Which client is this installation for?</h2>
+    <p>The name is used for container names, labels and titles. Changing it later restarts all containers.</p>
+    <input id="client-name" type="text" maxlength="60" placeholder="Client name">
+    <label id="rename-box" hidden><input id="confirm-downtime" type="checkbox"> I understand monitoring is down for several minutes while containers are recreated</label>
+    <button id="btn-client">Save and apply</button>
+    <p id="client-msg" class="err"></p>
+  </section>
+
+  <section id="s-mode" hidden>
+    <h2>2. New install or move from the old stack?</h2>
+    <label><input type="radio" name="mode" value="new" checked> New install (start empty)</label>
+    <label><input type="radio" name="mode" value="move"> Move from the old stack, keeping data (the old stack is never stopped or deleted)</label>
+    <button id="btn-mode">Continue</button>
+    <p id="mode-msg" class="err"></p>
+  </section>
+
+  <section id="s-migrate" hidden>
+    <h2>3. Move from the old stack</h2>
+    <p>All paths must be absolute and under the read-only old-stack mount. Passwords: give the path of a file that contains the password.</p>
+    <div id="migrate-form"></div>
+    <button id="btn-preflight">Run preflight (read-only)</button>
+    <p id="preflight-summary"></p>
+    <pre id="preflight-log"></pre>
+    <label><input id="confirm-run" type="checkbox"> I confirm: copy the data into the new stack (the old stack is only read)</label>
+    <button id="btn-run" disabled>Run migration</button>
+    <p id="migrate-msg" class="err"></p>
+    <pre id="progress"></pre>
+  </section>
+
+  <section id="s-history" hidden>
+    <h2>4. Prometheus history</h2>
+    <label><input type="radio" name="hist" value="fresh" checked> Start fresh (no old metrics)</label>
+    <label><input type="radio" name="hist" value="keep"> Keep the old history</label>
+    <div id="hist-keep" hidden>
+      <label>Method
+        <select id="hist-method"><option value="snapshot">Snapshot via the old Prometheus admin API</option><option value="dir">Copy complete blocks from the data directory</option></select>
+      </label>
+      <label id="hist-url-l">Old Prometheus URL <input id="hist-url" type="text" placeholder="http://host.docker.internal:9090"></label>
+      <label>Old Prometheus data directory (path) <input id="hist-dir" type="text" placeholder="/opt/old-stack/prometheus/data"></label>
+    </div>
+    <button id="btn-history">Finish</button>
+    <p id="hist-msg" class="err"></p>
+  </section>
+
+  <section id="s-done" hidden>
+    <h2>Setup complete</h2>
+    <p><a href="/">Open InsightEngine</a></p>
+  </section>
+
+  <section id="s-log" hidden>
+    <h2>Log</h2>
+    <button id="btn-log">Refresh log</button>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script src="/setup/app.js"></script>
+</body>
+</html>

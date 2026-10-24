@@ -1,0 +1,54 @@
+# Loki single-binary skeleton. -config.expand-env=true is set in compose, so
+# ${LOKI_RETENTION_PERIOD} comes from .env (default 2160h = 90 days ~ 3 months).
+# Sizes/limits are ESTIMATES for ~20,000 devices; validate before relying on them.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: "2024-04-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: ${LOKI_RETENTION_PERIOD}
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  ingestion_rate_mb: 32
+  ingestion_burst_size_mb: 64
+  per_stream_rate_limit: 8MB
+  per_stream_rate_limit_burst: 32MB
+  max_label_names_per_series: 15
+  max_global_streams_per_user: 50000      # labels are kept low-cardinality on purpose
+  max_query_series: 10000
+  max_entries_limit_per_query: 20000
+  split_queries_by_interval: 1h
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+
+analytics:
+  reporting_enabled: false

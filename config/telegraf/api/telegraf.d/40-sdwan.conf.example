@@ -1,0 +1,3 @@
+# SD-WAN manager API (secret "sdwan_credentials"). Placeholder only - session
+# token flows need a login step; TODO(Phindani): decide between a small
+# exporter service and telegraf inputs.http with a token refresh.

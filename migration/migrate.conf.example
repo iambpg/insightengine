@@ -1,0 +1,19 @@
+# Example for running scripts/migrate.sh by hand (the setup service writes this file
+# for you). Copy to migrate.conf (mode 600). KEY=VALUE only; the file is parsed,
+# never sourced. Passwords are FILE PATHS, never values.
+OLD_COMPOSE_FILE=/opt/old-stack/docker-compose.yml
+OLD_NETBOX_PG_CONTAINER=netbox-postgres
+OLD_NETBOX_CONTAINER=netbox
+OLD_NETBOX_DB=netbox
+OLD_NETBOX_DB_USER=netbox
+OLD_NETBOX_DB_PASSWORD_FILE=/opt/old-stack/secrets/netbox_db_password
+OLD_NETDISCO_PG_CONTAINER=netdisco-postgres
+OLD_NETDISCO_DB=netdisco
+OLD_NETDISCO_DB_USER=netdisco
+OLD_NETDISCO_DB_PASSWORD_FILE=/opt/old-stack/secrets/netdisco_db_password
+OLD_NETBOX_MEDIA_PATH=/opt/old-stack/netbox/media
+OLD_GRAFANA_DATA_PATH=/opt/old-stack/grafana
+OLD_GRAFANA_PROVISIONING_PATH=/opt/old-stack/grafana/provisioning
+OLD_ALERTMANAGER_CONFIG_PATH=/opt/old-stack/alertmanager/alertmanager.yml
+OLD_CADDYFILE_PATH=/opt/old-stack/caddy/Caddyfile
+KEEP_DUMPS=yes

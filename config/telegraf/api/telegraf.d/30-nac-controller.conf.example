@@ -1,0 +1,7 @@
+# Policy/NAC and network-controller APIs (secret files "ise_credentials" and
+# "dnac_credentials": content = "user:password" or a token - TODO(Phindani):
+# fix the format you want). Placeholder only - endpoints/auth flows differ per
+# product and version and must be confirmed.
+# [[inputs.http]]
+#   urls = ["https://controller.example.invalid/api/..."]
+#   username = "@{docker_secrets:ise_credentials}"

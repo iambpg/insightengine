@@ -1,0 +1,33 @@
+# Skeleton rules. TODO(Phindani): replace with your existing alert-rules.yml
+# (the original file was not part of the pasted compose, so it was not seen).
+groups:
+  - name: insightengine-basic
+    rules:
+      - alert: DeviceUnreachable
+        expr: probe_success{job=~"icmp-.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.hostname }} ({{ $labels.ipv4 }}) is not answering ICMP"
+      - alert: SnmpScrapeFailing
+        expr: up{job=~"snmp-.*"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SNMP scrape failing for {{ $labels.hostname }} ({{ $labels.job }})"
+      - alert: CollectorDown
+        expr: up{job=~"telegraf-.*|snmp-exporter|blackbox-exporter|loki|alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Collector {{ $labels.job }} / {{ $labels.instance }} is down"
+      - alert: HttpSdRefreshFailing
+        expr: increase(prometheus_sd_http_failures_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus cannot refresh its NetBox device list (check token, CA, plugin endpoint)"

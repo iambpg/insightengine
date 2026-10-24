@@ -1,0 +1,1183 @@
+# =============================================================================
+# InsightEngine monitoring stack — ONE install per client (sized for ~20,000
+# devices per client; every sizing number below is an ESTIMATE to be validated).
+#
+# Everything that names the client is driven from CLIENT_NAME / CLIENT_SLUG in
+# .env (written by install.sh). Do not hard-code client names or IPs here.
+#
+# FIRST RUN: install.sh writes CLIENT_NAME=unconfigured and starts the stack. The
+# client name is chosen on the first-run page served by the "setup" service
+# (https://<PUBLIC_HOST>/setup/). Renaming later = re-render .env + recreate
+# containers (see README "Renaming the client").
+#
+# Profiles (COMPOSE_PROFILES in .env):
+#   (none)   core: setup, docker-socket-proxy, insightengine-ui (placeholder), caddy, prometheus, alertmanager, alert-relay, grafana,
+#            snmp-exporter-1..2, blackbox-exporter-1..2, telegraf-api,
+#            telegraf-host, netbox (+worker, postgres, redis), activepieces
+#            (+worker, postgres, redis), netdisco (+postgres), insightengine-postgres
+#   scale    snmp-exporter-3..4, blackbox-exporter-3 (more exporter capacity)
+#   logs     loki + telegraf-syslog          (syslog -> Loki, 3 months)
+#   backup   oxidized-init, oxidized, oxidized-prune (config backups, 3 months)
+#   traps    trapd (snmptrapd -> Alertmanager + Loki)
+#   tools    snmp-generator (one-shot; run on demand)
+#   cust-exporter  your existing custom exporter (copy its files in first)
+# =============================================================================
+
+# FIXED project name: named volumes (data) are prefixed with it, so they survive a
+# client rename. The client name only changes container names, labels and titles.
+name: insightengine
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+# ----------------------------- shared definitions ----------------------------
+x-snmp-exporter: &snmp-exporter
+  image: ${SNMP_EXPORTER_IMAGE}
+  restart: unless-stopped
+  logging: *default-logging
+  networks: [monitoring-net]
+  environment:
+    # Referenced from snmp/out/snmp.yml as ${SNMP_V2_COMMUNITY} etc. (see README)
+    SNMP_V2_COMMUNITY: ${SNMP_V2_COMMUNITY:-unset-placeholder}
+    SNMP_V3_USER: ${SNMP_V3_USER:-unset-placeholder}
+    SNMP_V3_AUTH_PASSWORD: ${SNMP_V3_AUTH_PASSWORD:-unset-placeholder}
+    SNMP_V3_PRIV_PASSWORD: ${SNMP_V3_PRIV_PASSWORD:-unset-placeholder}
+  volumes:
+    - ./snmp/out:/etc/snmp_exporter:ro
+  command:
+    - --config.file=/etc/snmp_exporter/snmp.yml
+    - --config.expand-environment-variables
+    - --snmp.module-concurrency=${SNMP_MODULE_CONCURRENCY:-4}
+    - --web.listen-address=:9116
+    - --log.level=warn
+  healthcheck:
+    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9116/-/healthy"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+  deploy:
+    resources:
+      limits:
+        memory: ${SNMP_EXPORTER_MEM:-2g}      # ESTIMATE
+        cpus: "${SNMP_EXPORTER_CPUS:-2}"      # ESTIMATE
+      reservations:
+        memory: 512m
+
+x-blackbox: &blackbox
+  image: ${BLACKBOX_IMAGE}
+  restart: unless-stopped
+  logging: *default-logging
+  networks: [monitoring-net]
+  cap_add: [NET_RAW]            # ICMP probes
+  volumes:
+    - ./config/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+  command:
+    - --config.file=/etc/blackbox_exporter/config.yml
+    - --web.listen-address=:9115
+    - --log.level=warn
+  healthcheck:
+    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9115/-/healthy"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+  deploy:
+    resources:
+      limits:
+        memory: ${BLACKBOX_MEM:-1g}           # ESTIMATE
+        cpus: "${BLACKBOX_CPUS:-2}"           # ESTIMATE
+      reservations:
+        memory: 128m
+
+x-netbox: &netbox
+  image: ${NETBOX_IMAGE}        # TODO(Phindani): must contain your 'lists' plugin
+  restart: unless-stopped
+  logging: *default-logging
+  networks: [monitoring-net]
+  user: "netbox:root"
+  environment: &netbox-env
+    DB_HOST: netbox-postgres
+    DB_NAME: ${NETBOX_DB_NAME:-netbox}
+    DB_USER: ${NETBOX_DB_USER:-netbox}
+    DB_PASSWORD: ${NETBOX_DB_PASSWORD:?run install.sh}
+    REDIS_HOST: netbox-redis
+    REDIS_DATABASE: "0"
+    REDIS_PASSWORD: ${NETBOX_REDIS_PASSWORD:?run install.sh}
+    REDIS_CACHE_HOST: netbox-redis-cache
+    REDIS_CACHE_DATABASE: "1"
+    REDIS_CACHE_PASSWORD: ${NETBOX_REDIS_CACHE_PASSWORD:?run install.sh}
+    SECRET_KEY: ${NETBOX_SECRET_KEY:?run install.sh}
+    API_TOKEN_PEPPER_1: ${NETBOX_API_TOKEN_PEPPER_1:?run install.sh}
+    ALLOWED_HOSTS: ${PUBLIC_HOST} caddy netbox localhost
+    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:${PORT_NETBOX:-8444}
+    CORS_ORIGIN_ALLOW_ALL: "false"
+    SKIP_SUPERUSER: "false"
+    SUPERUSER_NAME: ${NETBOX_SUPERUSER_NAME:-admin}
+    SUPERUSER_EMAIL: ${NETBOX_SUPERUSER_EMAIL:-admin@localhost}
+    SUPERUSER_PASSWORD: ${NETBOX_SUPERUSER_PASSWORD:?run install.sh}
+    SUPERUSER_API_TOKEN: ${NETBOX_SUPERUSER_API_TOKEN:?run install.sh}
+    METRICS_ENABLED: "true"
+    WEBHOOKS_ENABLED: "true"
+    GRAPHQL_ENABLED: "true"
+    MEDIA_ROOT: /opt/netbox/netbox/media
+    RELEASE_CHECK_URL: ""
+  # Same mounts for the web and ALL workers (the old file used two different
+  # host paths for media, so the worker could not see uploaded files).
+  volumes:
+    - netbox-media:/opt/netbox/netbox/media:rw
+    - netbox-reports:/opt/netbox/netbox/reports:rw
+    - netbox-scripts:/opt/netbox/netbox/scripts:rw
+
+x-activepieces-env: &activepieces-env
+  # Names follow https://www.activepieces.com/docs/install/configuration/environment-variables
+  AP_ENGINE_EXECUTABLE_PATH: dist/packages/engine/main.js
+  AP_ENVIRONMENT: prod
+  AP_FRONTEND_URL: https://${PUBLIC_HOST}:${PORT_ACTIVEPIECES:-8081}
+  AP_ENCRYPTION_KEY: ${AP_ENCRYPTION_KEY:?run install.sh}
+  AP_JWT_SECRET: ${AP_JWT_SECRET:?run install.sh}
+  AP_API_KEY: ${AP_API_KEY:-}
+  AP_POSTGRES_HOST: activepieces-postgres
+  AP_POSTGRES_PORT: "5432"
+  AP_POSTGRES_DATABASE: ${AP_POSTGRES_DATABASE:-activepieces}
+  AP_POSTGRES_USERNAME: ${AP_POSTGRES_USERNAME:-activepieces}
+  AP_POSTGRES_PASSWORD: ${AP_POSTGRES_PASSWORD:?run install.sh}
+  AP_REDIS_HOST: activepieces-redis
+  AP_REDIS_PORT: "6379"
+  AP_REDIS_USER: default
+  AP_REDIS_PASSWORD: ${AP_REDIS_PASSWORD:?run install.sh}
+  AP_EXECUTION_MODE: ${AP_EXECUTION_MODE:-UNSANDBOXED}      # TODO(Phindani): see README "Activepieces sandboxing"
+  AP_WORKER_CONCURRENCY: ${AP_WORKER_CONCURRENCY:-10}       # ESTIMATE
+  AP_FLOW_TIMEOUT_SECONDS: "600"
+  AP_EXECUTION_DATA_RETENTION_DAYS: ${AP_EXECUTION_DATA_RETENTION_DAYS:-30}
+  AP_QUEUE_UI_ENABLED: "false"
+  AP_TELEMETRY_ENABLED: "false"
+  AP_TRIGGER_DEFAULT_POLL_INTERVAL: "5"
+
+x-redis: &redis
+  image: ${REDIS_IMAGE}
+  restart: unless-stopped
+  logging: *default-logging
+  networks: [monitoring-net]
+
+x-caddy-env: &caddy-env
+  CLIENT_SLUG: ${CLIENT_SLUG}
+  CLIENT_NAME: ${CLIENT_NAME}
+  PUBLIC_HOST: ${PUBLIC_HOST:?run install.sh}
+  ADMIN_BASIC_USER: ${ADMIN_BASIC_USER:-admin}
+  ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH:?run install.sh}
+  IE_UI_PORT: ${IE_UI_PORT:-8080}
+
+# ----------------------------------- network ---------------------------------
+networks:
+  monitoring-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${MONITORING_SUBNET:-10.50.0.0/24}
+  # Only the setup service and the docker-socket-proxy live here. No egress,
+  # nothing else can reach the proxy.
+  docker-proxy-net:
+    driver: bridge
+    internal: true
+
+# ----------------------------------- secrets ---------------------------------
+# File-based secrets (installed by install.sh under ./secrets, 0600/0400 and
+# chown'ed to the container UID when run as root). Values are never in git.
+secrets:
+  setup_token:
+    file: ./secrets/setup/token
+  netbox_token_prometheus:
+    file: ./secrets/prometheus/netbox.token
+  netbox_token_oxidized:
+    file: ./secrets/oxidized/netbox.token
+  oxidized_username:
+    file: ./secrets/oxidized/device_username
+  oxidized_password:
+    file: ./secrets/oxidized/device_password
+  trap_community:
+    file: ./secrets/trapd/trap_community
+  trap_v3_users:
+    file: ./secrets/trapd/v3_users.conf
+  fortigate_token:
+    file: ./secrets/telegraf/fortigate_token
+  panos_api_key:
+    file: ./secrets/telegraf/panos_api_key
+  ise_credentials:
+    file: ./secrets/telegraf/ise_credentials
+  dnac_credentials:
+    file: ./secrets/telegraf/dnac_credentials
+  sdwan_credentials:
+    file: ./secrets/telegraf/sdwan_credentials
+
+volumes:
+  prom-data:
+  alertmanager-data:
+  grafana-data:
+  caddy-data:
+  caddy-config:
+  scrape-lb-data:
+  scrape-lb-config:
+  netbox-postgres-data:
+  netbox-redis-data:
+  netbox-redis-cache-data:
+  netbox-media:
+  netbox-reports:
+  netbox-scripts:
+  activepieces-postgres-data:
+  activepieces-redis-data:
+  activepieces-cache:
+  netdisco-pgdata:
+  insightengine-postgres-data:
+  loki-data:
+  oxidized-config:
+  oxidized-data:
+  trapd-state:
+
+services:
+  # ===========================================================================
+  # FIRST-RUN SETUP (own container, internal networks only, token-authenticated)
+  # ===========================================================================
+  # SECURITY: the setup service can run `docker compose up -d` for this project and
+  # the migration scripts, so it holds (through the proxy below) ROOT-EQUIVALENT
+  # control of the host. See README "Security flags". The web UI/backend never gets
+  # a Docker socket - it only calls this service's HTTP API (docs/setup-api.md).
+  docker-socket-proxy:
+    image: ${DOCKER_PROXY_IMAGE:-tecnativa/docker-socket-proxy:v0.5.0}   # TODO(Phindani): confirm tag
+    container_name: ie-docker-proxy
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [docker-proxy-net]
+    environment:
+      # Allowed API sections (coarse: by endpoint family, NOT by project/label).
+      CONTAINERS: "1"
+      IMAGES: "1"
+      NETWORKS: "1"
+      VOLUMES: "1"
+      EXEC: "1"            # migrate.sh runs pg_dump inside the OLD database containers
+      INFO: "1"
+      EVENTS: "1"
+      PING: "1"
+      VERSION: "1"
+      POST: "1"            # also enables DELETE; without it everything is read-only
+      ALLOW_START: "1"
+      ALLOW_STOP: "1"
+      ALLOW_RESTARTS: "1"
+      # Everything else stays blocked: image BUILD, COMMIT, AUTH, SECRETS, CONFIGS,
+      # SWARM/SERVICES/TASKS/NODES, PLUGINS, SYSTEM, SESSION, GRPC, DISTRIBUTION.
+      BUILD: "0"
+      COMMIT: "0"
+      AUTH: "0"
+      SECRETS: "0"
+      CONFIGS: "0"
+      SWARM: "0"
+      SERVICES: "0"
+      TASKS: "0"
+      NODES: "0"
+      PLUGINS: "0"
+      SYSTEM: "0"
+      SESSION: "0"
+      GRPC: "0"
+      DISTRIBUTION: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # TODO(Phindani): on SELinux hosts the proxy may need `privileged: true` (see its docs).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2375/_ping || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits: {memory: 128m, cpus: "0.5"}   # ESTIMATE
+
+  setup:
+    build:
+      context: ./setup
+      dockerfile: Dockerfile
+    image: insightengine/setup:local
+    container_name: ie-setup                      # NOT client-suffixed: it must survive a rename
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net, docker-proxy-net]  # no published ports
+    depends_on:
+      docker-socket-proxy: {condition: service_healthy}
+    environment:
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+      INSTALL_DIR: ${INSTALL_DIR:?run install.sh}
+      SETUP_PUBLIC_AFTER_COMPLETE: ${SETUP_PUBLIC_AFTER_COMPLETE:-no}
+      SETUP_OLD_STACK_ROOT: ${SETUP_OLD_STACK_ROOT:-/opt}
+    working_dir: ${INSTALL_DIR}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"       # to reach an old Prometheus on the host
+    volumes:
+      # The project directory is mounted at the SAME absolute path so that bind-mount
+      # paths in docker-compose.yml mean the same thing to the client and the daemon.
+      - ${INSTALL_DIR}:${INSTALL_DIR}
+      # Old stack folders, READ-ONLY (migration source). Change the root if the old stack is elsewhere.
+      - ${SETUP_OLD_STACK_ROOT:-/opt}:${SETUP_OLD_STACK_ROOT:-/opt}:ro
+    secrets:
+      - source: setup_token
+        target: setup_token
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8099/setup/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits: {memory: "${SETUP_MEM:-512m}", cpus: "1"}   # ESTIMATE
+
+  # PLACEHOLDER for the custom InsightEngine UI. Caddy sends "/" here only once the
+  # setup state is "complete". TODO(Phindani): set IE_UI_IMAGE (and IE_UI_PORT) to the
+  # real UI image and delete the volumes line (it only serves the placeholder page).
+  insightengine-ui:
+    image: ${IE_UI_IMAGE:-nginxinc/nginx-unprivileged:1.27-alpine}
+    container_name: insightengine-ui-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    volumes:
+      - ./config/ui-placeholder/index.html:/usr/share/nginx/html/index.html:ro
+    deploy:
+      resources:
+        limits: {memory: 256m, cpus: "0.5"}   # ESTIMATE
+
+  # ===========================================================================
+  # CADDY — user-facing TLS reverse proxy + the internal NetBox API endpoint
+  # that Prometheus/Oxidized call (https://caddy:8443).
+  # ===========================================================================
+  caddy:
+    image: ${CADDY_IMAGE}
+    container_name: caddy-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP:-80}:80"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:443"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:443/udp"          # HTTP/3
+      - "${HOST_BIND:-0.0.0.0}:${PORT_GRAFANA:-3000}:3000"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_PROMETHEUS:-9090}:9090"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_ALERTMANAGER:-9093}:9093"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_ACTIVEPIECES:-8081}:8081"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_NETDISCO:-5000}:5000"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_OXIDIZED:-8888}:8888"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_NETBOX:-8444}:8444"
+    environment: *caddy-env
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      prometheus: {condition: service_started}
+      grafana: {condition: service_started}
+      alertmanager: {condition: service_started}
+      netbox: {condition: service_started}
+    healthcheck:
+      # Caddy admin API (localhost only). The old check hit :80, which only
+      # redirects, and had a leading space in the URL.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits: {memory: "${CADDY_MEM:-512m}", cpus: "${CADDY_CPUS:-2}"}   # ESTIMATE
+        reservations: {memory: 128m}
+
+  # Dedicated internal load balancer for scrapes so that scrape load cannot
+  # starve the user-facing proxy. Not published to the host.
+  scrape-lb:
+    image: ${CADDY_IMAGE}
+    container_name: scrape-lb-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    volumes:
+      - ./config/caddy/Caddyfile.scrape-lb:/etc/caddy/Caddyfile:ro
+      - scrape-lb-data:/data
+      - scrape-lb-config:/config
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits: {memory: "${SCRAPE_LB_MEM:-512m}", cpus: "${SCRAPE_LB_CPUS:-2}"}   # ESTIMATE
+
+  # ===========================================================================
+  # PROMETHEUS
+  # ===========================================================================
+  prometheus:
+    image: ${PROMETHEUS_IMAGE}
+    container_name: prometheus-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      # Expanded inside external_labels by --enable-feature=expand-external-labels
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      CLIENT_NAME: ${CLIENT_NAME}
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - ./certs/ca.crt:/etc/prometheus/certs/ca.crt:ro
+      - prom-data:/prometheus
+    secrets:
+      - source: netbox_token_prometheus
+        target: netbox_token
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROM_RETENTION_TIME:-30d}
+      - --storage.tsdb.retention.size=${PROM_RETENTION_SIZE:-0}
+      - --storage.tsdb.wal-compression
+      - --query.max-samples=${PROM_QUERY_MAX_SAMPLES:-50000000}
+      - --query.timeout=${PROM_QUERY_TIMEOUT:-2m}
+      - --query.max-concurrency=${PROM_QUERY_MAX_CONCURRENCY:-20}
+      - --web.enable-lifecycle
+      - --web.external-url=https://${PUBLIC_HOST}:${PORT_PROMETHEUS:-9090}
+      - --enable-feature=expand-external-labels
+    ulimits:
+      nofile: {soft: 1048576, hard: 1048576}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s          # WAL replay can be slow at this size
+    stop_grace_period: 5m
+    deploy:
+      resources:
+        limits: {memory: "${PROM_MEM:-24g}", cpus: "${PROM_CPUS:-8}"}   # ESTIMATE
+        reservations: {memory: "${PROM_MEM_RESERVE:-8g}"}
+
+  # ===========================================================================
+  # SNMP EXPORTERS (fronted by scrape-lb:9116)
+  # ===========================================================================
+  snmp-exporter-1:
+    <<: *snmp-exporter
+    container_name: snmp-exporter-1-${CLIENT_SLUG}
+  snmp-exporter-2:
+    <<: *snmp-exporter
+    container_name: snmp-exporter-2-${CLIENT_SLUG}
+  snmp-exporter-3:
+    <<: *snmp-exporter
+    container_name: snmp-exporter-3-${CLIENT_SLUG}
+    profiles: [scale]
+  snmp-exporter-4:
+    <<: *snmp-exporter
+    container_name: snmp-exporter-4-${CLIENT_SLUG}
+    profiles: [scale]
+
+  # ===========================================================================
+  # BLACKBOX EXPORTERS (ICMP etc., fronted by scrape-lb:9115)
+  # ===========================================================================
+  blackbox-exporter-1:
+    <<: *blackbox
+    container_name: blackbox-exporter-1-${CLIENT_SLUG}
+  blackbox-exporter-2:
+    <<: *blackbox
+    container_name: blackbox-exporter-2-${CLIENT_SLUG}
+  blackbox-exporter-3:
+    <<: *blackbox
+    container_name: blackbox-exporter-3-${CLIENT_SLUG}
+    profiles: [scale]
+
+  # ===========================================================================
+  # ALERTMANAGER + internal webhook relay (placeholder for the UI-managed
+  # outside webhook URLs; Alertmanager only ever talks to the relay)
+  # ===========================================================================
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE}
+    container_name: alertmanager-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    volumes:
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./config/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=${ALERTMANAGER_RETENTION:-720h}
+      - --web.external-url=https://${PUBLIC_HOST}:${PORT_ALERTMANAGER:-9093}
+      - --cluster.listen-address=
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits: {memory: "${ALERTMANAGER_MEM:-1g}", cpus: "${ALERTMANAGER_CPUS:-1}"}   # ESTIMATE
+        reservations: {memory: 128m}
+
+  alert-relay:
+    build:
+      context: ./config/alert-relay
+    image: insightengine/alert-relay:local
+    container_name: alert-relay-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      CLIENT_NAME: ${CLIENT_NAME}
+      DESTINATIONS_FILE: /etc/alert-relay/destinations.json
+    volumes:
+      # Placeholder: the UI will later write this file. Read on every request.
+      - ./config/alert-relay/destinations.json:/etc/alert-relay/destinations.json:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits: {memory: 256m, cpus: "0.5"}   # ESTIMATE
+
+  # ===========================================================================
+  # GRAFANA
+  # ===========================================================================
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    container_name: grafana-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      CLIENT_NAME: ${CLIENT_NAME}     # used in provisioning files ($CLIENT_NAME)
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run install.sh}
+      GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY:?run install.sh}
+      GF_SERVER_DOMAIN: ${PUBLIC_HOST}
+      GF_SERVER_ROOT_URL: https://${PUBLIC_HOST}:${PORT_GRAFANA:-3000}/
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      # The stray /opt/arg/n8n mount from the old file is gone.
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits: {memory: "${GRAFANA_MEM:-4g}", cpus: "${GRAFANA_CPUS:-2}"}   # ESTIMATE
+        reservations: {memory: 512m}
+
+  # ===========================================================================
+  # TELEGRAF — role-specific instances (Prometheus scrapes each on :9273)
+  # ===========================================================================
+  telegraf-api:
+    image: ${TELEGRAF_IMAGE}
+    container_name: telegraf-api-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    user: "10001:10001"          # TODO(Phindani): confirm; secrets are chown'ed to this UID by install.sh
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+    volumes:
+      - ./config/telegraf/api/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./config/telegraf/api/telegraf.d:/etc/telegraf/telegraf.d:ro
+      - ./certs/ca.crt:/etc/telegraf/ca.crt:ro
+    secrets:
+      - fortigate_token
+      - panos_api_key
+      - ise_credentials
+      - dnac_credentials
+      - sdwan_credentials
+    command: ["telegraf", "--config", "/etc/telegraf/telegraf.conf", "--config-directory", "/etc/telegraf/telegraf.d"]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9273/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits: {memory: "${TELEGRAF_API_MEM:-2g}", cpus: "${TELEGRAF_API_CPUS:-2}"}   # ESTIMATE
+        reservations: {memory: 256m}
+
+  telegraf-host:
+    image: ${TELEGRAF_IMAGE}
+    container_name: telegraf-host-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    group_add: ["${DOCKER_GID:-999}"]   # group that owns /var/run/docker.sock (install.sh detects it)
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      HOST_PROC: /hostfs/proc
+      HOST_SYS: /hostfs/sys
+      HOST_ETC: /hostfs/etc
+      HOST_VAR: /hostfs/var
+      HOST_RUN: /hostfs/run
+      HOST_MOUNT_PREFIX: /hostfs
+    volumes:
+      - ./config/telegraf/host/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      # SECURITY FLAG: both mounts are read-only but still expose a lot. A read-only
+      # Docker socket is NOT harmless (the API can still be read: env vars,
+      # labels, mounts). Safer alternatives are described in the README
+      # ("Host metrics: safer alternatives"). TODO(Phindani): decide.
+      - /:/hostfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: ["telegraf", "--config", "/etc/telegraf/telegraf.conf"]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9273/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits: {memory: "${TELEGRAF_HOST_MEM:-512m}", cpus: "${TELEGRAF_HOST_CPUS:-1}"}   # ESTIMATE
+
+  # ===========================================================================
+  # NETBOX (own PostgreSQL + own Redis)
+  # ===========================================================================
+  netbox-postgres:
+    image: ${POSTGRES_IMAGE}
+    container_name: netbox-postgres-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      POSTGRES_DB: ${NETBOX_DB_NAME:-netbox}
+      POSTGRES_USER: ${NETBOX_DB_USER:-netbox}
+      POSTGRES_PASSWORD: ${NETBOX_DB_PASSWORD:?run install.sh}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${NETBOX_PG_SHARED_BUFFERS:-2GB}
+      - -c
+      - effective_cache_size=${NETBOX_PG_EFFECTIVE_CACHE_SIZE:-6GB}
+      - -c
+      - work_mem=${NETBOX_PG_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=${NETBOX_PG_MAINT_WORK_MEM:-512MB}
+      - -c
+      - max_connections=${NETBOX_PG_MAX_CONNECTIONS:-200}
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - wal_compression=on
+    shm_size: 1g
+    volumes:
+      - netbox-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -t 2 -d $$POSTGRES_DB -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 30s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: {memory: "${NETBOX_PG_MEM:-8g}", cpus: "${NETBOX_PG_CPUS:-4}"}   # ESTIMATE
+        reservations: {memory: 2g}
+
+  netbox-redis:
+    <<: *redis
+    container_name: netbox-redis-${CLIENT_SLUG}
+    environment:
+      REDIS_PASSWORD: ${NETBOX_REDIS_PASSWORD:?run install.sh}
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD" --maxmemory-policy noeviction
+    volumes:
+      - netbox-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "[ \"$$(redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping)\" = PONG ]"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits: {memory: "${NETBOX_REDIS_MEM:-1g}", cpus: "1"}   # ESTIMATE
+
+  netbox-redis-cache:
+    <<: *redis
+    container_name: netbox-redis-cache-${CLIENT_SLUG}
+    environment:
+      REDIS_PASSWORD: ${NETBOX_REDIS_CACHE_PASSWORD:?run install.sh}
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory ${NETBOX_REDIS_CACHE_MAXMEM:-1gb} --maxmemory-policy allkeys-lru
+    volumes:
+      - netbox-redis-cache-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "[ \"$$(redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping)\" = PONG ]"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits: {memory: "${NETBOX_REDIS_CACHE_LIMIT:-1536m}", cpus: "1"}   # ESTIMATE
+
+  netbox:
+    <<: *netbox
+    container_name: netbox-${CLIENT_SLUG}
+    depends_on:
+      netbox-postgres: {condition: service_healthy}
+      netbox-redis: {condition: service_healthy}
+      netbox-redis-cache: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login/ -o /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits: {memory: "${NETBOX_MEM:-4g}", cpus: "${NETBOX_CPUS:-4}"}   # ESTIMATE
+        reservations: {memory: 1g}
+
+  netbox-worker:
+    <<: *netbox
+    # no container_name: replicated service
+    command:
+      - /opt/netbox/venv/bin/python
+      - /opt/netbox/netbox/manage.py
+      - rqworker
+    depends_on:
+      netbox: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "ps -aux | grep -v grep | grep -q rqworker || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: ${NETBOX_WORKER_REPLICAS:-3}      # ESTIMATE
+      resources:
+        limits: {memory: "${NETBOX_WORKER_MEM:-1g}", cpus: "${NETBOX_WORKER_CPUS:-1}"}
+
+  # ===========================================================================
+  # ACTIVEPIECES (replaces n8n). Own PostgreSQL + own Redis, as per the
+  # official docker-compose (app + worker(s) + postgres + redis).
+  # ===========================================================================
+  activepieces-postgres:
+    image: ${AP_POSTGRES_IMAGE}
+    container_name: activepieces-postgres-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      POSTGRES_DB: ${AP_POSTGRES_DATABASE:-activepieces}
+      POSTGRES_USER: ${AP_POSTGRES_USERNAME:-activepieces}
+      POSTGRES_PASSWORD: ${AP_POSTGRES_PASSWORD:?run install.sh}
+    volumes:
+      - activepieces-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: {memory: "${AP_PG_MEM:-2g}", cpus: "2"}   # ESTIMATE
+
+  activepieces-redis:
+    <<: *redis
+    container_name: activepieces-redis-${CLIENT_SLUG}
+    environment:
+      REDIS_PASSWORD: ${AP_REDIS_PASSWORD:?run install.sh}
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD" --maxmemory-policy noeviction
+    volumes:
+      - activepieces-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "[ \"$$(redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping)\" = PONG ]"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits: {memory: "${AP_REDIS_MEM:-1g}", cpus: "1"}   # ESTIMATE
+
+  activepieces-app:
+    image: ${AP_IMAGE}
+    container_name: activepieces-app-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    depends_on:
+      activepieces-postgres: {condition: service_healthy}
+      activepieces-redis: {condition: service_healthy}
+    environment:
+      <<: *activepieces-env
+      AP_CONTAINER_TYPE: APP
+    volumes:
+      - activepieces-cache:/usr/src/app/cache
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits: {memory: "${AP_APP_MEM:-2g}", cpus: "${AP_APP_CPUS:-2}"}   # ESTIMATE
+        reservations: {memory: 512m}
+
+  activepieces-worker:
+    image: ${AP_IMAGE}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    depends_on:
+      activepieces-app: {condition: service_started}
+    environment:
+      <<: *activepieces-env
+      AP_CONTAINER_TYPE: WORKER
+    volumes:
+      - activepieces-cache:/usr/src/app/cache
+    deploy:
+      replicas: ${AP_WORKER_REPLICAS:-3}     # official file uses 5; ESTIMATE
+      resources:
+        limits: {memory: "${AP_WORKER_MEM:-2g}", cpus: "${AP_WORKER_CPUS:-2}"}
+
+  # ===========================================================================
+  # NETDISCO (own PostgreSQL; image/layout kept from the original file)
+  # ===========================================================================
+  netdisco-postgres:
+    image: ${NETDISCO_IMAGE_PREFIX}-postgresql
+    container_name: netdisco-postgres-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      POSTGRES_DB: ${NETDISCO_DB_NAME:-netdisco}
+      POSTGRES_USER: ${NETDISCO_DB_USER:-netdisco}
+      POSTGRES_PASSWORD: ${NETDISCO_DB_PASSWORD:?run install.sh}
+    shm_size: 512m
+    volumes:
+      # TODO(Phindani): this path came from the old file; it only works if the image
+      # (or PGDATA) uses /var/lib/postgresql/netdisco-pgdata. Confirm the image.
+      - netdisco-pgdata:/var/lib/postgresql/netdisco-pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits: {memory: "${NETDISCO_PG_MEM:-4g}", cpus: "2"}   # ESTIMATE
+
+  netdisco-backend:
+    image: ${NETDISCO_IMAGE_PREFIX}-backend
+    container_name: netdisco-backend-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    depends_on:
+      netdisco-postgres: {condition: service_healthy}
+    environment: &netdisco-env
+      NETDISCO_DB_HOST: netdisco-postgres
+      NETDISCO_DB_PORT: "5432"
+      NETDISCO_DB_NAME: ${NETDISCO_DB_NAME:-netdisco}
+      NETDISCO_DB_USER: ${NETDISCO_DB_USER:-netdisco}
+      NETDISCO_DB_PASS: ${NETDISCO_DB_PASSWORD:?run install.sh}
+    volumes:
+      # TODO(Phindani): the old file also mounted the whole 'config' dir, which
+      # shadows the image's shipped defaults. Only nd-site-local is mounted here.
+      - ./config/netdisco/nd-site-local:/home/netdisco/nd-site-local
+      - ./data/netdisco/logs:/home/netdisco/netdisco/logs
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'Netdisco::Backend' || pgrep -f 'netdisco-backend' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits: {memory: "${NETDISCO_BACKEND_MEM:-4g}", cpus: "${NETDISCO_BACKEND_CPUS:-4}"}   # ESTIMATE
+
+  netdisco-web:
+    image: ${NETDISCO_IMAGE_PREFIX}-web
+    container_name: netdisco-web-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    depends_on:
+      netdisco-postgres: {condition: service_healthy}
+      netdisco-backend: {condition: service_healthy}
+    environment: *netdisco-env
+    volumes:
+      - ./config/netdisco/nd-site-local:/home/netdisco/nd-site-local
+      - ./data/netdisco/logs:/home/netdisco/netdisco/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/ -o /dev/null || wget -qO /dev/null http://localhost:5000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits: {memory: "${NETDISCO_WEB_MEM:-1g}", cpus: "1"}   # ESTIMATE
+
+  # ===========================================================================
+  # INSIGHTENGINE backend database (own PostgreSQL: users, roles, settings,
+  # incident records). The backend/UI services are not part of this bundle.
+  # ===========================================================================
+  insightengine-postgres:
+    image: ${POSTGRES_IMAGE}
+    container_name: insightengine-postgres-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      POSTGRES_DB: ${IE_DB_NAME:-insightengine}
+      POSTGRES_USER: ${IE_DB_USER:-insightengine}
+      POSTGRES_PASSWORD: ${IE_DB_PASSWORD:?run install.sh}
+    volumes:
+      - insightengine-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: {memory: "${IE_PG_MEM:-2g}", cpus: "2"}   # ESTIMATE
+
+  # ===========================================================================
+  # LOGS — Loki (3 months = 2160h) + syslog collector (profile: logs)
+  # ===========================================================================
+  loki:
+    image: ${LOKI_IMAGE}
+    container_name: loki-${CLIENT_SLUG}
+    profiles: [logs]
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    command: ["-config.file=/etc/loki/loki.yml", "-config.expand-env=true"]
+    environment:
+      LOKI_RETENTION_PERIOD: ${LOKI_RETENTION_PERIOD:-2160h}
+    volumes:
+      - ./config/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits: {memory: "${LOKI_MEM:-8g}", cpus: "${LOKI_CPUS:-4}"}   # ESTIMATE
+        reservations: {memory: 1g}
+
+  telegraf-syslog:
+    image: ${TELEGRAF_IMAGE}
+    container_name: telegraf-syslog-${CLIENT_SLUG}
+    profiles: [logs]
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    user: "10001:10001"
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+    ports:
+      # Devices send to host UDP/TCP 514; mapped to unprivileged ports in the container.
+      - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/udp"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/tcp"
+    volumes:
+      - ./config/telegraf/syslog/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    command: ["telegraf", "--config", "/etc/telegraf/telegraf.conf"]
+    depends_on:
+      loki: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9273/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits: {memory: "${TELEGRAF_SYSLOG_MEM:-2g}", cpus: "${TELEGRAF_SYSLOG_CPUS:-2}"}   # ESTIMATE
+
+  # ===========================================================================
+  # CONFIG BACKUPS — Oxidized (profile: backup)
+  # ===========================================================================
+  oxidized-init:
+    # One-shot: renders the Oxidized config + hook from templates and secret
+    # files into the shared volume, so no credential is stored in a repo file.
+    image: ${ALPINE_IMAGE}
+    container_name: oxidized-init-${CLIENT_SLUG}
+    profiles: [backup]
+    restart: "no"
+    networks: [monitoring-net]
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      OXIDIZED_INTERVAL: ${OXIDIZED_INTERVAL:-14400}
+      OXIDIZED_THREADS: ${OXIDIZED_THREADS:-60}
+      OXIDIZED_NETBOX_FILTER: ${OXIDIZED_NETBOX_FILTER:-status=active&tag=oxidized}
+      OXIDIZED_UID: "30000"
+    volumes:
+      - ./config/oxidized:/templates:ro
+      - oxidized-config:/out
+    secrets:
+      - source: netbox_token_oxidized
+        target: netbox_token
+      - source: oxidized_username
+        target: device_username
+      - source: oxidized_password
+        target: device_password
+    command: ["sh", "/templates/render.sh"]
+
+  oxidized:
+    image: ${OXIDIZED_IMAGE}
+    container_name: oxidized-${CLIENT_SLUG}
+    profiles: [backup]
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    depends_on:
+      oxidized-init: {condition: service_completed_successfully}
+    environment:
+      CONFIG_RELOAD_INTERVAL: ${OXIDIZED_RELOAD_INTERVAL:-600}    # re-read the NetBox device list
+      UPDATE_CA_CERTIFICATES: "true"
+    volumes:
+      - oxidized-config:/home/oxidized/.config/oxidized
+      - oxidized-data:/home/oxidized/data
+      - ./certs/ca.crt:/usr/local/share/ca-certificates/insightengine-ca.crt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/nodes -o /dev/null || wget -q --spider http://localhost:8888/nodes || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits: {memory: "${OXIDIZED_MEM:-4g}", cpus: "${OXIDIZED_CPUS:-4}"}   # ESTIMATE
+
+  oxidized-prune:
+    # Keeps config history for OXIDIZED_RETENTION_DAYS (default 90 ~ 3 months).
+    image: ${ALPINE_IMAGE}
+    container_name: oxidized-prune-${CLIENT_SLUG}
+    profiles: [backup]
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      OXIDIZED_RETENTION_DAYS: ${OXIDIZED_RETENTION_DAYS:-90}
+      PRUNE_EVERY_SECONDS: ${OXIDIZED_PRUNE_EVERY_SECONDS:-86400}
+      REPO_PATH: /data/oxidized.git
+    volumes:
+      - ./config/oxidized/prune-history.sh:/usr/local/bin/prune-history.sh:ro
+      - oxidized-config:/data
+    command: ["sh", "-c", "apk add --no-cache git >/dev/null && exec sh /usr/local/bin/prune-history.sh --loop"]
+    deploy:
+      resources:
+        limits: {memory: 1g, cpus: "1"}   # ESTIMATE
+
+  # ===========================================================================
+  # TRAPS — snmptrapd -> Alertmanager + Loki (profile: traps)
+  # ===========================================================================
+  trapd:
+    build:
+      context: ./trapd
+    image: insightengine/trapd:local
+    container_name: trapd-${CLIENT_SLUG}
+    profiles: [traps]
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      ALERTMANAGER_URL: http://alertmanager:9093
+      LOKI_URL: http://loki:3100
+      TRAP_ALERT_TTL_SECONDS: ${TRAP_ALERT_TTL_SECONDS:-3600}
+      SNMP_PERSISTENT_DIR: /var/lib/trapd
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${PORT_TRAPS:-162}:1162/udp"
+    secrets:
+      - trap_community
+      - trap_v3_users
+    volumes:
+      - ./snmp/mibs:/usr/share/snmp/mibs/custom:ro
+      - trapd-state:/var/lib/trapd
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep snmptrapd >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits: {memory: "${TRAPD_MEM:-1g}", cpus: "${TRAPD_CPUS:-2}"}   # ESTIMATE
+
+  # ===========================================================================
+  # SNMP GENERATOR — one-shot, run on demand:
+  #   docker compose --profile tools run --rm snmp-generator
+  # Reads snmp/generator.yml + snmp/mibs, writes snmp/out/snmp.yml
+  # ===========================================================================
+  snmp-generator:
+    profiles: [tools]
+    build:
+      context: https://github.com/prometheus/snmp_exporter.git#${SNMP_EXPORTER_VERSION:-v0.30.1}:generator
+      args:
+        REPO_TAG: ${SNMP_EXPORTER_VERSION:-v0.30.1}
+    image: insightengine/snmp-generator:${SNMP_EXPORTER_VERSION:-v0.30.1}
+    restart: "no"
+    networks: [monitoring-net]
+    working_dir: /opt
+    volumes:
+      - ./snmp/generator.yml:/opt/generator.yml:ro
+      - ./snmp/mibs:/opt/mibs:ro
+      - ./snmp/out:/opt/out
+    command: ["generate", "-g", "/opt/generator.yml", "-m", "/opt/mibs", "-o", "/opt/out/snmp.yml"]
+
+  # ===========================================================================
+  # CUSTOM EXPORTER (your existing component; profile: cust-exporter)
+  # ===========================================================================
+  cust-exporter:
+    profiles: [cust-exporter]
+    build:
+      context: ./cust-exporter        # TODO(Phindani): copy your Dockerfile + app here
+      dockerfile: Dockerfile
+    image: insightengine/cust-exporter:local
+    container_name: cust-exporter-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    volumes:
+      - ./cust-exporter/app:/app
+      - ./secrets/cust-exporter/netbox.token:/app/netbox.token:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits: {memory: "${CUST_EXPORTER_MEM:-512m}", cpus: "1"}   # ESTIMATE
