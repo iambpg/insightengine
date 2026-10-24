@@ -68,7 +68,7 @@ States: `unconfigured → applying → complete | failed` (details and API: `doc
 * **Renaming** (Settings → Client name → `POST /setup/client` with `confirm_downtime=true`) = re-render + recreate every other container. **Downtime: several minutes
   (estimate; measure on your host)** — all monitoring stops meanwhile. Side effects: new Prometheus series get the new `client` label while old series keep the old one;
   the NetBox Tenant/Region is not renamed automatically (TODO).
-* **TODO(Phindani, unconfirmed): multi-client ("client 2") on one server is not designed**; this bundle is one client per installation.
+* InsightEngine is one client per server.
 
 ## 4. What was fixed (defect by defect)
 
@@ -229,7 +229,6 @@ and **anything on real devices or at 20,000-device scale.**
 13. n8n data is **not** migrated to Activepieces.
 14. `vasa_switches_shard_1.json` file_sd is not used; uncomment the commented job if you still need it.
 15. **Custom UI image** (`IE_UI_IMAGE`, `IE_UI_PORT`): not part of this bundle. `config/ui-placeholder/index.html` is a placeholder that shows the redirect contract; its image tag (`nginxinc/nginx-unprivileged:1.27-alpine`) and the `tecnativa/docker-socket-proxy:v0.5.0` tag are **unverified**.
-16. **Multi-client ("client 2")** on one server: unconfirmed, not designed (§2.3).
-17. **Profiles** (`logs`, `backup`, `traps`, …) cannot yet be chosen on the first-run page; set `COMPOSE_PROFILES` in `.env`.
-18. **NetBox Tenant rename** on client rename, and automatic `seed-netbox.sh` after setup: not implemented.
-19. **Old stack location** defaults (`/opt`) and names are assumptions; confirm `SETUP_OLD_STACK_ROOT`.
+16. **Profiles** (`logs`, `backup`, `traps`, …) cannot yet be chosen on the first-run page; set `COMPOSE_PROFILES` in `.env`.
+17. **NetBox Tenant rename** on client rename, and automatic `seed-netbox.sh` after setup: not implemented.
+18. **Old stack location** defaults (`/opt`) and names are assumptions; confirm `SETUP_OLD_STACK_ROOT`.
