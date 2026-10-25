@@ -219,8 +219,7 @@ a migration tell the user to recreate NetBox API tokens (`scripts/set-secret.sh`
 It is the **single** place for the client identity. On every apply the service copies `client_name`/`client_slug` to `CLIENT_NAME`/`CLIENT_SLUG` in `.env`
 (the only template step: every compose file, label and title reads those two variables). Do not edit `.env` by hand for the client name.
 
-**TODO(Phindani, unconfirmed): multi-client.** This design has exactly one client per installation. A "client 2" on the same server is not designed;
-confirm whether it is wanted before the schema (`schema: 1`) grows a list of clients.
+InsightEngine is one client per server.
 
 ## 7. Docker access and its risk
 
