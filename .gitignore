@@ -1,5 +1,6 @@
 # secrets and per-client state - never commit
 .env
+.install-started
 secrets/*
 !secrets/.gitkeep
 certs/*

@@ -23,6 +23,18 @@ if [ ! -f .env ]; then
   echo "note: no .env yet - validating with dummy values (nothing is written to .env)"
 fi
 
+# --- dockerfile COPY sources and compose mount/command audit (no daemon required)
+if have python3; then
+  if python3 scripts/check-docker-copy.py >"$TMP/copy.out" 2>&1; then ok "dockerfile COPY sources"; else bad "dockerfile COPY sources"; cat "$TMP/copy.out"; fi
+  if python3 -c 'import yaml' >/dev/null 2>&1; then
+    if python3 scripts/check-compose-audit.py >"$TMP/audit.out" 2>&1; then ok "compose mount/command audit"; else bad "compose mount/command audit"; cat "$TMP/audit.out"; fi
+  else
+    skip "compose mount/command audit (PyYAML missing)"
+  fi
+else
+  skip "dockerfile COPY and compose audit"
+fi
+
 # --- compose
 if [ -n "$COMPOSE" ]; then
   mkdir -p secrets certs cust-exporter/app data/netdisco/logs
@@ -75,9 +87,9 @@ export CLIENT_NAME="${CLIENT_NAME:-x}" CLIENT_SLUG="${CLIENT_SLUG:-x}"
 
 # --- prometheus
 if have promtool; then
-  P="$TMP/prom"; mkdir -p "$P"
-  sed "s#/etc/prometheus/#$P/#g; s#/run/secrets/netbox_token#$P/tok#g" config/prometheus/prometheus.yml > "$P/prometheus.yml"
-  cp config/prometheus/alert-rules.yml "$P/"; mkdir -p "$P/certs"; cp -f certs/ca.crt "$P/certs/ca.crt" 2>/dev/null || : > "$P/certs/ca.crt"; echo x > "$P/tok"
+  P="$TMP/prom"; mkdir -p "$P/ie-certs"
+  sed "s#/etc/prometheus/#$P/#g; s#/etc/ie-certs/#$P/ie-certs/#g; s#/run/secrets/netbox_token#$P/tok#g" config/prometheus/prometheus.yml > "$P/prometheus.yml"
+  cp config/prometheus/alert-rules.yml "$P/"; cp -f certs/ca.crt "$P/ie-certs/ca.crt" 2>/dev/null || : > "$P/ie-certs/ca.crt"; echo x > "$P/tok"
   if promtool check config "$P/prometheus.yml" >"$TMP/p.out" 2>&1; then ok "promtool check config"; else bad "promtool check config"; sed 's/^/      /' "$TMP/p.out"; fi
 else skip "promtool"; fi
 # --- alertmanager

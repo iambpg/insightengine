@@ -14,13 +14,21 @@
 #   1. checks prerequisites (openssl, awk, sed, docker + compose plugin)
 #   2. creates .env (mode 600) with openssl-generated secrets - never printed -
 #      with CLIENT_NAME=unconfigured / CLIENT_SLUG=unconfigured
-#   3. creates a private CA + server certificate, secret files, data folders
-#   4. builds/pulls images and starts the stack (docker compose up -d), including the
+#   3. probes every published host port (ss, lsof, and Docker) and writes free
+#      PORT_* values into .env
+#   4. creates a private CA + server certificate, secret files, data folders
+#   5. builds/pulls images and starts the stack (docker compose up -d), including the
 #      "setup" service
 #
+# Re-run: if .env exists and .install-started contains exactly past-secret-generation,
+# the script resumes at certificates, image build, and start. It does not regenerate
+# or print secrets, and it does not rewrite .env, ports, or secret files.
+# --public-host and the port flags apply only when .env is first created.
+# If .env exists without that marker, the script stops and leaves .env untouched.
+#
 # WHICH CLIENT this server is for, and NEW INSTALL vs MOVE FROM THE OLD STACK, are NOT
-# asked here: open the first-run page  https://<PUBLIC_HOST>/setup/  (README, "First run").
-# This script never touches an old stack.
+# asked here: open the first-run page  https://<PUBLIC_HOST>[:PORT_HTTPS]/setup/
+# (README, "First run"). This script never touches an old stack.
 # =============================================================================
 set -euo pipefail
 umask 077
@@ -31,7 +39,9 @@ say()  { printf '%s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
 die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-usage() { sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() {
+  awk 'NR < 2 { next } /^set -euo pipefail$/ { exit } { sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
+}
 
 # ---- helpers ----------------------------------------------------------------
 gen() {  # gen <length>  -> random alphanumeric (hex) string, no special chars
@@ -88,6 +98,128 @@ fix_perms() {
   say "permissions applied"
 }
 
+# Every host port docker-compose.yml publishes. Caddy's container ports match
+# these values. Syslog and traps keep container ports 6514 and 1162.
+# proto is tcp, udp, or both (Docker allocates each protocol separately).
+TAKEN_PORTS=" "
+PORT_PLAN=""
+host_port_busy() { # host_port_busy <port> <tcp|udp|both>
+  local port=$1 proto=$2 published
+  case " $TAKEN_PORTS " in
+    *" $port "*) return 0 ;;
+  esac
+  if command -v ss >/dev/null 2>&1; then
+    if [ "$proto" != udp ] && ss -H -ltn "sport = :$port" 2>/dev/null | grep -q .; then return 0; fi
+    if [ "$proto" != tcp ] && ss -H -lun "sport = :$port" 2>/dev/null | grep -q .; then return 0; fi
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    if [ "$proto" != udp ] && lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then return 0; fi
+    if [ "$proto" != tcp ] && lsof -nP -iUDP:"$port" >/dev/null 2>&1; then return 0; fi
+  fi
+  if [ "$proto" != udp ] && (exec 3<>"/dev/tcp/127.0.0.1/$port") >/dev/null 2>&1; then return 0; fi
+  if [ "${HAVE_DOCKER:-0}" = 1 ]; then
+    published="$(docker ps --format '{{.Ports}}' 2>/dev/null || true)"
+    # ":80->" must not match ":8080->".
+    if printf '%s\n' "$published" | grep -Eq ":${port}->"; then return 0; fi
+  fi
+  return 1
+}
+choose_host_port() { # choose_host_port <label> <default> <preferred> <proto>  -> stdout
+  local label=$1 default=$2 preferred=$3 proto=$4 start candidate n
+  if [ "$PORTS" = default ]; then
+    if host_port_busy "$default" "$proto"; then
+      die "$label port $default is in use. Re-run without --default-ports so a free port can be chosen."
+    fi
+    printf '%s' "$default"
+    return 0
+  fi
+  if [ "$PORTS" = alt ]; then start=$preferred; else start=$default; fi
+  if ! host_port_busy "$start" "$proto"; then
+    printf '%s' "$start"
+    return 0
+  fi
+  if [ "$start" != "$preferred" ] && ! host_port_busy "$preferred" "$proto"; then
+    say "$label: port $start is in use; using $preferred" >&2
+    printf '%s' "$preferred"
+    return 0
+  fi
+  candidate=$preferred
+  n=0
+  while [ "$n" -lt 200 ]; do
+    if ! host_port_busy "$candidate" "$proto"; then
+      say "$label: port $start is in use; using $candidate" >&2
+      printf '%s' "$candidate"
+      return 0
+    fi
+    candidate=$((candidate + 1))
+    if [ "$candidate" -gt 65535 ]; then candidate=20000; fi
+    n=$((n + 1))
+  done
+  die "no free host port for $label near $preferred"
+}
+plan_one_port() { # plan_one_port <KEY> <default> <preferred> <proto>
+  local chosen
+  chosen="$(choose_host_port "$1" "$2" "$3" "$4")"
+  TAKEN_PORTS="$TAKEN_PORTS $chosen"
+  PORT_PLAN="${PORT_PLAN}${1}=${chosen}"$'\n'
+}
+plan_published_ports() {
+  TAKEN_PORTS=" "
+  PORT_PLAN=""
+  plan_one_port PORT_HTTP 80 8080 tcp
+  plan_one_port PORT_HTTPS 443 8443 both
+  plan_one_port PORT_GRAFANA 3000 13000 tcp
+  plan_one_port PORT_PROMETHEUS 9090 19090 tcp
+  plan_one_port PORT_ALERTMANAGER 9093 19093 tcp
+  plan_one_port PORT_ACTIVEPIECES 8081 18081 tcp
+  plan_one_port PORT_NETDISCO 5000 15000 tcp
+  plan_one_port PORT_OXIDIZED 8888 18888 tcp
+  plan_one_port PORT_NETBOX 8444 18444 tcp
+  plan_one_port PORT_SYSLOG 514 5514 both
+  plan_one_port PORT_TRAPS 162 1162 udp
+}
+apply_port_plan() {
+  local line key val https
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key=${line%%=*}
+    val=${line#*=}
+    setenv "$key" "$val"
+  done <<EOF
+$PORT_PLAN
+EOF
+  https="$(getenv_val PORT_HTTPS)"
+  if [ "$https" = 443 ]; then setenv HTTPS_PORT_SUFFIX ""
+  else setenv HTTPS_PORT_SUFFIX ":${https}"; fi
+}
+print_port_table() {
+  local http https grafana prom am ap nd ox nb syslog traps origin
+  http="$(getenv_val PORT_HTTP)"; http="${http:-80}"
+  https="$(getenv_val PORT_HTTPS)"; https="${https:-443}"
+  grafana="$(getenv_val PORT_GRAFANA)"; grafana="${grafana:-3000}"
+  prom="$(getenv_val PORT_PROMETHEUS)"; prom="${prom:-9090}"
+  am="$(getenv_val PORT_ALERTMANAGER)"; am="${am:-9093}"
+  ap="$(getenv_val PORT_ACTIVEPIECES)"; ap="${ap:-8081}"
+  nd="$(getenv_val PORT_NETDISCO)"; nd="${nd:-5000}"
+  ox="$(getenv_val PORT_OXIDIZED)"; ox="${ox:-8888}"
+  nb="$(getenv_val PORT_NETBOX)"; nb="${nb:-8444}"
+  syslog="$(getenv_val PORT_SYSLOG)"; syslog="${syslog:-514}"
+  traps="$(getenv_val PORT_TRAPS)"; traps="${traps:-162}"
+  if [ "$https" = 443 ]; then origin="https://${PUBLIC_HOST}"; else origin="https://${PUBLIC_HOST}:${https}"; fi
+  say "Published host ports:"
+  say "  setup / UI        ${origin}/setup/    (PORT_HTTP=${http} PORT_HTTPS=${https})"
+  say "  Grafana           https://${PUBLIC_HOST}:${grafana}/"
+  say "  Prometheus        https://${PUBLIC_HOST}:${prom}/"
+  say "  Alertmanager      https://${PUBLIC_HOST}:${am}/"
+  say "  Activepieces      https://${PUBLIC_HOST}:${ap}/"
+  say "  Netdisco          https://${PUBLIC_HOST}:${nd}/"
+  say "  Oxidized          https://${PUBLIC_HOST}:${ox}/"
+  say "  NetBox            https://${PUBLIC_HOST}:${nb}/"
+  say "  syslog            ${syslog}/tcp+udp"
+  say "  SNMP traps        ${traps}/udp"
+}
+
+PUBLIC_HOST_FROM_FLAG=0
 PUBLIC_HOST="${INSTALL_PUBLIC_HOST:-}"
 PORTS="${INSTALL_PORTS:-auto}"      # auto | alt | default
 START=1
@@ -95,8 +227,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
     --fix-perms) fix_perms; exit 0 ;;
-    --public-host) [ $# -ge 2 ] || die "--public-host needs a value"; PUBLIC_HOST="$2"; shift 2 ;;
-    --public-host=*) PUBLIC_HOST="${1#*=}"; shift ;;
+    --public-host) [ $# -ge 2 ] || die "--public-host needs a value"; PUBLIC_HOST="$2"; PUBLIC_HOST_FROM_FLAG=1; shift 2 ;;
+    --public-host=*) PUBLIC_HOST="${1#*=}"; PUBLIC_HOST_FROM_FLAG=1; shift ;;
     --alt-ports) PORTS=alt; shift ;;
     --default-ports) PORTS=default; shift ;;
     --no-start) START=0; shift ;;
@@ -114,96 +246,122 @@ else
   warn "docker compose not found - preparing files only."
 fi
 
-[ ! -e .env ] || die ".env already exists - not overwriting it (it holds this server's secrets). Move it away first, or edit it by hand."
+RESUME=0
+if [ -e .env ]; then
+  if [ -f .install-started ] && grep -qx 'past-secret-generation' .install-started; then
+    RESUME=1
+  else
+    die ".env already exists - not overwriting it (it holds this server's secrets). Move it away first, or edit it by hand."
+  fi
+fi
 [ -f .env.example ] || die ".env.example is missing"
 
-# ---- host address (no questions: flag/env, else detect) ---------------------
-if [ -z "$PUBLIC_HOST" ]; then
-  PUBLIC_HOST="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-  [ -n "$PUBLIC_HOST" ] || PUBLIC_HOST="$(hostname -f 2>/dev/null || hostname 2>/dev/null || true)"
-  [ -n "$PUBLIC_HOST" ] || die "could not detect this host's address - pass --public-host"
-  say "PUBLIC_HOST not given; using detected value '$PUBLIC_HOST' (override with --public-host)"
-fi
-printf '%s' "$PUBLIC_HOST" | grep -Eq '^[A-Za-z0-9.:-]+$' || die "host must contain only letters, digits, dots, colons or dashes"
+cleanup_env() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] && [ -n "${ENV_CREATED:-}" ]; then
+    rm -f .env .install-started
+  fi
+}
+trap cleanup_env EXIT
 
-# ---- ports: use alternatives automatically when the defaults are taken ------
-port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
-if [ "$PORTS" = auto ]; then
-  PORTS=default
-  for p in 80 443 3000 9090 9093 8081 5000 8888 8444; do
-    if port_busy "$p"; then PORTS=alt; say "port $p is already in use on this host -> the stack will be published on alternative ports (a running older stack is NOT touched)"; break; fi
+if [ "$RESUME" = 1 ]; then
+  say "resuming install: secret generation already finished (.install-started). Continuing at certificates, image build, and start."
+  if [ "$PUBLIC_HOST_FROM_FLAG" = 1 ] || [ -n "${INSTALL_PUBLIC_HOST:-}" ] || [ "$PORTS" != auto ]; then
+    warn "--public-host, INSTALL_PUBLIC_HOST, and port choices apply only when .env is first created; this run keeps the existing .env"
+  fi
+  PUBLIC_HOST="$(getenv_val PUBLIC_HOST)"
+  [ -n "$PUBLIC_HOST" ] || die "PUBLIC_HOST is empty in the existing .env"
+  printf '%s' "$PUBLIC_HOST" | grep -Eq '^[A-Za-z0-9.:-]+$' || die "host must contain only letters, digits, dots, colons or dashes"
+else
+  if [ -z "$PUBLIC_HOST" ]; then
+    PUBLIC_HOST="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+    [ -n "$PUBLIC_HOST" ] || PUBLIC_HOST="$(hostname -f 2>/dev/null || hostname 2>/dev/null || true)"
+    [ -n "$PUBLIC_HOST" ] || die "could not detect this host's address - pass --public-host"
+    say "PUBLIC_HOST not given; using detected value '$PUBLIC_HOST' (override with --public-host)"
+  fi
+  printf '%s' "$PUBLIC_HOST" | grep -Eq '^[A-Za-z0-9.:-]+$' || die "host must contain only letters, digits, dots, colons or dashes"
+
+  # Probe every published host port before writing .env. A busy default does not
+  # force the whole alternative set (that set can itself be taken, e.g. 8443).
+  plan_published_ports
+
+  cp .env.example .env; chmod 600 .env
+  ENV_CREATED=1
+
+  setenv CLIENT_NAME "unconfigured"
+  setenv CLIENT_SLUG "unconfigured"
+  setenv INSTALL_DIR "$ROOT"
+  setenv PUBLIC_HOST "$PUBLIC_HOST"
+  setenv NETBOX_SUPERUSER_EMAIL "admin@${PUBLIC_HOST}"
+  apply_port_plan
+
+  setenv GRAFANA_ADMIN_PASSWORD "$(gen 24)"
+  setenv GRAFANA_SECRET_KEY "$(gen 48)"
+  setenv NETBOX_DB_PASSWORD "$(gen 32)"
+  setenv NETBOX_REDIS_PASSWORD "$(gen 32)"
+  setenv NETBOX_REDIS_CACHE_PASSWORD "$(gen 32)"
+  setenv NETBOX_SECRET_KEY "$(gen 64)"
+  setenv NETBOX_API_TOKEN_PEPPER_1 "$(gen 64)"
+  setenv NETBOX_SUPERUSER_PASSWORD "$(gen 24)"
+  setenv NETBOX_SUPERUSER_API_TOKEN "$(gen 40)"
+  setenv AP_ENCRYPTION_KEY "$(gen 32)"
+  setenv AP_JWT_SECRET "$(gen 48)"
+  setenv AP_POSTGRES_PASSWORD "$(gen 32)"
+  setenv AP_REDIS_PASSWORD "$(gen 32)"
+  setenv NETDISCO_DB_PASSWORD "$(gen 32)"
+  setenv IE_DB_PASSWORD "$(gen 32)"
+  setenv IE_CONFIG_DB_PASSWORD "$(gen 32)"
+  setenv SNMP_V3_USERNAME "$(getenv_val SNMP_V3_USER)"
+
+  if [ -S /var/run/docker.sock ]; then
+    gid="$(stat -c %g /var/run/docker.sock 2>/dev/null || true)"
+    [ -n "$gid" ] && setenv DOCKER_GID "$gid"
+  fi
+
+  ADMIN_PW="$(gen 24)"
+  hash=""
+  if command -v htpasswd >/dev/null; then
+    hash="$(printf '%s\n' "$ADMIN_PW" | htpasswd -niB x 2>/dev/null | cut -d: -f2- | tr -d '\n' || true)"
+  fi
+  if [ -z "$hash" ] && command -v python3 >/dev/null && python3 -c 'import bcrypt' 2>/dev/null; then
+    hash="$(ADMIN_PW="$ADMIN_PW" python3 -c 'import bcrypt,os;print(bcrypt.hashpw(os.environ["ADMIN_PW"].encode(),bcrypt.gensalt(12)).decode(),end="")' || true)"
+  fi
+  if [ -z "$hash" ] && [ "$HAVE_DOCKER" = 1 ]; then
+    img="$(getenv_val CADDY_IMAGE)"
+    hash="$(printf '%s\n' "$ADMIN_PW" | docker run --rm -i "$img" caddy hash-password 2>/dev/null | tr -d '\r\n' || true)"
+  fi
+  hash="${hash/\$2y\$/\$2a\$}"
+  case "$hash" in
+    \$2a\$*|\$2b\$*) setenv ADMIN_BASIC_HASH "$hash"; setenv ADMIN_BASIC_PASSWORD "$ADMIN_PW" ;;
+    *) die "could not create a bcrypt hash for the admin basic-auth (need htpasswd, python3-bcrypt or docker). A partial .env is removed automatically; install one of those and re-run." ;;
+  esac
+  unset ADMIN_PW hash
+
+  mkdir -p secrets
+  NB_TOKEN="$(getenv_val NETBOX_SUPERUSER_API_TOKEN)"
+  write_secret prometheus/netbox.token "$NB_TOKEN" 65534
+  write_secret oxidized/netbox.token "$NB_TOKEN" 0
+  unset NB_TOKEN
+  write_secret oxidized/device_username "" 0
+  write_secret oxidized/device_password "" 0
+  write_secret trapd/trap_community "" 10002
+  write_secret trapd/v3_users.conf "" 10002
+  for s in fortigate_token panos_api_key ise_credentials dnac_credentials sdwan_credentials; do
+    write_secret "telegraf/$s" "" 10001
   done
+  write_secret cust-exporter/netbox.token "unset-placeholder" 0
+  write_secret setup/token "$(gen 48)" 0
+  [ "$PERM_WARN" = 1 ] && warn "not root: secret files for container users are mode 0644. Run 'sudo ./install.sh --fix-perms' to tighten them."
+
+  printf '%s\n' 'past-secret-generation' > .install-started
+  chmod 600 .install-started
+  grep -qx 'past-secret-generation' .install-started || die "could not record .install-started"
+  ENV_CREATED=
 fi
 
 say "=== InsightEngine installer (no questions asked) ==="
 
-# ---- .env -------------------------------------------------------------------
-cp .env.example .env; chmod 600 .env
-# if anything below fails, do not leave a half-written .env behind (it would block a re-run)
-ENV_CREATED=1
-cleanup_env() { local rc=$?; if [ "$rc" -ne 0 ] && [ -n "${ENV_CREATED:-}" ]; then rm -f .env; fi; }
-trap cleanup_env EXIT
-
-setenv CLIENT_NAME "unconfigured"
-setenv CLIENT_SLUG "unconfigured"
-setenv INSTALL_DIR "$ROOT"
-setenv PUBLIC_HOST "$PUBLIC_HOST"
-setenv NETBOX_SUPERUSER_EMAIL "admin@${PUBLIC_HOST}"
-
-setenv GRAFANA_ADMIN_PASSWORD "$(gen 24)"
-setenv GRAFANA_SECRET_KEY "$(gen 48)"
-setenv NETBOX_DB_PASSWORD "$(gen 32)"
-setenv NETBOX_REDIS_PASSWORD "$(gen 32)"
-setenv NETBOX_REDIS_CACHE_PASSWORD "$(gen 32)"
-setenv NETBOX_SECRET_KEY "$(gen 64)"
-setenv NETBOX_API_TOKEN_PEPPER_1 "$(gen 64)"
-setenv NETBOX_SUPERUSER_PASSWORD "$(gen 24)"
-setenv NETBOX_SUPERUSER_API_TOKEN "$(gen 40)"
-setenv AP_ENCRYPTION_KEY "$(gen 32)"
-setenv AP_JWT_SECRET "$(gen 48)"
-setenv AP_POSTGRES_PASSWORD "$(gen 32)"
-setenv AP_REDIS_PASSWORD "$(gen 32)"
-setenv NETDISCO_DB_PASSWORD "$(gen 32)"
-setenv IE_DB_PASSWORD "$(gen 32)"
-setenv IE_CONFIG_DB_PASSWORD "$(gen 32)"
-setenv SNMP_V3_USERNAME "$(getenv_val SNMP_V3_USER)"
-
-if [ -S /var/run/docker.sock ]; then
-  gid="$(stat -c %g /var/run/docker.sock 2>/dev/null || true)"
-  [ -n "$gid" ] && setenv DOCKER_GID "$gid"
-fi
-
-if [ "$PORTS" = alt ]; then
-  setenv PORT_HTTP 8080;        setenv PORT_HTTPS 8443
-  setenv PORT_GRAFANA 13000;    setenv PORT_PROMETHEUS 19090
-  setenv PORT_ALERTMANAGER 19093; setenv PORT_ACTIVEPIECES 18081
-  setenv PORT_NETDISCO 15000;   setenv PORT_OXIDIZED 18888
-  setenv PORT_NETBOX 18444
-  setenv PORT_SYSLOG 5514;      setenv PORT_TRAPS 1162
-fi
-
-# basic-auth hash for Prometheus/Alertmanager/Oxidized in front of Caddy
-ADMIN_PW="$(gen 24)"
-hash=""
-if command -v htpasswd >/dev/null; then
-  hash="$(printf '%s\n' "$ADMIN_PW" | htpasswd -niB x 2>/dev/null | cut -d: -f2- | tr -d '\n' || true)"
-fi
-if [ -z "$hash" ] && command -v python3 >/dev/null && python3 -c 'import bcrypt' 2>/dev/null; then
-  hash="$(ADMIN_PW="$ADMIN_PW" python3 -c 'import bcrypt,os;print(bcrypt.hashpw(os.environ["ADMIN_PW"].encode(),bcrypt.gensalt(12)).decode(),end="")' || true)"
-fi
-if [ -z "$hash" ] && [ "$HAVE_DOCKER" = 1 ]; then
-  img="$(getenv_val CADDY_IMAGE)"
-  hash="$(printf '%s\n' "$ADMIN_PW" | docker run --rm -i "$img" caddy hash-password 2>/dev/null | tr -d '\r\n' || true)"
-fi
-hash="${hash/\$2y\$/\$2a\$}"
-case "$hash" in
-  \$2a\$*|\$2b\$*) setenv ADMIN_BASIC_HASH "$hash"; setenv ADMIN_BASIC_PASSWORD "$ADMIN_PW" ;;
-  *) die "could not create a bcrypt hash for the admin basic-auth (need htpasswd, python3-bcrypt or docker). Install one and re-run (remove the partly written .env first)." ;;
-esac
-unset ADMIN_PW hash
-
-# ---- certificates --------------------------------------------------------
-mkdir -p certs
+mkdir -p certs secrets data/netdisco/logs data/migration data/setup migration cust-exporter/app config/netdisco/nd-site-local
 if [ ! -f certs/ca.crt ]; then
   say "creating a private CA and server certificate in ./certs"
   san="DNS:caddy,DNS:localhost"
@@ -220,31 +378,6 @@ if [ ! -f certs/ca.crt ]; then
   chmod 600 certs/*.key; chmod 644 certs/ca.crt certs/server.crt
   say "  (import certs/ca.crt into browsers/clients that should trust this server)"
 fi
-
-# ---- secret files, folders ------------------------------------------------
-mkdir -p secrets data/netdisco/logs data/migration data/setup migration cust-exporter/app config/netdisco/nd-site-local
-# The Prometheus and Oxidized token files start as the NetBox superuser token so a device
-# added after first-run is monitored with no extra step. This token is privileged.
-# Replace it with a read-only token: scripts/set-secret.sh prometheus/netbox.token
-NB_TOKEN="$(getenv_val NETBOX_SUPERUSER_API_TOKEN)"
-write_secret prometheus/netbox.token "$NB_TOKEN" 65534
-write_secret oxidized/netbox.token "$NB_TOKEN" 0
-unset NB_TOKEN
-write_secret oxidized/device_username "" 0
-write_secret oxidized/device_password "" 0
-write_secret trapd/trap_community "" 10002
-write_secret trapd/v3_users.conf "" 10002
-for s in fortigate_token panos_api_key ise_credentials dnac_credentials sdwan_credentials; do
-  write_secret "telegraf/$s" "" 10001
-done
-write_secret cust-exporter/netbox.token "unset-placeholder" 0
-# token for the setup service API (the operator pastes it into the first-run page)
-write_secret setup/token "$(gen 48)" 0
-[ "$PERM_WARN" = 1 ] && warn "not root: secret files for container users are mode 0644. Run 'sudo ./install.sh --fix-perms' to tighten them."
-
-
-# from here on a failure must not delete .env
-ENV_CREATED=
 
 # Build local images. IE_UI_IMAGE, when set to something other than insightengine-ui:local,
 # is pulled and not built. ui/Dockerfile is the Next.js UI (npm ci, NEXT_PUBLIC_IE_API_MODE=live,
@@ -299,13 +432,12 @@ else
 fi
 
 # ---- summary (no secrets printed) --------------------------------------------
-HTTPS_PORT="$(getenv_val PORT_HTTPS)"; HTTPS_PORT="${HTTPS_PORT:-443}"
-url="https://${PUBLIC_HOST}"; [ "$HTTPS_PORT" = 443 ] || url="$url:$HTTPS_PORT"
 say ""
 say "=== done ==="
+print_port_table
 say "Configuration : .env (mode 600) holds the generated passwords. This script does not print them."
 say "Certificates  : certs/ca.crt (private CA - import it into browsers that should trust this server)"
-say "FIRST RUN     : open  ${url}/setup/  and paste the setup token."
+say "FIRST RUN     : open the setup URL above and paste the setup token."
 say "                The token is in the file  secrets/setup/token  (read it yourself, e.g. 'sudo cat secrets/setup/token')."
 say "                Then: client name, the first administrator email and password, then new install or move."
 say "                The administrator password is chosen on that page. This script does not print it."

@@ -1,6 +1,7 @@
 # Device discovery matches the real stack's NetBox plugin
 # (/api/plugins/lists/prometheus-devices/), reached through the internal Caddy
-# listener so TLS is checked with certs/ca.crt. Refresh is 5m, so a new active
+# listener so TLS is checked with the CA mounted at /etc/ie-certs/ca.crt
+# (not under the read-only /etc/prometheus tree). Refresh is 5m, so a new active
 # device with a primary IP shows up within the 5-10 minute window.
 # Module and auth come from the job, then from __meta_netbox_snmp_* when the
 # plugin set them (role / manufacturer / platform).
@@ -57,7 +58,7 @@ scrape_configs:
           type: Token
           credentials_file: /run/secrets/netbox_token
         tls_config:
-          ca_file: /etc/prometheus/certs/ca.crt
+          ca_file: /etc/ie-certs/ca.crt
           server_name: caddy
     relabel_configs: &icmp_relabels
       - source_labels: [__address__]

@@ -79,11 +79,16 @@ def _prepare_prometheus(content: str, work: str, rules_text: str | None) -> str:
     with open(rules_path, "w", encoding="utf-8") as fh:
         fh.write(rules_text)
     # certificates are not required for a syntax check; give promtool an empty file if referenced
-    certs = os.path.join(work, "certs")
-    os.makedirs(certs, exist_ok=True)
-    open(os.path.join(certs, "ca.crt"), "a", encoding="utf-8").close()
+    for cert_dir in ("certs", "ie-certs"):
+        certs = os.path.join(work, cert_dir)
+        os.makedirs(certs, exist_ok=True)
+        open(os.path.join(certs, "ca.crt"), "a", encoding="utf-8").close()
     open(os.path.join(work, "netbox.token"), "a", encoding="utf-8").close()
-    rewritten = content.replace("/etc/prometheus/", work + "/").replace("/run/secrets/netbox_token", os.path.join(work, "netbox.token"))
+    rewritten = (
+        content.replace("/etc/prometheus/", work + "/")
+        .replace("/etc/ie-certs/", os.path.join(work, "ie-certs") + "/")
+        .replace("/run/secrets/netbox_token", os.path.join(work, "netbox.token"))
+    )
     path = os.path.join(work, "prometheus.yml")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(rewritten)

@@ -28,8 +28,11 @@
 	}
 }
 
-http://:80 {
-	redir https://{host}{uri} permanent
+# PORT_* are the host ports install.sh chose. Compose publishes each one onto
+# the same port inside this container, so the site address and the public URL match.
+# HTTPS_PORT_SUFFIX is empty when PORT_HTTPS is 443, otherwise ":8443" (or whatever was free).
+http://:{$PORT_HTTP:80} {
+	redir https://{$PUBLIC_HOST}{$HTTPS_PORT_SUFFIX:}{uri} permanent
 }
 
 # Front door: "/" is the first-run setup page until the setup state is
@@ -45,7 +48,7 @@ http://:80 {
 # only answers /setup/state and /setup/gate on the edge (unless
 # SETUP_PUBLIC_AFTER_COMPLETE=yes).
 # If the setup service is down, "/" returns an error (fail closed).
-https://{$PUBLIC_HOST} {
+https://{$PUBLIC_HOST}:{$PORT_HTTPS:443} {
 	import tls_local
 	import client_header
 	encode zstd gzip
@@ -83,7 +86,7 @@ https://{$PUBLIC_HOST} {
 }
 
 # NetBox (user-facing), moved off "/" to its own port.
-https://{$PUBLIC_HOST}:8444 {
+https://{$PUBLIC_HOST}:{$PORT_NETBOX:8444} {
 	import tls_local
 	import client_header
 	encode zstd gzip
@@ -98,42 +101,42 @@ https://caddy:8443 {
 	reverse_proxy netbox:8080
 }
 
-https://{$PUBLIC_HOST}:3000 {
+https://{$PUBLIC_HOST}:{$PORT_GRAFANA:3000} {
 	import tls_local
 	import client_header
 	encode zstd gzip
 	reverse_proxy grafana:3000
 }
 
-https://{$PUBLIC_HOST}:9090 {
+https://{$PUBLIC_HOST}:{$PORT_PROMETHEUS:9090} {
 	import tls_local
 	import client_header
 	import admin_auth
 	reverse_proxy prometheus:9090
 }
 
-https://{$PUBLIC_HOST}:9093 {
+https://{$PUBLIC_HOST}:{$PORT_ALERTMANAGER:9093} {
 	import tls_local
 	import client_header
 	import admin_auth
 	reverse_proxy alertmanager:9093
 }
 
-https://{$PUBLIC_HOST}:8081 {
+https://{$PUBLIC_HOST}:{$PORT_ACTIVEPIECES:8081} {
 	import tls_local
 	import client_header
 	encode zstd gzip
 	reverse_proxy activepieces-app:80
 }
 
-https://{$PUBLIC_HOST}:5000 {
+https://{$PUBLIC_HOST}:{$PORT_NETDISCO:5000} {
 	import tls_local
 	import client_header
 	encode zstd gzip
 	reverse_proxy netdisco-web:5000
 }
 
-https://{$PUBLIC_HOST}:8888 {
+https://{$PUBLIC_HOST}:{$PORT_OXIDIZED:8888} {
 	import tls_local
 	import client_header
 	import admin_auth

@@ -6,7 +6,7 @@
   method = "GET"
   headers = {"Authorization" = "Bearer @{docker_secrets:fortigate_token}"}
   data_format = "json_v2"
-  tls_ca = "/etc/telegraf/ca.crt"          # use your device CA bundle here if it differs
+  tls_ca = "/etc/ie-certs/ca.crt"          # stack CA; use the device CA bundle here if it differs
   timeout = "20s"
   interval = "60s"
   name_override = "firewall_resource"

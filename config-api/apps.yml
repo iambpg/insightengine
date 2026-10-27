@@ -1,6 +1,9 @@
 # App registry for ie-config. Paths are relative to CONFIG_ROOT (the install directory).
 # File ids are the only way to address a file. "${CLIENT_SLUG}" and "${PUBLIC_HOST}" and the
 # PORT_* / image variables are expanded from the environment when the process starts.
+# Reload: only Prometheus is started with --web.enable-lifecycle. Alertmanager,
+# blackbox_exporter, and snmp_exporter serve POST /-/reload without that flag.
+# Scale replicas (snmp-exporter-3/4, blackbox-exporter-3) are not in the reload list.
 version: 1
 apps:
   - id: prometheus

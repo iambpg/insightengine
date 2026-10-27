@@ -39,9 +39,9 @@ sudo ./install.sh --public-host monitor.example.com      # or: INSTALL_PUBLIC_HO
 ```
 
 `install.sh` flags: `--public-host HOST` (default: first IP / host name of this machine — the value goes into the TLS certificate and `PUBLIC_HOST`),
-`--alt-ports` / `--default-ports` (default: **automatic** — if any default port is already in use, e.g. an old stack on the same host, the alternative set
-HTTP 8080, HTTPS 8443, Grafana 13000, … is used and the old stack is not touched), `--no-start` (prepare files only), `--fix-perms`, `--help`.
-It refuses to overwrite an existing `.env`. It prints **no secret**; the generated values live only in `.env` (mode 600) and `secrets/`.
+`--alt-ports` / `--default-ports` (default: **automatic** — every published host port is probed with `ss`, `lsof`, and Docker's published ports. A free default is kept. A busy port is replaced on its own: its preferred alternative, then the next free port. One busy port does not move the others. `--default-ports` stops if a default is busy. `--alt-ports` starts from the preferred alternatives), `--no-start` (prepare files only), `--fix-perms`, `--help`.
+If `.env` exists and `.install-started` contains exactly `past-secret-generation`, a later run resumes at certificates, image build, and start. It does not regenerate or print secrets, and it does not rewrite `.env`, ports, or secret files. If `.env` exists without that marker, the script stops and leaves `.env` untouched. Generated values live only in `.env` (mode 600) and `secrets/`.
+The chosen ports are the ones Caddy listens on and the ones in Prometheus `--web.external-url`, Alertmanager `--web.external-url`, Grafana `root_url`, NetBox, and the setup URL printed at the end. `scripts/smoke.sh` (after the stack is up; it does not start it) waits and prints the last 15 log lines of any container that is not healthy.
 Run as root so secret files are `0400` and owned by the container user (otherwise `0644` + a warning; fix later with `sudo ./install.sh --fix-perms`).
 
 It does **not** ask for the client or for new-vs-move: it writes `CLIENT_NAME='unconfigured'`, `CLIENT_SLUG='unconfigured'`, creates
@@ -131,7 +131,7 @@ Re-measure after the first week with `prometheus_tsdb_head_series` and container
 
 Your pattern is kept: Prometheus calls the plugin list endpoint through Caddy
 (`https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=<role>`) with `Authorization: Token` read from a
-**token file** (`credentials_file`), and verifies TLS with `certs/ca.crt` (`ca_file`, `server_name: caddy`).
+**token file** (`credentials_file`), and verifies TLS with the CA mounted at `/etc/ie-certs/ca.crt` (`ca_file`; the host file is `certs/ca.crt`, outside the read-only `/etc/prometheus` directory, `server_name: caddy`).
 **This endpoint is "as used in your current stack"** — I did not verify or invent any plugin details, and the label names
 `__meta_netbox_*` used in relabelling are my assumption of that plugin's output. Compare with `curl` output from your real plugin.
 Roles are one job each (`icmp-*` and `snmp-*`) so each class gets its own interval, timeout and `sample_limit`.
@@ -143,7 +143,7 @@ Roles are one job each (`icmp-*` and `snmp-*`) so each class gets its own interv
 * Old DB passwords are given as **file paths** (never typed into the page or sent over the API); `migrate.sh` reads the file and hands the password to the old container on **stdin**.
   Nothing is logged.
 * Old Alertmanager/Caddy/Grafana-provisioning files are copied to `migration/imported/<timestamp>/` for **review**, not applied.
-* New and old stacks can run **side by side** (`install.sh` detects busy ports and shifts the new stack to alternative ports).
+* New and old stacks can run **side by side** (`install.sh` probes each published host port and picks a free one).
 * The old stack's folders are mounted **read-only** into the setup container under `SETUP_OLD_STACK_ROOT` (default `/opt`; change it in `.env` if the old stack lives elsewhere, then
   `docker compose up -d setup`). Paths outside it are rejected.
 
@@ -208,6 +208,8 @@ UI import checks on this change (Node.js 22.23.4, npm 10.9.9, shellcheck 0.9.0, 
 * `shellcheck` on `install.sh` and `scripts/validate.sh` passed. The full `shellcheck` run inside `scripts/validate.sh` still reports an existing info-level SC2015 in `scripts/prom-history.sh` line 57, so that script exits 1 with shellcheck 0.9.0. That line is unchanged here.
 * The UI container image was not built and the stack was not started.
 
+Later static checks (still no Docker daemon in this environment): `scripts/check-docker-copy.py` (COPY sources, including the named `netbox_config` context), `scripts/check-compose-audit.py` (read-only nested mounts, Prometheus-only `--web.enable-lifecycle`, Netdisco `required: false`, `http://127.0.0.1` healthchecks), and `scripts/smoke.sh --self-test`. `scripts/smoke.sh` without that flag waits on a running project and does not start it. `install.sh --no-start` was re-run in a scratch copy to confirm resume does not rewrite `.env`. No container was built or started, so `python manage.py check` inside the NetBox image was not run; the lists plugin was compared with the NetBox v4.6.3 source instead.
+
 ## 10. Security notes and flags
 
 * **Setup service = root-equivalent (flag).** It drives Docker through `docker-socket-proxy` on an internal-only network; the web page and any UI backend never get a raw socket.
@@ -227,12 +229,12 @@ UI import checks on this change (Node.js 22.23.4, npm 10.9.9, shellcheck 0.9.0, 
 ## 11. Assumptions and TODOs needing Phindani's input
 
 1. **NetBox image/version**: pinned stock tag `netboxcommunity/netbox:v4.7.3` as a placeholder. Use **your** image with the Prometheus `lists` plugin and the exact version you run (and decide whether the plugin name `lists` is right).
-2. **All image tags** in `.env.example` were the latest releases found while preparing this bundle; confirm them. Netdisco and Oxidized are still on `latest` (TODO: pin).
+2. **All image tags** in `.env.example` were the latest releases found while preparing this bundle; confirm them. Netdisco is pinned to `netdisco/netdisco:2.116000` (compose appends `-postgresql`, `-backend`, and `-web`). Oxidized is still on `latest` (TODO: pin).
 3. **Plugin endpoint and `__meta_netbox_*` label names** (§7) are unverified.
 4. **MIB set / SNMP modules**: `snmp/generator.yml` is untested; `snmp/out/snmp.yml` is a skeleton with `if_mib` and `system` modules. Provide the vendor MIB list (Cisco, Fortinet, Palo Alto, Aruba, Juniper, …) and run `docker compose --profile tools run --rm snmp-generator`.
 5. **API credential names** for Telegraf (`secrets/telegraf/*`): FortiGate, PAN-OS, ISE, DNA Center, SD-WAN. The `*.conf.example` files use placeholder endpoints that must be confirmed against each vendor's current API.
 6. **Container UIDs**: Telegraf 10001, trapd 10002, Prometheus 65534, Oxidized 30000 — confirm for your images.
-7. **Netdisco**: the old PGDATA path (`/var/lib/postgresql/netdisco-pgdata`) is noted in the compose; confirm the image's data dir. Port `5000`, `nd-site-local` content (`deployment.yml.example`).
+7. **Netdisco**: image tag `2.116000`, PostgreSQL 18. The data volume is `netdisco-pgdata` mounted at `/var/lib/postgresql` (PGDATA is `/var/lib/postgresql/18/docker`). The entrypoint sets a random superuser password; the app role and database come from `NETDISCO_DB_USER` / `NETDISCO_DB_PASS` / `NETDISCO_DB_NAME`. `netdisco-db-init` finishes before web and backend. Port `5000` (`PORT_NETDISCO`). SNMP-only `deployment.yml` is rendered into `nd-site-local` (`deployment.yml.example`).
 8. **Oxidized**: model/platform mapping uses NetBox `platform.slug`; the image must contain `curl` for the hooks (otherwise build a small derived image).
 9. **Old stack names/paths** (`/opt/arg/...`, `/opt/netdisco/...`, container names) are installer defaults you can edit.
 10. **Alert rules** in `config/prometheus/alert-rules.yml` are 4 skeletons; replace with your real rules. `alert-relay` is a placeholder: `config/alert-relay/destinations.json` ships with one disabled example; the UI is meant to write the real file later. Destination URLs may contain secrets, so do not commit the real file.
