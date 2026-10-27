@@ -201,6 +201,13 @@ the socket-proxy allow-list against real `docker compose up`, the setup containe
 the first-run page in a browser, `migrate.sh run` and `prom-history.sh import` against real stacks, the MIB generator, the vendor-API Telegraf examples,
 and **anything on real devices or at 20,000-device scale.**
 
+UI import checks on this change (Node.js 22.23.4, npm 10.9.9, shellcheck 0.9.0, PyYAML 6.0.1; Docker not installed):
+
+* `npm ci`, `npm run build`, and `npm test` in `ui/` passed (4 files, 16 tests). `next build` wrote `ui/.next/standalone/server.js`. The production bundle omits the mock demo passwords. The image Dockerfile sets `NEXT_PUBLIC_IE_API_MODE=live`; an unset production build resolves to live as well.
+* `docker-compose.yml` parses with PyYAML. `insightengine-ui` builds `./ui` (`Dockerfile`), listens via `PORT` / `IE_UI_PORT` (8080), and checks `GET /healthz`.
+* `shellcheck` on `install.sh` and `scripts/validate.sh` passed. The full `shellcheck` run inside `scripts/validate.sh` still reports an existing info-level SC2015 in `scripts/prom-history.sh` line 57, so that script exits 1 with shellcheck 0.9.0. That line is unchanged here.
+* The UI container image was not built and the stack was not started.
+
 ## 10. Security notes and flags
 
 * **Setup service = root-equivalent (flag).** It drives Docker through `docker-socket-proxy` on an internal-only network; the web page and any UI backend never get a raw socket.
