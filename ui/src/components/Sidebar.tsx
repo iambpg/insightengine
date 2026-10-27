@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/AppIcon';
 import AppLogo from '@/components/ui/AppLogo';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
 
 interface NavItem {
@@ -32,7 +33,6 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
         href: '/not-in-net-box',
         label: 'Not in NetBox',
         icon: 'QuestionMarkCircleIcon',
-        badge: 10,
       },
     ],
   },
@@ -60,12 +60,32 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
     role: 'Administrator',
     initials: 'MB',
   });
+  const [pending, setPending] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listDiscovered()
+      .then((rows) => {
+        if (!cancelled) setPending(rows.length);
+      })
+      .catch(() => {
+        if (!cancelled) setPending(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const apply = () => {
       const session = readSession();
       if (!session) {
-        setWho({ name: 'Marit van der Berg', role: 'Administrator', initials: 'MB' });
+        setWho(
+          isMockMode()
+            ? { name: 'Marit van der Berg', role: 'Administrator', initials: 'MB' }
+            : { name: 'Signed out', role: '', initials: '—' }
+        );
         return;
       }
       const name = displayName(session.email);
@@ -109,6 +129,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
             <ul className="space-y-0.5">
               {g.items.map((item) => {
                 const active = isActive(item.href);
+                const badge = item.href === '/not-in-net-box' ? pending : item.badge;
                 return (
                   <li key={`nav-${item.label}`} className="group relative">
                     <Link
@@ -123,9 +144,9 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
                     >
                       <Icon name={item.icon} size={18} variant={active ? 'solid' : 'outline'} />
                       {!isCollapsed && <span className="flex-1 truncate">{item.label}</span>}
-                      {!isCollapsed && item.badge ? (
+                      {!isCollapsed && badge ? (
                         <span className="rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-bold tabular text-warning-foreground">
-                          {item.badge}
+                          {badge}
                         </span>
                       ) : null}
                     </Link>
@@ -135,7 +156,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
                         className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md bg-navy-3 px-2 py-1 text-xs text-primary-foreground opacity-0 shadow-pop transition-opacity group-hover:opacity-100"
                       >
                         {item.label}
-                        {item.badge ? ` (${item.badge})` : ''}
+                        {badge ? ` (${badge})` : ''}
                       </span>
                     )}
                   </li>

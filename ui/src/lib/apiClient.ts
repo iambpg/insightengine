@@ -55,6 +55,9 @@ export interface Paged<T> {
   rows: T[];
   total: number;
   isExampleData: boolean;
+  roles?: string[];
+  regions?: string[];
+  degraded?: string[];
 }
 
 type Backend = typeof live;
@@ -86,23 +89,28 @@ export const api = {
   },
 
   // BACKEND: GET /api/v1/devices/{id}/metrics/throughput?range=
-  async getThroughput(range: RangeKey, seed: number, customMin?: number): Promise<SeriesPoint[]> {
+  async getThroughput(range: RangeKey, seed: string | number, customMin?: number): Promise<SeriesPoint[]> {
     return (await backend()).getThroughput(range, seed, customMin);
   },
 
   // BACKEND: GET /api/v1/devices/{id}/metrics/resources?range=
-  async getResources(range: RangeKey, seed: number) {
+  async getResources(range: RangeKey, seed: string | number) {
     return (await backend()).getResources(range, seed);
   },
 
   // BACKEND: GET /api/v1/devices/{id}/ports/top?metric=util
-  async getTopPorts(seed: number) {
-    return (await backend()).getTopPorts(seed);
+  async getTopPorts(seed: string | number, range?: RangeKey, customMin?: number) {
+    return (await backend()).getTopPorts(seed, range, customMin);
   },
 
   // BACKEND: GET /api/v1/devices/{id}/ports/{portId}/metrics?range=
-  async getPortSeries(portId: string, range: RangeKey, customMin?: number): Promise<SeriesPoint[]> {
-    return (await backend()).getPortSeries(portId, range, customMin);
+  async getPortSeries(
+    portId: string,
+    range: RangeKey,
+    customMin?: number,
+    deviceId?: string
+  ): Promise<SeriesPoint[]> {
+    return (await backend()).getPortSeries(portId, range, customMin, deviceId);
   },
 
   // BACKEND: GET /api/v1/sites?page=&q=&health=&region=
@@ -111,8 +119,8 @@ export const api = {
   },
 
   // BACKEND: GET /api/v1/sites/{id}/devices
-  async listSiteDevices(siteIndex: number): Promise<DeviceRow[]> {
-    return (await backend()).listSiteDevices(siteIndex);
+  async listSiteDevices(siteId: string | number): Promise<DeviceRow[]> {
+    return (await backend()).listSiteDevices(siteId);
   },
 
   // BACKEND: GET /api/v1/discovery/unapproved

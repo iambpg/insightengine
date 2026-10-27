@@ -8,6 +8,7 @@
 - Validate with the binaries copied into the image (promtool, amtool, snmp_exporter `--dry-run`, blackbox_exporter `--config.check`, caddy `validate` / `adapt`). Telegraf is TOML syntax only: `telegraf --test` contacts devices, so it is not run. If a binary is missing, the API says so in `tool` and falls back to syntax.
 - Reload over HTTP on the monitoring network (`/-/reload` on Prometheus, Alertmanager, blackbox, SNMP exporter). Only Prometheus is started with `--web.enable-lifecycle`; Alertmanager, blackbox_exporter, and snmp_exporter serve `POST /-/reload` without that flag. Caddy reload runs `caddy adapt` and POSTs the JSON to the admin `/load` API. An empty POST is not sent. If adapt cannot run, the response says to restart.
 - Restart a container only when its name is in the registry (or the fixed names `ie-setup`, `ie-docker-proxy`, `ie-config`, `ie-config-docker-proxy`). The call goes to `ie-config-docker-proxy`, a second tecnativa proxy. It allows container list/inspect and restart. `POST=1` on that proxy also enables DELETE in the proxy itself; start, stop, exec, images, networks, volumes, and secrets are set to 0. This is still a privileged Docker API. Only an Administrator can call restart, every call is audited, and the service is not published on the host.
+- Read the customer UI's fleet screens from NetBox, Prometheus and Alertmanager. The routes, empty-install behaviour and what was not checked on a live stack are in `docs/fleet-api.md`.
 
 ## Data
 

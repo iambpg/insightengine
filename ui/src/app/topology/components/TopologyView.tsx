@@ -8,6 +8,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData, DeviceHealth, DeviceRow, PortInfo, SiteRow } from '@/lib/types';
 import DeviceArt, { ArtDefs, type DeviceKind } from '@/app/topology/components/DeviceArt';
@@ -323,7 +324,7 @@ function ErrorBox({ text, onRetry }: { text: string; onRetry: () => void }) {
   );
 }
 
-function DeviceTopologyPage({ form }: { form: string }) {
+function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: string }) {
   const [device, setDevice] = useState<DeviceDetailData | null>(null);
   const [siteDevices, setSiteDevices] = useState<DeviceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -335,17 +336,25 @@ function DeviceTopologyPage({ form }: { form: string }) {
     setSiteDevices(null);
     setError(null);
     api
-      .getDevice(form)
-      .then((d) => !cancelled && setDevice(d))
-      .catch(() => !cancelled && setError('Failed to load the topology. Check your connection and try again.'));
-    api
-      .listSiteDevices(3)
-      .then((d) => !cancelled && setSiteDevices(d))
+      .getDevice(deviceKey)
+      .then((d) => {
+        if (cancelled) return;
+        setDevice(d);
+        const siteKey = isMockMode() ? 3 : d.siteId;
+        if (!siteKey) {
+          setSiteDevices([]);
+          return;
+        }
+        api
+          .listSiteDevices(siteKey)
+          .then((rows) => !cancelled && setSiteDevices(rows))
+          .catch(() => !cancelled && setError('Failed to load the topology. Check your connection and try again.'));
+      })
       .catch(() => !cancelled && setError('Failed to load the topology. Check your connection and try again.'));
     return () => {
       cancelled = true;
     };
-  }, [form, reload]);
+  }, [deviceKey, reload]);
 
   const devTopo = useMemo(() => (device ? buildDeviceTopology(device) : null), [device]);
   const siteTopo = useMemo(() => {
@@ -365,7 +374,7 @@ function DeviceTopologyPage({ form }: { form: string }) {
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
         <Link href="/" className="hover:text-foreground hover:underline">Devices</Link>
         <Icon name="ChevronRightIcon" size={12} />
-        <Link href={`/device-detail?form=${form}`} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
+        <Link href={isMockMode() ? `/device-detail?form=${form}` : `/device-detail?id=${encodeURIComponent(device?.id || deviceKey)}&form=${form}`} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
         <Icon name="ChevronRightIcon" size={12} />
         <span className="text-foreground">Topology</span>
       </nav>
@@ -380,7 +389,7 @@ function DeviceTopologyPage({ form }: { form: string }) {
               <span className="font-mono-data text-xs text-muted-foreground">Serial {device.serialMasked}</span>
             </div>
             <Link
-              href={`/device-detail?form=${form}`}
+              href={isMockMode() ? `/device-detail?form=${form}` : `/device-detail?id=${encodeURIComponent(device?.id || deviceKey)}&form=${form}`}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
             >
               <Icon name="ArrowLeftIcon" size={16} />Back to device
@@ -433,7 +442,7 @@ function DeviceTopologyPage({ form }: { form: string }) {
         <div className="border-t border-border px-4 py-2"><Legend /></div>
       </section>
 
-      <ExampleDataBanner text="Topology links are simulated example data. No live discovery is run." />
+      {isMockMode() ? <ExampleDataBanner text="Topology links are simulated example data. No live discovery is run." /> : null}
     </div>
   );
 }
@@ -447,9 +456,8 @@ function SiteTopologyPage({ site, onBack }: { site: SiteRow; onBack: () => void 
     let cancelled = false;
     setDevices(null);
     setError(null);
-    const idx = Number(site.id.replace('site-', '')) - 1;
     api
-      .listSiteDevices(idx)
+      .listSiteDevices(site.id)
       .then((d) => !cancelled && setDevices(d))
       .catch(() => !cancelled && setError('Failed to load the topology for this site. Check your connection and try again.'));
     return () => {
@@ -502,7 +510,7 @@ function SiteTopologyPage({ site, onBack }: { site: SiteRow; onBack: () => void 
         <div className="border-t border-border px-4 py-2"><Legend /></div>
       </section>
 
-      <ExampleDataBanner text="Topology links are simulated example data. No live discovery is run." />
+      {isMockMode() ? <ExampleDataBanner text="Topology links are simulated example data. No live discovery is run." /> : null}
     </div>
   );
 }
@@ -511,9 +519,11 @@ export default function TopologyView() {
   const searchParams = useSearchParams();
   const q = searchParams?.get('form') ?? null;
   const form = q && FORMS.includes(q) ? q : null;
+  const id = searchParams?.get('id');
   const [site, setSite] = useState<SiteRow | null>(null);
 
-  if (form) return <DeviceTopologyPage form={form} />;
+  if (!isMockMode() && id) return <DeviceTopologyPage form={form ?? 'switch-stack'} deviceKey={id} />;
+  if (form) return <DeviceTopologyPage form={form} deviceKey={form} />;
   if (site) return <SiteTopologyPage site={site} onBack={() => setSite(null)} />;
   return (
     <div className="px-3 sm:px-4">

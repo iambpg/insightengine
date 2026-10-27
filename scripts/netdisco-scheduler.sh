@@ -26,14 +26,25 @@ while true; do
   if [ $((now - last)) -ge "$window" ]; then
     scan=1
   fi
-  if [ "$scan" -eq 1 ] && [ -f "$DIR/scan-prefixes.txt" ]; then
+  walk_file() {
+    file=$1
+    [ -f "$file" ] || return 0
     while IFS= read -r cidr || [ -n "$cidr" ]; do
       printf '%s' "$cidr" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$' || continue
       netdisco-do discover -d "$cidr" || true
       netdisco-do macsuck -d "$cidr" || true
       netdisco-do arpnip -d "$cidr" || true
-    done < "$DIR/scan-prefixes.txt"
+    done < "$file"
+  }
+  if [ "$scan" -eq 1 ] && [ -f "$DIR/scan-prefixes.txt" ]; then
+    walk_file "$DIR/scan-prefixes.txt"
     last=$now
+  fi
+  # One-shot targets from POST /api/v1/discovery/scan. Removed before the walk so a retry does not duplicate them.
+  if [ -f "$DIR/scan-once.txt" ]; then
+    mv "$DIR/scan-once.txt" "$DIR/scan-once.running"
+    walk_file "$DIR/scan-once.running"
+    rm -f "$DIR/scan-once.running"
   fi
   sleep 60
 done

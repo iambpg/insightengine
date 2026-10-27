@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import type { DeviceHealth } from '@/lib/types';
 
 interface Summary {
@@ -24,10 +25,19 @@ const fmt = (n: number) => n.toLocaleString('en-US');
 
 export default function HealthStrip({ activeHealth, onPick }: Props) {
   const [s, setS] = useState<Summary | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    api.getSummary().then(setS);
+    api.getSummary().then(setS).catch(() => setFailed(true));
   }, []);
+
+  if (failed) {
+    return (
+      <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        Fleet summary is unavailable.
+      </div>
+    );
+  }
 
   if (!s) {
     return (
@@ -40,7 +50,8 @@ export default function HealthStrip({ activeHealth, onPick }: Props) {
     );
   }
 
-  const pct = (n: number) => `${((n / s.total) * 100).toFixed(1)}%`;
+  const pct = (n: number) => (s.total > 0 ? `${((n / s.total) * 100).toFixed(1)}%` : '0.0%');
+  const mock = isMockMode();
 
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 2xl:gap-4">
@@ -64,13 +75,13 @@ export default function HealthStrip({ activeHealth, onPick }: Props) {
           <span className="bg-destructive" style={{ width: pct(s.critical) }} />
           <span className="bg-down" style={{ width: pct(s.unreachable) }} />
         </div>
-        <p className="mt-2 text-[11px] text-down">Across 2,014 sites · {fmt(s.alerts)} alerts firing</p>
+        <p className="mt-2 text-[11px] text-down">{mock ? `Across 2,014 sites · ${fmt(s.alerts)} alerts firing` : `${fmt(s.alerts)} open alerts`}</p>
       </button>
 
       <Tile label="Healthy" value={s.healthy} pct={pct(s.healthy)} tone="success" icon="CheckCircleIcon" note="Telemetry fresh, no faults" active={activeHealth === 'healthy'} onClick={() => onPick('healthy')} />
-      <Tile label="Warning" value={s.warning} pct={pct(s.warning)} tone="warning" icon="ExclamationTriangleIcon" note="Errors or high utilisation" active={activeHealth === 'warning'} onClick={() => onPick('warning')} delta="+118 vs yesterday" />
-      <Tile label="Critical" value={s.critical} pct={pct(s.critical)} tone="destructive" icon="XCircleIcon" note="Port, PSU or module fault" active={activeHealth === 'critical'} onClick={() => onPick('critical')} delta="+37 vs yesterday" alert />
-      <Tile label="Unreachable" value={s.unreachable} pct={pct(s.unreachable)} tone="neutral" icon="SignalSlashIcon" note="No poll for 30+ minutes" active={activeHealth === 'unreachable'} onClick={() => onPick('unreachable')} delta="−12 vs yesterday" />
+      <Tile label="Warning" value={s.warning} pct={pct(s.warning)} tone="warning" icon="ExclamationTriangleIcon" note="Errors or high utilisation" active={activeHealth === 'warning'} onClick={() => onPick('warning')} delta={mock ? '+118 vs yesterday' : undefined} />
+      <Tile label="Critical" value={s.critical} pct={pct(s.critical)} tone="destructive" icon="XCircleIcon" note="Port, PSU or module fault" active={activeHealth === 'critical'} onClick={() => onPick('critical')} delta={mock ? '+37 vs yesterday' : undefined} alert />
+      <Tile label="Unreachable" value={s.unreachable} pct={pct(s.unreachable)} tone="neutral" icon="SignalSlashIcon" note="No poll for 30+ minutes" active={activeHealth === 'unreachable'} onClick={() => onPick('unreachable')} delta={mock ? '−12 vs yesterday' : undefined} />
     </div>
   );
 }

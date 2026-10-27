@@ -30,6 +30,11 @@ class Settings:
     mib_dir: str
     candidate_dir: str
     generator_bin: str
+    prometheus_url: str = "http://prometheus:9090"
+    alertmanager_url: str = "http://alertmanager:9093"
+    ca_file: str = "/etc/ie-certs/ca.crt"
+    fleet_cache_seconds: float = 8.0
+    alert_webhook_token_file: str = ""
     max_body: int = 6 * 1024 * 1024
     max_edit: int = 5 * 1024 * 1024
     mib_file_max: int = 2 * 1024 * 1024
@@ -62,4 +67,9 @@ class Settings:
             mib_dir=os.environ.get("MIB_DIR", os.path.join(root, "snmp", "mibs")),
             candidate_dir=os.environ.get("CANDIDATE_DIR", os.path.join(root, "data", "config-history", "candidates")),
             generator_bin=os.environ.get("GENERATOR_BIN", "/usr/local/bin/generator"),
+            prometheus_url=os.environ.get("PROMETHEUS_URL", "http://prometheus:9090").rstrip("/"),
+            alertmanager_url=os.environ.get("ALERTMANAGER_URL", "http://alertmanager:9093").rstrip("/"),
+            ca_file=os.environ.get("IE_CA_FILE", "/etc/ie-certs/ca.crt"),
+            fleet_cache_seconds=float(os.environ.get("FLEET_CACHE_SECONDS", "8") or "8"),
+            alert_webhook_token_file=os.environ.get("ALERT_WEBHOOK_TOKEN_FILE", ""),
         )

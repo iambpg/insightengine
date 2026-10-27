@@ -326,6 +326,87 @@ def test_discovery_selection_and_mib_names(tmp_path):
         save_mib(str(tmp_path), "ok.mib", b"x" * 10, file_max=4, total_max=20)
 
 
+def test_discovery_scan_and_ui_shapes(world):
+    from ie_config.db import DiscoveryCandidate, make_session_factory
+
+    client = world["client"]
+    _bootstrap(client)
+    csrf = _login(client)
+    assert client.get("/api/v1/discovery/scans").json() == []
+    assert client.get("/api/v1/discovery/unapproved").json() == []
+    missing = client.post("/api/v1/discovery/scan", json={"target": "prefix", "value": "10.0.0.0/24"})
+    assert missing.status_code == 403
+    bad = client.post(
+        "/api/v1/discovery/scan",
+        headers={"X-CSRF-Token": csrf},
+        json={"target": "ip", "value": "not-an-ip"},
+    )
+    assert bad.status_code == 400
+    queued = client.post(
+        "/api/v1/discovery/scan",
+        headers={"X-CSRF-Token": csrf},
+        json={"target": "prefix", "value": "10.2.0.0/24"},
+    )
+    assert queued.status_code == 200, queued.text
+    body = queued.json()
+    assert set(body) >= {"id", "target", "value", "status", "startedAt", "message"}
+    assert body["status"] == "queued"
+    assert body["target"] == "prefix"
+    assert body["value"] == "10.2.0.0/24"
+    assert client.get("/api/v1/discovery/scans").json()[0]["id"] == body["id"]
+    once = (world["root"] / "nd" / "scan-once.txt").read_text(encoding="utf-8")
+    assert "10.2.0.0/24" in once
+    assert (world["root"] / "nd" / "scan-now").is_file()
+
+    factory, _engine = make_session_factory("sqlite:///" + str(world["root"] / "ie.db"))
+    with factory() as db:
+        db.add(DiscoveryCandidate(
+            ip="10.1.1.1", name="edge-a", sysdescr="Cisco IOS", vendor="Cisco", model="C9300",
+            role_slug="access-switch", site_slug="rotterdam",
+        ))
+        db.commit()
+    rows = client.get("/api/v1/discovery/unapproved").json()
+    assert rows[0]["hostname"] == "edge-a"
+    assert rows[0]["sysName"] == "edge-a"
+    assert rows[0]["ip"] == "10.1.1.1"
+    assert rows[0]["suggested"] == {"role": "access-switch", "site": "rotterdam"}
+    assert isinstance(rows[0]["id"], str)
+
+    overview = client.get("/api/v1/settings/overview").json()
+    assert overview["generatedAt"]
+    assert "lastReloadAt" in overview["apps"][0]
+    assert "lastError" in overview["apps"][0]
+
+    me = client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    assert me.json()["email"] == "admin@example.com"
+    assert me.json()["role"] == "Administrator"
+    assert me.json()["csrfToken"]
+    headers = {"X-CSRF-Token": csrf}
+    validated = client.post(
+        "/api/v1/settings/apps/prometheus/files/prometheus.yml/validate",
+        headers=headers,
+        json={"content": "scrape_configs: []\n"},
+    )
+    assert validated.status_code == 200, validated.text
+    assert "ok" in validated.json() and "messages" in validated.json()
+    diff = client.post(
+        "/api/v1/settings/apps/prometheus/files/prometheus.yml/diff",
+        headers=headers,
+        json={"content": "scrape_configs: []\n"},
+    )
+    assert diff.status_code == 200
+    assert "unified" in diff.json()
+    history = client.get("/api/v1/settings/apps/prometheus/files/prometheus.yml/history")
+    assert history.status_code == 200 and isinstance(history.json(), list)
+    missing_history = client.get("/api/v1/settings/apps/prometheus/files/prometheus.yml/history/missing")
+    assert missing_history.status_code == 404
+    unknown = client.post("/api/v1/discovery/999/approve", headers=headers, json={"role": "access-switch", "site": "rotterdam"})
+    assert unknown.status_code == 404
+    rejected = client.post("/api/v1/discovery/999/reject", headers=headers)
+    assert rejected.status_code == 404
+
+
 def test_fake_promtool_does_not_write_live_file(tmp_path, monkeypatch):
     binary = tmp_path / "promtool"
     binary.write_text("#!/bin/sh\ngrep -q INVALID \"$3\" && exit 1\nexit 0\n", encoding="utf-8")

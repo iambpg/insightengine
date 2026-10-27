@@ -8,6 +8,7 @@ import Pagination from '@/components/ui/Pagination';
 import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import type { SiteRow } from '@/lib/types';
 
 interface Props {
@@ -117,7 +118,7 @@ export default function TopologySiteList({ onPick }: Props) {
         <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} sizes={[10, 25, 50]} noun="sites" />
       </section>
 
-      <ExampleDataBanner text="Topology links are simulated example data. No live discovery is run." />
+      {isMockMode() ? <ExampleDataBanner text="Topology links are simulated example data. No live discovery is run." /> : null}
     </div>
   );
 }

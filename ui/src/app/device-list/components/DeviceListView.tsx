@@ -5,6 +5,7 @@ import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
 import { api, type DeviceQuery } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import type { DeviceHealth, DeviceRow } from '@/lib/types';
 import HealthStrip from './HealthStrip';
 import DeviceFilters from './DeviceFilters';
@@ -27,7 +28,13 @@ export default function DeviceListView() {
   const [selected, setSelected] = useState<string[]>([]);
   const [visible, setVisible] = useState<ColumnKey[]>(COLUMNS.map((c) => c.key));
   const [reload, setReload] = useState(0);
-  const [updated, setUpdated] = useState('14:38:12');
+  const [roles, setRoles] = useState<string[] | undefined>();
+  const stamp = () => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+  };
+  const [updated, setUpdated] = useState(stamp);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +46,7 @@ export default function DeviceListView() {
         if (cancelled) return;
         setRows(res.rows);
         setTotal(res.total);
+        if (res.roles) setRoles(res.roles);
       })
       .catch(() => !cancelled && setError('Failed to load devices. Check your connection and try again.'));
     return () => {
@@ -79,7 +87,7 @@ export default function DeviceListView() {
             type="button"
             onClick={() => {
               setReload((n) => n + 1);
-              setUpdated('14:38:41');
+              setUpdated(stamp());
             }}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium transition-all hover:bg-muted active:scale-95"
           >
@@ -89,14 +97,14 @@ export default function DeviceListView() {
         </div>
       </header>
 
-      <ExampleDataBanner />
+      {isMockMode() ? <ExampleDataBanner /> : null}
 
       <HealthStrip activeHealth={query.health} onPick={healthFilter} />
 
       <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Device table">
         <div className="flex flex-col gap-3 border-b border-border p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <DeviceFilters query={query} onChange={patch} />
+            <DeviceFilters query={query} onChange={patch} roles={roles} />
             <div className="ml-auto flex items-center gap-2">
               <ColumnMenu visible={visible} onChange={setVisible} />
             </div>

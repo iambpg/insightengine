@@ -8,6 +8,7 @@ import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate from '@/components/faceplate/Faceplate';
 import { api } from '@/lib/apiClient';
+import { devicePath } from '@/lib/apiMode';
 import { buildFaceplateFor } from '@/lib/mockData';
 import type { DeviceRow, SiteRow } from '@/lib/types';
 
@@ -20,9 +21,8 @@ export default function SiteDetail({ site }: { site: SiteRow | null }) {
     let cancelled = false;
     setDevices(null);
     setError(null);
-    const idx = Number(site.id.replace('site-', '')) - 1;
     api
-      .listSiteDevices(idx)
+      .listSiteDevices(site.id)
       .then((d) => !cancelled && setDevices(d))
       .catch(() => !cancelled && setError('Failed to load devices for this site.'));
     return () => {
@@ -79,7 +79,7 @@ export default function SiteDetail({ site }: { site: SiteRow | null }) {
             <li key={d.id} className="rounded-lg border border-border bg-card p-4 shadow-card transition-all duration-150 hover:-translate-y-0.5 hover:shadow-pop">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <Link href={`/device-detail?form=${d.formFactor}`} className="block truncate font-mono-data text-sm font-semibold hover:text-primary hover:underline">{d.hostname}</Link>
+                  <Link href={devicePath(d.id, d.formFactor)} className="block truncate font-mono-data text-sm font-semibold hover:text-primary hover:underline">{d.hostname}</Link>
                   <p className="text-xs text-muted-foreground">{d.role} · <span className="font-mono-data">{d.mgmtIp}</span></p>
                 </div>
                 <HealthBadge health={d.health} />

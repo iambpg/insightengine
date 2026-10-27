@@ -160,6 +160,7 @@ export interface DeviceDetailData {
   hostname: string;
   role: string;
   site: string;
+  siteId?: string;
   mgmtIp: string;
   modelFamily: string;
   health: DeviceHealth;

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
 
 from .storage import atomic_write, unified_diff
 from .validators import validate_content
@@ -32,7 +33,12 @@ def list_mibs(directory: str) -> list[dict]:
             continue
         path = os.path.join(directory, name)
         if os.path.isfile(path):
-            out.append({"name": name, "sizeBytes": os.path.getsize(path)})
+            modified = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc)
+            out.append({
+                "name": name,
+                "sizeBytes": os.path.getsize(path),
+                "uploadedAt": modified.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            })
     return out
 
 

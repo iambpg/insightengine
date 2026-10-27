@@ -7,6 +7,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData } from '@/lib/types';
 
@@ -154,6 +155,7 @@ function resolveTyped(raw: string, d: DeviceDetailData): string | null {
 
 export default function DeviceCliView() {
   const [form, setForm] = useState<string>('switch-stack');
+  const [deviceKey, setDeviceKey] = useState<string>('switch-stack');
   const [device, setDevice] = useState<DeviceDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -168,8 +170,12 @@ export default function DeviceCliView() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get('form');
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('form');
+    const id = params.get('id');
     if (q && Object.keys(FACEPLATE_SAMPLES).includes(q)) setForm(q);
+    if (!isMockMode() && id) setDeviceKey(id);
+    else if (q) setDeviceKey(q);
   }, []);
 
   useEffect(() => {
@@ -178,13 +184,13 @@ export default function DeviceCliView() {
     setError(null);
     setHistory([]);
     api
-      .getDevice(form)
+      .getDevice(deviceKey)
       .then((d) => !cancelled && setDevice(d))
       .catch(() => !cancelled && setError('Failed to connect to this device. Check your connection and try again.'));
     return () => {
       cancelled = true;
     };
-  }, [form]);
+  }, [deviceKey]);
 
   useEffect(() => {
     const el = screenRef.current;

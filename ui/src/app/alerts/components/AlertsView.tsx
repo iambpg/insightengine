@@ -10,6 +10,8 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { devicePath, isMockMode } from '@/lib/apiMode';
+import { readSession } from '@/lib/session';
 import type { AlertItem, AlertSeverity } from '@/lib/types';
 
 type SevFilter = AlertSeverity | 'all';
@@ -124,8 +126,11 @@ export default function AlertsView() {
     setBusy(true);
     try {
       await api.acknowledgeAlerts(ids);
-      const at = '2026-10-27 17:25';
-      setAlerts((cur) => cur?.map((a) => (ids.includes(a.id) ? { ...a, status: 'acknowledged', acknowledgedBy: 'Marit van der Berg', acknowledgedAt: at } : a)) ?? cur);
+      const at = isMockMode()
+        ? '2026-10-27 17:25'
+        : new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+      const by = isMockMode() ? 'Marit van der Berg' : readSession()?.email || 'you';
+      setAlerts((cur) => cur?.map((a) => (ids.includes(a.id) ? { ...a, status: 'acknowledged', acknowledgedBy: by, acknowledgedAt: at } : a)) ?? cur);
       setSelected((s) => s.filter((x) => !ids.includes(x)));
       toast.success(`${ids.length} ${ids.length === 1 ? 'alert' : 'alerts'} acknowledged`);
     } catch {
@@ -167,7 +172,7 @@ export default function AlertsView() {
         </button>
       </header>
 
-      <ExampleDataBanner />
+      {isMockMode() ? <ExampleDataBanner /> : null}
 
       <section className="grid grid-cols-1 gap-3 px-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Alert summary">
         {summaryCards.map((c) => {
@@ -372,7 +377,7 @@ export default function AlertsView() {
                               <p className="truncate text-xs text-muted-foreground" title={a.detail}>{a.detail}</p>
                             </td>
                             <td className="px-3 py-2.5">
-                              <Link href={`/device-detail?form=${a.formFactor}`} className="font-mono-data text-xs font-semibold hover:text-primary hover:underline">
+                              <Link href={devicePath(a.deviceHostname, a.formFactor)} className="font-mono-data text-xs font-semibold hover:text-primary hover:underline">
                                 {a.deviceHostname}
                               </Link>
                             </td>

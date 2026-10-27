@@ -5,6 +5,7 @@ import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import type { DeviceHealth, SiteRow } from '@/lib/types';
 import SiteList from './SiteList';
 import SiteDetail from './SiteDetail';
@@ -21,6 +22,15 @@ export default function SiteViewScreen() {
   const [active, setActive] = useState<SiteRow | null>(null);
   const [reload, setReload] = useState(0);
   const [text, setText] = useState('');
+  const [regions, setRegions] = useState<string[] | undefined>();
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) {
+      setText(q);
+      setSearch(q);
+    }
+  }, []);
 
   useEffect(() => {
     if (text === search) return;
@@ -41,7 +51,15 @@ export default function SiteViewScreen() {
         if (cancelled) return;
         setRows(res.rows);
         setTotal(res.total);
-        setActive((a) => a ?? res.rows[0] ?? null);
+        if (res.regions) setRegions(res.regions);
+        const wanted = new URLSearchParams(window.location.search).get('site');
+        setActive((current) => {
+          if (wanted) {
+            const match = res.rows.find((row) => row.id === wanted);
+            if (match) return match;
+          }
+          return current ?? res.rows[0] ?? null;
+        });
       })
       .catch(() => !cancelled && setError('Failed to load sites. Check your connection and try again.'));
     return () => {
@@ -55,7 +73,7 @@ export default function SiteViewScreen() {
         <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
         <p className="mt-1 text-sm text-muted-foreground">About 2,000 sites, about 10 switches each. Search, filter, then inspect a site's devices.</p>
       </header>
-      <ExampleDataBanner />
+      {isMockMode() ? <ExampleDataBanner /> : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[400px_1fr] 2xl:grid-cols-[440px_1fr]">
         <section className="flex flex-col rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Site list">
@@ -76,10 +94,10 @@ export default function SiteViewScreen() {
                 <span className="sr-only">Region</span>
                 <select value={region} onChange={(e) => { setRegion(e.target.value); setPage(1); }} className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm">
                   <option value="all">All regions</option>
-                  <option value="Benelux-West">Benelux-West</option>
-                  <option value="Benelux-North">Benelux-North</option>
-                  <option value="Benelux-South">Benelux-South</option>
-                  <option value="Rhine-East">Rhine-East</option>
+                  {(regions && regions.length > 0 ? regions : ['Benelux-West', 'Benelux-North', 'Benelux-South', 'Rhine-East']).map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                  {region !== 'all' && regions && !regions.includes(region) ? <option value={region}>{region}</option> : null}
                 </select>
               </label>
               <label className="flex-1">

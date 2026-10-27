@@ -7,12 +7,16 @@ import type { DeviceQuery } from '@/lib/apiClient';
 interface Props {
   query: DeviceQuery;
   onChange: (p: Partial<DeviceQuery>) => void;
+  roles?: string[];
 }
 
-const ROLES = ['all', 'Access switch', 'Switch stack', 'Access point', 'Wireless controller', 'Firewall', 'Branch router', 'Modular chassis'];
+const FALLBACK_ROLES = ['Access switch', 'Switch stack', 'Access point', 'Wireless controller', 'Firewall', 'Branch router', 'Modular chassis'];
 const HEALTH = ['all', 'healthy', 'warning', 'critical', 'unreachable'] as const;
 
-export default function DeviceFilters({ query, onChange }: Props) {
+export default function DeviceFilters({ query, onChange, roles }: Props) {
+  const roleNames = roles && roles.length > 0 ? roles : FALLBACK_ROLES;
+  const roleOptions = ['all', ...roleNames.filter((role) => role !== 'all')];
+  if (query.role !== 'all' && !roleOptions.includes(query.role)) roleOptions.push(query.role);
   const [text, setText] = useState(query.search);
 
   useEffect(() => {
@@ -47,7 +51,7 @@ export default function DeviceFilters({ query, onChange }: Props) {
           onChange={(e) => onChange({ role: e.target.value })}
           className="h-9 rounded-md border border-input bg-card px-2 text-sm"
         >
-          {ROLES.map((r) => (
+          {roleOptions.map((r) => (
             <option key={`role-${r}`} value={r}>
               {r === 'all' ? 'All roles' : r}
             </option>
