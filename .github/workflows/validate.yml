@@ -1,0 +1,33 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python audits
+        run: |
+          python3 -m pip install --disable-pip-version-check pyyaml
+          python3 scripts/check-docker-copy.py
+          python3 scripts/check-compose-audit.py
+          bash scripts/smoke.sh --self-test
+      - name: shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck -s bash install.sh scripts/smoke.sh scripts/validate.sh config/netdisco/align-db-role.sh
+          shellcheck -s sh config/caddy/scrape-lb-entrypoint.sh
+      - name: docker compose config
+        run: |
+          curl -fsSL -o /tmp/docker-compose "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64"
+          chmod +x /tmp/docker-compose
+          tmp="$(mktemp -d)"
+          sed -E "s/^(CLIENT_NAME)=.*/\1='Example Client'/; s/^(CLIENT_SLUG)=.*/\1='example-client'/; s/^(PUBLIC_HOST)=.*/\1='monitor.example.invalid'/; s/^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|ENCRYPTION_KEY|JWT_SECRET))=.*/\1='dummy-value-for-validation'/; s/^ADMIN_BASIC_HASH=.*/ADMIN_BASIC_HASH='dummy'/; s#^INSTALL_DIR=.*#INSTALL_DIR='$PWD'#" .env.example > "$tmp/env"
+          COMPOSE_PROFILES='*' /tmp/docker-compose --env-file "$tmp/env" config -q

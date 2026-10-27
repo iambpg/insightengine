@@ -1,14 +1,16 @@
 # Internal-only load balancer in front of the exporter instances.
 # uri_hash keeps a given target (and module) on the same exporter.
-# Instances that are not running (profile "scale" off) are marked unhealthy
-# by the active health check and skipped.
+# Replicas 3 and 4 exist only under profile "scale". They are not listed here:
+# a missing DNS name is an error on every active health check. scrape-lb-entrypoint.sh
+# inserts them into the copy it runs when snmp-exporter-3 resolves.
 {
 	auto_https off
 	admin localhost:2019
+	# HTTP only. No certificate is served here, so default_sni does not apply.
 }
 
 http://:9116 {
-	reverse_proxy snmp-exporter-1:9116 snmp-exporter-2:9116 snmp-exporter-3:9116 snmp-exporter-4:9116 {
+	reverse_proxy snmp-exporter-1:9116 snmp-exporter-2:9116 {
 		lb_policy uri_hash
 		lb_try_duration 3s
 		health_uri /-/healthy
@@ -23,7 +25,7 @@ http://:9116 {
 }
 
 http://:9115 {
-	reverse_proxy blackbox-exporter-1:9115 blackbox-exporter-2:9115 blackbox-exporter-3:9115 {
+	reverse_proxy blackbox-exporter-1:9115 blackbox-exporter-2:9115 {
 		lb_policy uri_hash
 		lb_try_duration 3s
 		health_uri /-/healthy

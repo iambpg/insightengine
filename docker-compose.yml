@@ -54,10 +54,11 @@ x-snmp-exporter: &snmp-exporter
     - --config.expand-environment-variables
     - --snmp.module-concurrency=${SNMP_MODULE_CONCURRENCY:-4}
     - --web.listen-address=:9116
-    - --web.enable-lifecycle
+    # POST /-/reload is built in. --web.enable-lifecycle is not a flag of this
+    # image (Prometheus only) and the process exits if it is passed.
     - --log.level=warn
   healthcheck:
-    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9116/-/healthy"]
+    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9116/-/healthy"]
     interval: 30s
     timeout: 10s
     retries: 3
@@ -81,10 +82,10 @@ x-blackbox: &blackbox
   command:
     - --config.file=/etc/blackbox_exporter/blackbox.yml
     - --web.listen-address=:9115
-    - --web.enable-lifecycle
+    # POST /-/reload is built in. Do not pass Prometheus's --web.enable-lifecycle.
     - --log.level=warn
   healthcheck:
-    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9115/-/healthy"]
+    test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9115/-/healthy"]
     interval: 30s
     timeout: 10s
     retries: 3
@@ -177,6 +178,17 @@ x-caddy-env: &caddy-env
   CLIENT_SLUG: ${CLIENT_SLUG}
   CLIENT_NAME: ${CLIENT_NAME}
   PUBLIC_HOST: ${PUBLIC_HOST:?run install.sh}
+  # Empty when PORT_HTTPS is 443; otherwise ":8443" (install.sh). Used by the HTTP->HTTPS redirect.
+  HTTPS_PORT_SUFFIX: ${HTTPS_PORT_SUFFIX:-}
+  PORT_HTTP: ${PORT_HTTP:-80}
+  PORT_HTTPS: ${PORT_HTTPS:-443}
+  PORT_GRAFANA: ${PORT_GRAFANA:-3000}
+  PORT_PROMETHEUS: ${PORT_PROMETHEUS:-9090}
+  PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-9093}
+  PORT_ACTIVEPIECES: ${PORT_ACTIVEPIECES:-8081}
+  PORT_NETDISCO: ${PORT_NETDISCO:-5000}
+  PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
+  PORT_NETBOX: ${PORT_NETBOX:-8444}
   ADMIN_BASIC_USER: ${ADMIN_BASIC_USER:-admin}
   ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH:?run install.sh}
   IE_UI_PORT: ${IE_UI_PORT:-8080}
@@ -241,6 +253,7 @@ volumes:
   activepieces-redis-data:
   activepieces-cache:
   netdisco-pgdata:
+  netdisco-pg-socket:
   insightengine-postgres-data:
   loki-data:
   oxidized-config:
@@ -383,7 +396,8 @@ services:
       PLUGINS: "0"
       SYSTEM: "0"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2375/version"]
+      # Alpine busybox wget: "localhost" is ::1, haproxy listens on 127.0.0.1.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:2375/version"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -400,6 +414,8 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net, docker-proxy-net]
+    # Do not depend on netdisco-postgres. Discovery uses NETDISCO_DATABASE_URL
+    # when that database is up; a down Netdisco must not block ie-config or `up`.
     depends_on:
       insightengine-postgres: {condition: service_healthy}
       ie-config-docker-proxy: {condition: service_healthy}
@@ -415,7 +431,9 @@ services:
       DOCKER_PROXY_URL: http://ie-config-docker-proxy:2375
       NETBOX_URL: http://netbox:8080
       NETBOX_TOKEN_FILE: /opt/insightengine/secrets/prometheus/netbox.token
-      NETDISCO_DATABASE_URL: postgresql://netdisco:${NETDISCO_DB_PASSWORD:?run install.sh}@netdisco-postgres:5432/${NETDISCO_DB_NAME:-netdisco}
+      # App role password is NETDISCO_DB_PASS (see netdisco-initdb.sh), not the
+      # random Postgres superuser password the entrypoint generates.
+      NETDISCO_DATABASE_URL: postgresql://${NETDISCO_DB_USER:-netdisco}:${NETDISCO_DB_PASSWORD:?run install.sh}@netdisco-postgres:5432/${NETDISCO_DB_NAME:-netdisco}
       NETDISCO_OUT_DIR: /var/lib/ie/netdisco-local
       IE_CONFIG_SCHEDULER: "1"
       SNMP_V2_COMMUNITY: ${SNMP_V2_COMMUNITY:-unset-placeholder}
@@ -507,31 +525,35 @@ services:
     logging: *default-logging
     networks: [monitoring-net]
     ports:
-      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP:-80}:80"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:443"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:443/udp"          # HTTP/3
-      - "${HOST_BIND:-0.0.0.0}:${PORT_GRAFANA:-3000}:3000"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_PROMETHEUS:-9090}:9090"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_ALERTMANAGER:-9093}:9093"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_ACTIVEPIECES:-8081}:8081"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_NETDISCO:-5000}:5000"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_OXIDIZED:-8888}:8888"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_NETBOX:-8444}:8444"
+      # Host port and container port are the same value. Caddyfile site
+      # addresses use these PORT_* variables, as do external-url / root_url.
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP:-80}:${PORT_HTTP:-80}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:${PORT_HTTPS:-443}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:${PORT_HTTPS:-443}/udp"          # HTTP/3
+      - "${HOST_BIND:-0.0.0.0}:${PORT_GRAFANA:-3000}:${PORT_GRAFANA:-3000}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_PROMETHEUS:-9090}:${PORT_PROMETHEUS:-9090}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_ALERTMANAGER:-9093}:${PORT_ALERTMANAGER:-9093}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_ACTIVEPIECES:-8081}:${PORT_ACTIVEPIECES:-8081}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_NETDISCO:-5000}:${PORT_NETDISCO:-5000}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_OXIDIZED:-8888}:${PORT_OXIDIZED:-8888}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_NETBOX:-8444}:${PORT_NETBOX:-8444}"
     environment: *caddy-env
     volumes:
       - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
       - caddy-data:/data
       - caddy-config:/config
+    # Do not wait on Netdisco. service_healthy on netdisco-postgres would
+    # keep Caddy from starting and fail `docker compose up` when Netdisco is down.
     depends_on:
       prometheus: {condition: service_started}
       grafana: {condition: service_started}
       alertmanager: {condition: service_started}
       netbox: {condition: service_started}
     healthcheck:
-      # Caddy admin API (localhost only). The old check hit :80, which only
-      # redirects, and had a leading space in the URL.
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      # Busybox wget (caddy:alpine) resolves "localhost" to ::1 and does not
+      # fall back. The admin API listens on 127.0.0.1:2019 only.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:2019/config/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -548,12 +570,20 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
+    # Entrypoint adds snmp-exporter-3/4 and blackbox-exporter-3 only when those
+    # names resolve (profile "scale"). A missing name is a DNS error on every
+    # Caddy active health check; the default file lists replicas 1 and 2 only.
+    entrypoint: ["/bin/sh", "/usr/local/bin/scrape-lb-entrypoint.sh"]
+    command: []
     volumes:
       - ./config/caddy/Caddyfile.scrape-lb:/etc/caddy/Caddyfile:ro
+      - ./config/caddy/scrape-lb-entrypoint.sh:/usr/local/bin/scrape-lb-entrypoint.sh:ro
       - scrape-lb-data:/data
       - scrape-lb-config:/config
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      # Same ::1 vs 127.0.0.1 issue as the user-facing Caddy container.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:2019/config/"]
+      start_period: 15s
       interval: 30s
       timeout: 10s
       retries: 3
@@ -576,8 +606,10 @@ services:
       CLIENT_NAME: ${CLIENT_NAME}
     volumes:
       # Directory mount so ie-config's atomic rename is the file Prometheus reloads.
+      # The CA is not mounted under /etc/prometheus: that directory is read-only,
+      # and Docker cannot create /etc/prometheus/certs inside it.
       - ./config/prometheus:/etc/prometheus:ro
-      - ./certs/ca.crt:/etc/prometheus/certs/ca.crt:ro
+      - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - prom-data:/prometheus
     secrets:
       - source: netbox_token_prometheus
@@ -591,13 +623,15 @@ services:
       - --query.max-samples=${PROM_QUERY_MAX_SAMPLES:-50000000}
       - --query.timeout=${PROM_QUERY_TIMEOUT:-2m}
       - --query.max-concurrency=${PROM_QUERY_MAX_CONCURRENCY:-20}
+      # Required for ie-config POST /-/reload. Do not add this flag to
+      # Alertmanager, blackbox_exporter, or snmp_exporter.
       - --web.enable-lifecycle
       - --web.external-url=https://${PUBLIC_HOST}:${PORT_PROMETHEUS:-9090}
       - --enable-feature=expand-external-labels
     ulimits:
       nofile: {soft: 1048576, hard: 1048576}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9090/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -658,10 +692,10 @@ services:
       - --storage.path=/alertmanager
       - --data.retention=${ALERTMANAGER_RETENTION:-720h}
       - --web.external-url=https://${PUBLIC_HOST}:${PORT_ALERTMANAGER:-9093}
-      - --web.enable-lifecycle
+      # POST /-/reload is built in. --web.enable-lifecycle is unknown here.
       - --cluster.listen-address=
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9093/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -686,7 +720,7 @@ services:
       # Placeholder: the UI will later write this file. Read on every request.
       - ./config/alert-relay:/etc/alert-relay:ro
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=3)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -719,7 +753,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -742,8 +776,10 @@ services:
     environment:
       CLIENT_SLUG: ${CLIENT_SLUG}
     volumes:
+      # CA is outside the read-only /etc/telegraf tree. A file mount under that
+      # directory fails with "make mountpoint ... read-only file system".
       - ./config/telegraf/api:/etc/telegraf:ro
-      - ./certs/ca.crt:/etc/telegraf/ca.crt:ro
+      - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
     secrets:
       - fortigate_token
       - panos_api_key
@@ -752,7 +788,7 @@ services:
       - sdwan_credentials
     command: ["telegraf", "--config", "/etc/telegraf/telegraf.conf", "--config-directory", "/etc/telegraf/telegraf.d"]
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9273/metrics"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9273/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -787,7 +823,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: ["telegraf", "--config", "/etc/telegraf/telegraf.conf"]
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9273/metrics"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9273/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -889,15 +925,19 @@ services:
     <<: *netbox
     build:
       context: ./netbox
+      # plugins.py lives in config/netbox (also bind-mounted below). One file.
+      additional_contexts:
+        netbox_config: ./config/netbox
       args:
         NETBOX_BASE_IMAGE: ${NETBOX_BASE_IMAGE:-netboxcommunity/netbox:v4.6.3}
     container_name: netbox-${CLIENT_SLUG}
+    # NetBox's own databases only. Not netdisco-postgres.
     depends_on:
       netbox-postgres: {condition: service_healthy}
       netbox-redis: {condition: service_healthy}
       netbox-redis-cache: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/login/ -o /dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/login/ -o /dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -989,7 +1029,7 @@ services:
     volumes:
       - activepieces-cache:/usr/src/app/cache
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:80/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1017,7 +1057,23 @@ services:
         limits: {memory: "${AP_WORKER_MEM:-2g}", cpus: "${AP_WORKER_CPUS:-2}"}
 
   # ===========================================================================
-  # NETDISCO (own PostgreSQL; image/layout kept from the original file)
+  # NETDISCO. Upstream netdisco-docker (image tag 2.116000, PostgreSQL 18):
+  #   netdisco-db-entrypoint.sh requires NETDISCO_CURRENT_PG_VERSION and, on a
+  #   fresh PGDATA, replaces POSTGRES_PASSWORD with a random superuser password
+  #   before exec'ing docker-entrypoint.sh. Do not set POSTGRES_USER or
+  #   POSTGRES_PASSWORD here. If POSTGRES_USER were "netdisco", that role would
+  #   be the superuser with the random password, and netdisco-initdb.sh's
+  #   CREATE ROLE would be a no-op (ON_ERROR_STOP=0).
+  #   netdisco-initdb.sh (in /docker-entrypoint-initdb.d) creates the app role
+  #   and database from NETDISCO_DB_NAME / NETDISCO_DB_USER / NETDISCO_DB_PASS
+  #   (default password "netdisco" only when NETDISCO_DB_PASS is unset).
+  #   Do not set PGHOST/PGUSER/PGPASSWORD on this service: initdb connects
+  #   through the local socket as the postgres superuser.
+  #   netdisco-db-role re-applies that same app password on every start (local
+  #   socket, trust) so a volume created before NETDISCO_DB_PASS was passed in
+  #   still matches the backend, web, db-init, and ie-config URL.
+  #   App::Netdisco::Configuration overrides deployment.yml database.pass from
+  #   NETDISCO_DB_PASS. The image file already has a database: section.
   # ===========================================================================
   netdisco-postgres:
     image: ${NETDISCO_IMAGE_PREFIX}-postgresql
@@ -1025,24 +1081,93 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
-    environment:
-      POSTGRES_DB: ${NETDISCO_DB_NAME:-netdisco}
-      POSTGRES_USER: ${NETDISCO_DB_USER:-netdisco}
-      POSTGRES_PASSWORD: ${NETDISCO_DB_PASSWORD:?run install.sh}
     shm_size: 512m
+    environment:
+      NETDISCO_CURRENT_PG_VERSION: ${NETDISCO_CURRENT_PG_VERSION:-18}
+      NETDISCO_DB_SUPERUSER: postgres
+      NETDISCO_DB_NAME: ${NETDISCO_DB_NAME:-netdisco}
+      NETDISCO_DB_USER: ${NETDISCO_DB_USER:-netdisco}
+      NETDISCO_DB_PASS: ${NETDISCO_DB_PASSWORD:?run install.sh}
     volumes:
-      # TODO(Phindani): this path came from the old file; it only works if the image
-      # (or PGDATA) uses /var/lib/postgresql/netdisco-pgdata. Confirm the image.
-      - netdisco-pgdata:/var/lib/postgresql/netdisco-pgdata
+      # PG18 official image: data lives under this directory (PGDATA is
+      # /var/lib/postgresql/18/docker). Not .../data and not the old
+      # .../netdisco-pgdata path.
+      - netdisco-pgdata:/var/lib/postgresql
+      - netdisco-pg-socket:/var/run/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      # The image HEALTHCHECK dials hostname netdisco-postgresql. This service
+      # is netdisco-postgres, so probe 127.0.0.1 (not that hostname, not ::1).
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 10
+      start_period: 30s
     deploy:
       resources:
         limits: {memory: "${NETDISCO_PG_MEM:-4g}", cpus: "2"}   # ESTIMATE
+
+  # One-shot. Same NETDISCO_DB_* values as initdb. Connects by the unix socket
+  # (trust), not TCP, so the random superuser password is never required.
+  netdisco-db-role:
+    image: ${NETDISCO_IMAGE_PREFIX}-postgresql
+    container_name: netdisco-db-role-${CLIENT_SLUG}
+    restart: "no"
+    logging: *default-logging
+    networks: [monitoring-net]
+    user: postgres
+    entrypoint: ["/bin/bash", "/align-db-role.sh"]
+    environment:
+      NETDISCO_DB_NAME: ${NETDISCO_DB_NAME:-netdisco}
+      NETDISCO_DB_USER: ${NETDISCO_DB_USER:-netdisco}
+      NETDISCO_DB_PASS: ${NETDISCO_DB_PASSWORD:?run install.sh}
+    volumes:
+      - netdisco-pg-socket:/var/run/postgresql
+      - ./config/netdisco/align-db-role.sh:/align-db-role.sh:ro
+    depends_on:
+      netdisco-postgres:
+        condition: service_healthy
+        required: false
+    deploy:
+      resources:
+        limits: {memory: 256m, cpus: "0.5"}
+
+  # One-shot schema deploy. Upstream command, run as user postgres.
+  # Do not restart it: a non-zero exit must leave web and backend stopped.
+  netdisco-db-init:
+    image: ${NETDISCO_IMAGE_PREFIX}-backend
+    container_name: netdisco-db-init-${CLIENT_SLUG}
+    restart: "no"
+    logging: *default-logging
+    networks: [monitoring-net]
+    entrypoint: []
+    command:
+      - /home/netdisco/bin/netdisco-env
+      - /home/netdisco/bin/netdisco-updatedb.sh
+    user: postgres
+    environment: &netdisco-env
+      NETDISCO_CURRENT_PG_VERSION: ${NETDISCO_CURRENT_PG_VERSION:-18}
+      NETDISCO_DB_HOST: netdisco-postgres
+      NETDISCO_DB_PORT: "5432"
+      NETDISCO_DB_NAME: ${NETDISCO_DB_NAME:-netdisco}
+      NETDISCO_DB_USER: ${NETDISCO_DB_USER:-netdisco}
+      NETDISCO_DB_PASS: ${NETDISCO_DB_PASSWORD:?run install.sh}
+      PGDATABASE: ${NETDISCO_DB_NAME:-netdisco}
+      PGHOST: netdisco-postgres
+      PGPORT: "5432"
+      PGUSER: ${NETDISCO_DB_USER:-netdisco}
+      PGPASSWORD: ${NETDISCO_DB_PASSWORD:?run install.sh}
+      DEPLOY_ADMIN_USER: ${NETDISCO_DEPLOY_ADMIN_USER:-YES}
+      NETDISCO_DB_DEPLOY_ARGS: ${NETDISCO_DB_DEPLOY_ARGS:-}
+    depends_on:
+      # required: false so a Netdisco failure warns instead of failing
+      # `docker compose up` for the rest of the project. The role aligner
+      # has already waited for postgres to be healthy.
+      netdisco-db-role:
+        condition: service_completed_successfully
+        required: false
+    deploy:
+      resources:
+        limits: {memory: 1g, cpus: "1"}
 
   netdisco-backend:
     image: ${NETDISCO_IMAGE_PREFIX}-backend
@@ -1050,19 +1175,17 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
-    environment: &netdisco-env
-      NETDISCO_DB_HOST: netdisco-postgres
-      NETDISCO_DB_PORT: "5432"
-      NETDISCO_DB_NAME: ${NETDISCO_DB_NAME:-netdisco}
-      NETDISCO_DB_USER: ${NETDISCO_DB_USER:-netdisco}
-      NETDISCO_DB_PASS: ${NETDISCO_DB_PASSWORD:?run install.sh}
+    init: true
+    environment: *netdisco-env
     volumes:
-      # TODO(Phindani): the old file also mounted the whole 'config' dir, which
-      # shadows the image's shipped defaults. Only nd-site-local is mounted here.
+      # Do not mount a directory over /home/netdisco/environments: that hides
+      # the image defaults. ie-config renders deployment.yml into nd-site-local.
       - netdisco-local:/home/netdisco/nd-site-local
-      - ./data/netdisco/logs:/home/netdisco/netdisco/logs
+      - ./data/netdisco/logs:/home/netdisco/logs
     depends_on:
-      netdisco-postgres: {condition: service_healthy}
+      netdisco-db-init:
+        condition: service_completed_successfully
+        required: false
       ie-config: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'Netdisco::Backend' || pgrep -f 'netdisco-backend' || exit 1"]
@@ -1080,15 +1203,18 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
+    init: true
     depends_on:
-      netdisco-postgres: {condition: service_healthy}
-      netdisco-backend: {condition: service_healthy}
+      netdisco-db-init:
+        condition: service_completed_successfully
+        required: false
+      ie-config: {condition: service_healthy}
     environment: *netdisco-env
     volumes:
       - netdisco-local:/home/netdisco/nd-site-local
-      - ./data/netdisco/logs:/home/netdisco/netdisco/logs
+      - ./data/netdisco/logs:/home/netdisco/logs
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:5000/ -o /dev/null || wget -qO /dev/null http://localhost:5000/ || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/ -o /dev/null || wget -qO /dev/null http://127.0.0.1:5000/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -1112,7 +1238,9 @@ services:
       - netdisco-local:/home/netdisco/nd-site-local
     depends_on:
       ie-config: {condition: service_healthy}
-      netdisco-backend: {condition: service_healthy}
+      netdisco-backend:
+        condition: service_healthy
+        required: false
     deploy:
       resources:
         limits: {memory: 512m, cpus: "0.5"}
@@ -1164,7 +1292,7 @@ services:
       - ./config/loki:/etc/loki:ro
       - loki-data:/loki
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3100/ready"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1194,7 +1322,7 @@ services:
     depends_on:
       loki: {condition: service_healthy}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9273/metrics"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9273/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1249,7 +1377,7 @@ services:
       - oxidized-data:/home/oxidized/data
       - ./certs/ca.crt:/usr/local/share/ca-certificates/insightengine-ca.crt:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/nodes -o /dev/null || wget -q --spider http://localhost:8888/nodes || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8888/nodes -o /dev/null || wget -q --spider http://127.0.0.1:8888/nodes || exit 1"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -1353,7 +1481,7 @@ services:
       - ./cust-exporter/app:/app
       - ./secrets/cust-exporter/netbox.token:/app/netbox.token:ro
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
