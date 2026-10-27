@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><title>InsightEngine</title></head>
 <body>
 <h1>InsightEngine</h1>
-<p>Placeholder page. The customer UI is imported into ui/ in a follow-up change. One git clone of this repository is the whole product.</p>
+<p>Placeholder page. This nginx image is used only when ui/Dockerfile is missing. The product UI is the Next.js app in this directory, built by ./install.sh from one git clone.</p>
 <p id="s"></p>
 <script>
 fetch('/setup/state',{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){

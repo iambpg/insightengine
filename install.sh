@@ -247,8 +247,9 @@ write_secret setup/token "$(gen 48)" 0
 ENV_CREATED=
 
 # Build local images. IE_UI_IMAGE, when set to something other than insightengine-ui:local,
-# is pulled and not built. If ui/Dockerfile is missing, the placeholder Dockerfile is used
-# so the stack still starts (config/ui-placeholder is what that image serves).
+# is pulled and not built. ui/Dockerfile is the Next.js UI (npm ci, NEXT_PUBLIC_IE_API_MODE=live,
+# port 8080, GET /healthz). If that file is missing, the placeholder Dockerfile is used
+# so the stack still starts (it serves ui/placeholder/).
 prepare_ui() {
   local ui
   ui="$(getenv_val IE_UI_IMAGE)"

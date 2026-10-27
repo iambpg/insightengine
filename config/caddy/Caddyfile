@@ -33,11 +33,14 @@ http://:80 {
 }
 
 # Front door: "/" is the first-run setup page until the setup state is
-# "complete", then the InsightEngine UI. Decision is made per request by asking the
+# "complete", then the InsightEngine UI (insightengine-ui, port IE_UI_PORT, default 8080).
+# Decision is made per request by asking the
 # setup service (forward_auth -> GET /setup/gate): 200 = complete -> continue to
 # the UI; anything else (302 to /setup/) is returned to the browser as is.
 # /setup/* is always the setup service (token-authenticated API + the static
-# first-run page). X-Setup-Edge tells the service the request came through here
+# first-run page). /api/v1/* is ie-config, after the same gate.
+# /healthz is the UI liveness route and is not behind the gate.
+# X-Setup-Edge tells the service the request came through here
 # (Caddy overwrites any client-supplied value); after completion the service then
 # only answers /setup/state and /setup/gate on the edge (unless
 # SETUP_PUBLIC_AFTER_COMPLETE=yes).
@@ -52,6 +55,12 @@ https://{$PUBLIC_HOST} {
 		reverse_proxy setup:8099 {
 			header_up X-Setup-Edge 1
 		}
+	}
+
+	# UI liveness. The Next.js route returns {"ok":true} and does not depend on setup.
+	@ui_healthz path /healthz
+	handle @ui_healthz {
+		reverse_proxy insightengine-ui:{$IE_UI_PORT}
 	}
 
 	# Settings API. Same setup gate as the UI. /internal/bootstrap-admin is not under /api/v1.

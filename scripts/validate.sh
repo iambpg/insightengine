@@ -121,6 +121,18 @@ else skip "telegraf"; fi
 if have shellcheck; then
   if shellcheck -x install.sh scripts/*.sh config/oxidized/*.sh trapd/*.sh >"$TMP/sc.out" 2>&1; then ok "shellcheck"; else bad "shellcheck"; sed 's/^/      /' "$TMP/sc.out" | head -n 40; fi
 else skip "shellcheck"; fi
+# --- customer UI (Next.js under ui/). Skip only when node or npm is missing.
+if have node && have npm; then
+  if (cd ui && npm ci && npm run build && npm test) >"$TMP/ui.out" 2>&1; then
+    ok "ui npm ci, build, test"
+  else
+    bad "ui npm ci, build, test"
+    tail -n 40 "$TMP/ui.out" | sed 's/^/      /'
+  fi
+else
+  skip "ui npm ci, build, test"
+fi
+
 # --- house rules
 if grep -rIl -i 'zab''bix' . >/dev/null 2>&1; then bad "forbidden word found"; else ok "forbidden-word scan"; fi
 

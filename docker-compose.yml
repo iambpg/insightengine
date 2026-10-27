@@ -467,9 +467,10 @@ services:
       resources:
         limits: {memory: 512m, cpus: "1"}
 
-  # Customer UI. Built from ./ui (insightengine-ui:local) unless IE_UI_IMAGE names another image.
-  # install.sh falls back to ui/Dockerfile.placeholder when ui/Dockerfile is absent.
-  # No volume over the html directory: that would hide the real UI after it is imported.
+  # Customer UI (Next.js). Built from ./ui/Dockerfile as insightengine-ui:local
+  # unless IE_UI_IMAGE names another image. install.sh uses ui/Dockerfile.placeholder
+  # only when ui/Dockerfile is absent. The image listens on 8080 (PORT / IE_UI_PORT).
+  # GET /healthz. Do not mount a volume over the app directory.
   insightengine-ui:
     image: ${IE_UI_IMAGE:-insightengine-ui:local}
     build:
@@ -479,15 +480,21 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
+    environment:
+      PORT: ${IE_UI_PORT:-8080}
+      HOSTNAME: 0.0.0.0
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      # Placeholder nginx image has wget. The Next.js image has node. Port 8080.
+      test:
+        - CMD-SHELL
+        - "wget -q -O /dev/null http://127.0.0.1:8080/healthz || node -e \"fetch('http://127.0.0.1:8080/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 40s
     deploy:
       resources:
-        limits: {memory: 256m, cpus: "0.5"}   # ESTIMATE
+        limits: {memory: 512m, cpus: "1"}   # ESTIMATE — Next.js standalone
 
   # ===========================================================================
   # CADDY — user-facing TLS reverse proxy + the internal NetBox API endpoint

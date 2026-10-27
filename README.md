@@ -1,6 +1,6 @@
 # InsightEngine monitoring stack — review bundle
 
-**One clone is the product.** `git clone` this repository and run `./install.sh`. The customer UI lives under `ui/` (a placeholder image until the Next.js app is imported). You do not clone a second repository.
+**One clone is the product.** `git clone` this repository and run `./install.sh`. The customer UI is the Next.js app under `ui/`. `install.sh` builds it, you open `https://<PUBLIC_HOST>/`, the first-run page is `/setup/`, and after setup the same address is the UI. You do not clone a second repository.
 
 It is a Docker Compose bundle for **one install per client**, sized (by estimate) for **~20,000 devices per client**
 (switches, APs, SD-WAN, routers, WLCs; ~5,500–6,000 APs per WLC).
@@ -23,8 +23,8 @@ It is a Docker Compose bundle for **one install per client**, sized (by estimate
 | `reference/ntt-real-stack/` | Sanitized copy of the running stack used to reconcile this bundle. |
 | `docs/setup-api.md` | The setup service HTTP API (endpoints, JSON, token, states) for the UI developer. |
 | `docs/settings-api.md` | Settings and discovery API implemented by `config-api/` (`ie-config`). |
-| `ui/` | Customer UI image. Placeholder until the Next.js app is imported. `IE_UI_IMAGE` overrides it. |
-| `config/` | Prometheus, Alertmanager, Caddy, blackbox, Loki, Grafana provisioning, Telegraf, Oxidized, alert relay, Netdisco, UI placeholder. |
+| `ui/` | Customer UI (Next.js). `./install.sh` builds `insightengine-ui:local` from `ui/Dockerfile` (port 8080, `GET /healthz`, `NEXT_PUBLIC_IE_API_MODE=live`). Empty `IE_UI_IMAGE` means that build. |
+| `config/` | Prometheus, Alertmanager, Caddy, blackbox, Loki, Grafana provisioning, Telegraf, Oxidized, alert relay, Netdisco. `config/ui-placeholder/` is only a copy of the setup-redirect sample. |
 | `snmp/`, `trapd/` | SNMP generator input / exporter skeleton / MIBs; snmptrapd image (traps → Alertmanager + Loki). |
 | `scripts/` | `validate.sh`, `migrate.sh`, `prom-history.sh`, `set-secret.sh`, `seed-netbox.sh`. |
 | `migration/` | `migrate.conf.example`; the real `migrate.conf` is written by the setup service (mode 600, git-ignored). |
@@ -58,7 +58,7 @@ It does **not** ask for the client or for new-vs-move: it writes `CLIENT_NAME='u
 4. **First administrator.** Email and a password (or generate one, shown once on the page). It is not written to the setup log. This is the Settings login.
 5. **New install** (finish) or **Move from the old stack, keeping data** (§8): old-stack paths → read-only preflight → confirm → run with progress and log →
    **keep Prometheus history or start fresh**.
-6. State becomes `complete`; `/` now shows the UI from `ui/`. The page redirects to `/setup/` while the state is not `complete`.
+6. State becomes `complete`; `/` now shows the Next.js UI built from `ui/`. The page redirects to `/setup/` while the state is not `complete`.
 7. `install.sh` already wrote the NetBox superuser API token into `secrets/prometheus/netbox.token` so a new device is monitored without another manual step. Replace it with a read-only token when you can (`scripts/set-secret.sh prometheus/netbox.token`). On a new install the setup service runs `scripts/seed-netbox.sh` (tenant, region, device roles, tag `ie-scan`). NetBox is at **`https://<PUBLIC_HOST>:8444`** (`PORT_NETBOX`). Settings (edit configs, discovery) are `docs/settings-api.md`. Adding a device or an `ie-scan` prefix is `docs/testing-discovery.md`.
 
 States: `unconfigured → applying → complete | failed` (details and API: `docs/setup-api.md`). Optional parts: set `COMPOSE_PROFILES` in `.env`
@@ -98,7 +98,7 @@ commented option; ports are `${PORT_*}` variables; all credentials come from `.e
   `AP_POSTGRES_*`, `AP_REDIS_*`, `AP_ENCRYPTION_KEY`, `AP_JWT_SECRET`, `AP_EXECUTION_MODE`, …). Behind Caddy on `PORT_ACTIVEPIECES`.
   **n8n workflows/credentials are not migrated** (different engine); rebuild them as flows.
 * Core: Caddy (TLS, auth) · Prometheus · 2 SNMP exporters + 2 blackbox exporters behind `scrape-lb` (profile `scale` adds more) ·
-  Alertmanager → `alert-relay` (placeholder webhook relay) · Grafana · Telegraf (API collector, host metrics) · NetBox (+ workers) · Activepieces · Netdisco · **setup service + docker-socket-proxy** (first run, §2) · custom UI placeholder (`insightengine-ui`).
+  Alertmanager → `alert-relay` (placeholder webhook relay) · Grafana · Telegraf (API collector, host metrics) · NetBox (+ workers) · Activepieces · Netdisco · **setup service + docker-socket-proxy** (first run, §2) · customer UI (`insightengine-ui`, built from `ui/`).
 * Profiles: `logs` (Loki 2160h = 90 days + Telegraf syslog; Promtail was not used because it reached EOL on 2026-03-02),
   `backup` (Oxidized with its device list from NetBox, git-backed, 3 months, config-change alerts), `traps` (snmptrapd),
   `tools` (snmp-generator, one-shot), `cust-exporter`.
@@ -182,7 +182,7 @@ Separate and optional: the last step of the first-run page, and later Settings (
   * Only the NEW Prometheus is stopped during the copy (short gap in new graphs); blocks older than `PROM_RETENTION_TIME` are removed by Prometheus afterwards.
 
 ### 8.5 Settings page → "Move from old stack"
-The custom UI is **not part of this bundle**. Its Settings page calls the same setup-service endpoints as the first-run page (`docs/setup-api.md` §5): preflight → confirm → run →
+The customer UI in `ui/` calls the same setup-service endpoints as the first-run page (`docs/setup-api.md` §5): preflight → confirm → run →
 history, one job at a time, paths only (no passwords), rollback note (§8.3).
 
 ## 9. Validation performed (honest statement)
@@ -233,7 +233,7 @@ and **anything on real devices or at 20,000-device scale.**
 12. `scripts/seed-netbox.sh` assumes NetBox 4.x API paths and token scheme (v1 `Token`, v2 `Bearer nbt_…`).
 13. n8n data is **not** migrated to Activepieces.
 14. `vasa_switches_shard_1.json` file_sd is not used; uncomment the commented job if you still need it.
-15. **Custom UI image** (`IE_UI_IMAGE`, `IE_UI_PORT`): not part of this bundle. `config/ui-placeholder/index.html` is a placeholder that shows the redirect contract; its image tag (`nginxinc/nginx-unprivileged:1.27-alpine`) and the `tecnativa/docker-socket-proxy:v0.5.0` tag are **unverified**.
+15. **Customer UI** is `ui/` (Next.js). Empty `IE_UI_IMAGE` builds `insightengine-ui:local` from `ui/Dockerfile` (`npm ci`, port 8080, `NEXT_PUBLIC_IE_API_MODE=live`). `IE_UI_PORT` defaults to 8080. `ui/Dockerfile.placeholder` runs only when `ui/Dockerfile` is absent. Three files under `ui/public/` are generated placeholders to replace with the originals from the UI source repo: `public/assets/images/app_logo.png`, `public/assets/images/no_image.png`, `public/favicon.ico`. The `tecnativa/docker-socket-proxy:v0.5.0` tag is still **unverified**. The UI image was not built here (no Docker daemon).
 16. **Profiles** (`logs`, `backup`, `traps`, …) cannot yet be chosen on the first-run page; set `COMPOSE_PROFILES` in `.env`.
 17. **NetBox Tenant rename** on client rename, and automatic `seed-netbox.sh` after setup: not implemented.
 18. **Old stack location** defaults (`/opt`) and names are assumptions; confirm `SETUP_OLD_STACK_ROOT`.

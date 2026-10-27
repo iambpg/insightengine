@@ -1,6 +1,5 @@
-# Used by install.sh when ui/Dockerfile is absent (before the UI source lands).
-# Same image as ui/Dockerfile in this commit. The follow-up UI import replaces
-# ui/Dockerfile and leaves this file so the stack can still start.
+# Fallback only when ui/Dockerfile is absent. install.sh sets IE_UI_DOCKERFILE to
+# this file in that case. The real UI is ui/Dockerfile (Next.js, port 8080).
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY placeholder/index.html /usr/share/nginx/html/index.html
 COPY placeholder/healthz /usr/share/nginx/html/healthz

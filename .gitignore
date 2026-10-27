@@ -13,3 +13,9 @@ migration/imported/
 *.dump
 *.key
 *.pem
+
+# Customer UI install and build output, and local env. ui/.env.example is committed.
+ui/node_modules
+ui/.next
+ui/.env*
+!ui/.env.example

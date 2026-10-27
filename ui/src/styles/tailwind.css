@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f5f8fc;
+  --foreground: #0b1220;
+  --primary: #0e7fa8;
+  --primary-foreground: #f5f8fc;
+  --secondary: #e6edf6;
+  --secondary-foreground: #0b1220;
+  --accent: #36cfff;
+  --accent-foreground: #0b1220;
+  --muted: #eaf0f7;
+  --muted-foreground: #5a6a82;
+  --card: #ffffff;
+  --card-foreground: #0b1220;
+  --border: #d9e2ee;
+  --input: #cfd9e8;
+  --ring: #36cfff;
+  --radius: 0.625rem;
+  --font-sans: var(--font-ibm-plex-sans);
+  --font-mono: var(--font-ibm-plex-mono);
+
+  --success: #17a672;
+  --success-foreground: #ffffff;
+  --warning: #e8a317;
+  --warning-foreground: #1b1300;
+  --destructive: #d93a46;
+  --destructive-foreground: #ffffff;
+
+  --navy: #0b1220;
+  --navy-2: #131d31;
+  --navy-3: #1c2942;
+  --teal: #23c9b7;
+  --cyan: #36cfff;
+  --info: #3b7bf0;
+  --info-foreground: #ffffff;
+  --disabled: #3b7bf0;
+  --down: #8a97ab;
+
+  --metal-1: #2a3140;
+  --metal-2: #1b212d;
+  --metal-3: #12161f;
+  --metal-hi: #4a5468;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  h1, h2, h3, h4, h5, h6, p {
+    margin: 0;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .font-mono-data {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .scroll-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background: var(--input);
+    border-radius: 999px;
+  }
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .label-caps {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .grid-bg-navy {
+    background-image: radial-gradient(circle at 20% 10%, rgba(54, 207, 255, 0.16), transparent 45%),
+      radial-gradient(circle at 85% 90%, rgba(35, 201, 183, 0.14), transparent 40%);
+  }
+  .pulse-ring {
+    animation: pulseRing 1.8s ease-out infinite;
+  }
+  .flash-update {
+    animation: flashUpdate 1.2s ease-out;
+  }
+  .fade-in {
+    animation: fadeIn 0.25s ease-out;
+  }
+  .slide-in-right {
+    animation: slideInRight 0.25s ease-out;
+  }
+  .slide-up {
+    animation: slideUp 0.2s ease-out;
+  }
+  .pop-in {
+    animation: popIn 0.18s ease-out;
+  }
+  .gradient-blob {
+    background: radial-gradient(circle, rgba(54, 207, 255, 0.28), transparent 65%);
+    filter: blur(40px);
+  }
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.8); opacity: 0.9; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes flashUpdate {
+  0% { background-color: rgba(54, 207, 255, 0.25); }
+  100% { background-color: transparent; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideInRight {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes popIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes ledGlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.led-warn-blink {
+  animation: ledGlow 1.6s ease-in-out infinite;
+}
+.led-fault-blink {
+  animation: ledGlow 0.9s ease-in-out infinite;
+}
+.cm-secret-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 1px;
+  border-radius: 999px;
+  border: 1px solid #cfd9e8;
+  background: #eaf0f7;
+  color: #3d4d66;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 0 0.45rem;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-ring,
+  .flash-update,
+  .fade-in,
+  .slide-in-right,
+  .slide-up,
+  .pop-in,
+  .led-warn-blink,
+  .led-fault-blink {
+    animation: none !important;
+  }
+}
