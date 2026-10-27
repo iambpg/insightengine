@@ -2,6 +2,8 @@
 
 Notes for the developer of the custom InsightEngine UI. From: Phindani Gama (network engineer). Status: draft for review.
 
+The UI source now lives in `ui/` of this repository. `git clone`, then `./install.sh`, then open `https://<PUBLIC_HOST>/`. That address is the first-run page (`/setup/`) until setup is complete, then the Next.js UI. `IE_UI_IMAGE` empty builds `insightengine-ui:local` from `ui/Dockerfile` (port 8080).
+
 Everything here comes from the stack bundle (docs/setup-api.md, which is the authority for the API, plus the README, install.sh, .env.example, Caddyfile and docker-compose.yml) and from me. Anything that is a proposal and not yet in the bundle starts with “Suggested:”. Things not decided yet are in section 13, Open items.
 
 # 1. Purpose and what you need to know first
@@ -92,7 +94,7 @@ Background **jobs** have their own state: running, succeeded or failed, and a ki
 - **Your UI must also check on load:** call GET /setup/state **without a token** (it returns only state and step). If state is not complete, do location.replace('/setup/'). The placeholder page in config/ui-placeholder/index.html shows exactly this.
 - After setup is complete, the setup service answers **only** /setup/state, /setup/gate and /setup/healthz through Caddy (unless SETUP_PUBLIC_AFTER_COMPLETE=yes). Everything else returns 404 on the public address.
 - So your Settings pages call **your own backend**. It holds the token as the secret mount setup_token, checks that the user is an Administrator, and calls http://setup:8099/setup/... on monitoring-net. Internal callers are not affected by the lockdown. The browser never sees the token.
-- Your UI container is `insightengine-ui-<slug>`. Its image and port come from IE_UI_IMAGE (empty = placeholder page) and IE_UI_PORT (default 8080) in .env. It is recreated, with the new name, every time the client name is applied.
+- Your UI container is `insightengine-ui-<slug>`. With `IE_UI_IMAGE` empty, the image is built from `ui/Dockerfile`. `IE_UI_PORT` defaults to 8080. The container is recreated, with the new name, every time the client name is applied.
 
 
 
