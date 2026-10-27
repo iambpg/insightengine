@@ -1,0 +1,32 @@
+# Netdisco deployment TEMPLATE. ie-config copies it into the netdisco-local volume
+# and substitutes the ${SNMP_*} placeholders from the same environment the SNMP
+# exporter uses. Do not put literal community strings or passwords in this file.
+# The rendered file is not served by the settings API.
+#
+# schedule keys are the Netdisco worker names. The scheduler container also runs
+# discover/macsuck/arpnip for each prefix in scan-prefixes.txt.
+
+device_auth:
+  - tag: default
+    community: ${SNMP_V2_COMMUNITY}
+    user: ${SNMP_V3_USERNAME}
+    auth:
+      pass: ${SNMP_V3_AUTH_PASSWORD}
+      proto: SHA256
+    priv:
+      pass: ${SNMP_V3_PRIV_PASSWORD}
+      proto: AES256
+
+schedule:
+  discoverall:
+    when:
+      min: "20"
+      hour: "*/6"
+  macsuckall:
+    when:
+      min: "0"
+      hour: "*/6"
+  arpnipall:
+    when:
+      min: "40"
+      hour: "*/6"

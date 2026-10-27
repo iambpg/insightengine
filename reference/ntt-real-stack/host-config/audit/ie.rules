@@ -1,0 +1,20 @@
+# Insights Engine Network Monitoring Platform — Audit Rules
+# Per Section 6.8 of Security Architecture Document
+
+# Monitor critical system files
+-w /etc/passwd -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/ssh/sshd_config -p wa -k ssh_config
+
+# Monitor Docker socket
+-w /var/run/docker.sock -p wa -k docker_socket
+
+# Monitor Insights Engine configuration directory
+-w /opt/ie/ -p wa -k ie_config
+
+# Monitor sudo usage
+-w /usr/bin/sudo -p x -k sudo_usage
+
+# Monitor Docker daemon config
+-w /etc/docker/ -p wa -k docker_config

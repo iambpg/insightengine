@@ -33,8 +33,19 @@
     <p id="client-msg" class="err"></p>
   </section>
 
+  <section id="s-admin" hidden>
+    <h2>2. First administrator</h2>
+    <p>This account signs in to Settings. The password is sent once and is not written to the setup log.</p>
+    <label>Email <input id="admin-email" type="email" autocomplete="off" placeholder="admin@example.com"></label>
+    <label>Password <input id="admin-password" type="password" autocomplete="new-password" placeholder="12+ characters, a letter and a digit"></label>
+    <label><input id="admin-generate" type="checkbox"> Generate a password and show it once</label>
+    <button id="btn-admin">Create administrator</button>
+    <p id="admin-once"></p>
+    <p id="admin-msg" class="err"></p>
+  </section>
+
   <section id="s-mode" hidden>
-    <h2>2. New install or move from the old stack?</h2>
+    <h2>3. New install or move from the old stack?</h2>
     <label><input type="radio" name="mode" value="new" checked> New install (start empty)</label>
     <label><input type="radio" name="mode" value="move"> Move from the old stack, keeping data (the old stack is never stopped or deleted)</label>
     <button id="btn-mode">Continue</button>

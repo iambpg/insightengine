@@ -1,7 +1,8 @@
 # InsightEngine monitoring stack — review bundle
 
-**Status: REVIEW ONLY.** Nothing in this bundle was deployed, no server was touched, no PR was opened.
-It is a corrected Docker Compose bundle for **one install per client**, sized (by estimate) for **~20,000 devices per client**
+**One clone is the product.** `git clone` this repository and run `./install.sh`. The customer UI lives under `ui/` (a placeholder image until the Next.js app is imported). You do not clone a second repository.
+
+It is a Docker Compose bundle for **one install per client**, sized (by estimate) for **~20,000 devices per client**
 (switches, APs, SD-WAN, routers, WLCs; ~5,500–6,000 APs per WLC).
 
 > **Important assumption.** The middle of the compose file you pasted was cut off. NetBox, Grafana, Alertmanager, blackbox,
@@ -18,7 +19,11 @@ It is a corrected Docker Compose bundle for **one install per client**, sized (b
 | `.env.example` | Every variable, with defaults (sizing values are estimates). The only env file committed. |
 | `docker-compose.yml` | The stack (fixed project name `insightengine`). Optional parts are behind profiles. |
 | `setup/` | The first-run **setup service** (`server.py`, standard library only), its plain-HTML page (`static/`) and stub-based tests (`tests/`). |
+| `config-api/` | `ie-config`: Settings API, validation, reload, discovery. |
+| `reference/ntt-real-stack/` | Sanitized copy of the running stack used to reconcile this bundle. |
 | `docs/setup-api.md` | The setup service HTTP API (endpoints, JSON, token, states) for the UI developer. |
+| `docs/settings-api.md` | Settings and discovery API implemented by `config-api/` (`ie-config`). |
+| `ui/` | Customer UI image. Placeholder until the Next.js app is imported. `IE_UI_IMAGE` overrides it. |
 | `config/` | Prometheus, Alertmanager, Caddy, blackbox, Loki, Grafana provisioning, Telegraf, Oxidized, alert relay, Netdisco, UI placeholder. |
 | `snmp/`, `trapd/` | SNMP generator input / exporter skeleton / MIBs; snmptrapd image (traps → Alertmanager + Loki). |
 | `scripts/` | `validate.sh`, `migrate.sh`, `prom-history.sh`, `set-secret.sh`, `seed-netbox.sh`. |
@@ -29,7 +34,7 @@ It is a corrected Docker Compose bundle for **one install per client**, sized (b
 ### 2.1 Install (no questions)
 
 ```bash
-unzip insightengine-stack.zip && cd insightengine-stack
+git clone <this-repo> insightengine && cd insightengine
 sudo ./install.sh --public-host monitor.example.com      # or: INSTALL_PUBLIC_HOST=... sudo -E ./install.sh
 ```
 
@@ -50,11 +55,11 @@ It does **not** ask for the client or for new-vs-move: it writes `CLIENT_NAME='u
 3. **Which client is this server for?** Type the name → "Save and apply". The setup service renders `CLIENT_NAME`/`CLIENT_SLUG` into `.env` and runs
    `docker compose up -d` for this project, which recreates the containers with the client name (`<service>-<slug>` container names, Prometheus `client` label, Grafana
    folder, Alertmanager titles, …). Estimate: a few minutes.
-4. **New install** (finish) or **Move from the old stack, keeping data** (§8): old-stack paths → read-only preflight → confirm → run with progress and log →
+4. **First administrator.** Email and a password (or generate one, shown once on the page). It is not written to the setup log. This is the Settings login.
+5. **New install** (finish) or **Move from the old stack, keeping data** (§8): old-stack paths → read-only preflight → confirm → run with progress and log →
    **keep Prometheus history or start fresh**.
-5. State becomes `complete`; `/` now shows the custom UI. The custom UI redirects to `/setup/` while the state is not `complete`.
-6. Then: `scripts/set-secret.sh prometheus/netbox.token` (read-only NetBox API token; also `oxidized/…`, `cust-exporter/…`), `scripts/seed-netbox.sh`
-   (Tenant + root Region from the client name). NetBox moved to **`https://<PUBLIC_HOST>:8444`** (`PORT_NETBOX`) because `/` now belongs to setup/UI.
+6. State becomes `complete`; `/` now shows the UI from `ui/`. The page redirects to `/setup/` while the state is not `complete`.
+7. `install.sh` already wrote the NetBox superuser API token into `secrets/prometheus/netbox.token` so a new device is monitored without another manual step. Replace it with a read-only token when you can (`scripts/set-secret.sh prometheus/netbox.token`). On a new install the setup service runs `scripts/seed-netbox.sh` (tenant, region, device roles, tag `ie-scan`). NetBox is at **`https://<PUBLIC_HOST>:8444`** (`PORT_NETBOX`). Settings (edit configs, discovery) are `docs/settings-api.md`. Adding a device or an `ie-scan` prefix is `docs/testing-discovery.md`.
 
 States: `unconfigured → applying → complete | failed` (details and API: `docs/setup-api.md`). Optional parts: set `COMPOSE_PROFILES` in `.env`
 (`logs,backup,traps`, …) and run `docker compose up -d` — **TODO: choosing profiles on the first-run page is not implemented**.

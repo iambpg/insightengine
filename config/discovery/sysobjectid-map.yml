@@ -1,0 +1,40 @@
+# Guess NetBox manufacturer, role and platform from sysObjectID / sysDescr.
+# Used when approving a device that Netdisco found and NetBox does not have yet.
+default_role: access-switch
+prefixes:
+  - oid: "1.3.6.1.4.1.9."
+    manufacturer: Cisco
+    manufacturer_slug: cisco
+    platform: ios
+    role: access-switch
+  - oid: "1.3.6.1.4.1.12356."
+    manufacturer: Fortinet
+    manufacturer_slug: fortinet
+    platform: fortigate
+    role: sdwan
+  - oid: "1.3.6.1.4.1.25461."
+    manufacturer: Palo Alto Networks
+    manufacturer_slug: palo-alto
+    platform: pan-os
+    role: core-firewall
+descr_patterns:
+  - regex: "(?i)wireless lan controller|aireos|cisco wlc"
+    manufacturer: Cisco
+    manufacturer_slug: cisco
+    platform: aireos
+    role: wireless-controller
+  - regex: "(?i)adaptive security appliance|\\bASA\\b"
+    manufacturer: Cisco
+    manufacturer_slug: cisco
+    platform: asa
+    role: core-firewall
+  - regex: "(?i)fortigate|fortios"
+    manufacturer: Fortinet
+    manufacturer_slug: fortinet
+    platform: fortigate
+    role: sdwan
+  - regex: "(?i)palo alto|pan-os"
+    manufacturer: Palo Alto Networks
+    manufacturer_slug: palo-alto
+    platform: pan-os
+    role: core-firewall

@@ -60,12 +60,13 @@
     show('s-client', s === 'unconfigured' && step === 'client' || s === 'failed' || s === 'complete');
     $('rename-box').hidden = s !== 'complete';
     if (s === 'complete' && !$('client-name').value) { $('client-name').value = state.client_name; }
+    show('s-admin', s === 'unconfigured' && step === 'admin');
     show('s-mode', s === 'unconfigured' && step === 'mode');
     show('s-migrate', s === 'unconfigured' && (step === 'migrate' || step === 'history'));
     show('s-history', s === 'unconfigured' && step === 'history');
     show('s-done', s === 'complete');
     show('s-log', true);
-    ['btn-client', 'btn-mode', 'btn-preflight', 'btn-history'].forEach(function (b) { $(b).disabled = !!busy; });
+    ['btn-client', 'btn-admin', 'btn-mode', 'btn-preflight', 'btn-history'].forEach(function (b) { $(b).disabled = !!busy; });
     var pf = state.last_preflight;
     preflightId = pf && pf.passed ? pf.id : null;
     $('btn-run').disabled = !(preflightId && $('confirm-run').checked) || !!busy;
@@ -119,6 +120,18 @@
     var b = { client_name: $('client-name').value };
     if (state && state.state === 'complete') { b.confirm_downtime = $('confirm-downtime').checked; }
     post('/setup/client', b, 'client-msg');
+  });
+  $('btn-admin').addEventListener('click', function () {
+    var gen = $('admin-generate').checked;
+    var b = { email: $('admin-email').value.trim() };
+    if (gen) { b.generate = true; } else { b.password = $('admin-password').value; }
+    $('admin-password').value = '';
+    $('admin-once').textContent = '';
+    post('/setup/admin', b, 'admin-msg', function (j) {
+      if (j.generated_password) {
+        $('admin-once').textContent = 'Generated password (shown once): ' + j.generated_password;
+      }
+    });
   });
   $('btn-mode').addEventListener('click', function () {
     var m = document.querySelector('input[name=mode]:checked').value;

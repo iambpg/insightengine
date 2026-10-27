@@ -1,0 +1,45 @@
+# SNMP module and auth chosen for a device. The NetBox plugin reads this file
+# (mounted at /etc/ie/module-map.yml) and publishes the result as
+# __meta_netbox_snmp_module and __meta_netbox_snmp_auth. Prometheus relabel
+# copies those onto the snmp_exporter query. Role defaults match the real stack.
+default_module: if_mib
+default_auth: ntt_snmpv3_auth
+by_role:
+  access-switch:
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+    auth: ntt_snmpv3_auth
+  core-switch:
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+    auth: ntt_snmpv3_auth
+  distribution-switch:
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, system]
+    auth: ie_snmp_v2
+  sdwan:
+    modules: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+    auth: ntt_snmpv3_auth
+  hub:
+    modules: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+    auth: ntt_snmpv3_auth
+  core-firewall:
+    modules: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortigate_est_bandwidth]
+    auth: ntt_snmpv3_auth
+  wireless-controller:
+    modules: [cisco_wlc_universal]
+    auth: ie_wlc_v2
+by_manufacturer:
+  fortinet:
+    modules: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+    auth: ntt_snmpv3_auth
+  palo-alto:
+    modules: [if_mib]
+    auth: ntt_snmpv3_auth
+  paloalto:
+    modules: [if_mib]
+    auth: ntt_snmpv3_auth
+by_platform:
+  pan-os:
+    modules: [if_mib]
+    auth: ntt_snmpv3_auth
+  fortigate:
+    modules: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+    auth: ntt_snmpv3_auth

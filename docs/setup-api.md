@@ -28,14 +28,14 @@ action running, `413` body over 64 KB, `429`, `500`.
 
 | `state` | meaning |
 |---|---|
-| `unconfigured` | first run, in progress. `step` = `client` → `mode` → (`migrate` → `history`, only for "move") |
+| `unconfigured` | first run, in progress. `step` = `client` → `admin` → `mode` → (`migrate` → `history`, only for "move") |
 | `applying` | the client name is being rendered and containers are being (re)created (background job) |
 | `complete` | setup finished; Caddy sends `/` to the custom UI |
 | `failed` | the last apply failed (`error` says why). Call `POST /setup/client` again to retry |
 
 ```
-unconfigured/client --POST client--> applying --ok--> unconfigured/mode --POST mode(new)-----------------> complete
-                                         |                     \--POST mode(move)--> unconfigured/migrate
+unconfigured/client --POST client--> applying --ok--> unconfigured/admin --POST admin--> unconfigured/mode --POST mode(new)--> complete
+                                                                                              \--POST mode(move)--> unconfigured/migrate
                                          \--error--> failed        preflight -> run (ok) -> unconfigured/history
                                                                    POST prom-history (keep ok | fresh) --> complete
 ```
@@ -97,7 +97,19 @@ Before a name is chosen `client_name` and `client_slug` are `"unconfigured"`. `j
 * What the job does (fixed steps): (1) write `CLIENT_NAME`/`CLIENT_SLUG` into `.env` from the config store (§6), (2) `docker compose config --services`,
   (3) `docker compose up -d --no-build <every service except setup and docker-socket-proxy>` for this project only (project name is fixed:
   `insightengine`), so containers whose name/labels/env contain the client are **recreated**. Progress: poll `GET /setup/state` (`state`, `job`) and `GET /setup/log`.
-* When the job succeeds: first run → `state=unconfigured, step=mode`; rename after `complete` → back to `complete`. On error → `state=failed`.
+* When the job succeeds: first run → `state=unconfigured, step=admin`; rename after `complete` → back to `complete`. On error → `state=failed`.
+
+### 4.2a `POST /setup/admin` (token)
+
+```json
+{"email": "admin@example.com", "password": "at least 12 characters, a letter and a digit"}
+```
+
+or `{"email": "admin@example.com", "generate": true}`.
+
+Allowed only at `step=admin` (after the client name is applied, before new-vs-move). The setup service calls ie-config `POST /internal/bootstrap-admin` with the setup bearer token. The password is not written to `setup.log`. `200` is `{"state":"unconfigured","step":"mode"}`. When `generate` is true and ie-config accepted the user, the response also has `generated_password` (once). If an administrator already exists, ie-config returns 409 and setup still advances to `mode` without a generated password. A failure to reach ie-config is `502`.
+
+Rename (still `POST /setup/client`):
 * **Rename after `complete`** needs `"confirm_downtime": true` in the body, otherwise `409` ("renaming recreates all containers ..."). Same name again = no confirm needed.
   **Downtime (estimate): several minutes** — all monitoring containers are stopped and recreated (typically 2–10 min depending on the host; measure it).
   Data is kept: the compose project name is fixed so named volumes (`insightengine_<volume>`) are reused. Side effects: the Prometheus `client`/`client_name`
@@ -109,7 +121,7 @@ Before a name is chosen `client_name` and `client_slug` are `"unconfigured"`. `j
 {"mode": "new"}        // or "move"
 ```
 `200`: `{"state": "complete", "step": "done"}` for `new`; `{"state": "unconfigured", "step": "migrate"}` for `move`.
-`409` if the client name has not been applied yet.
+`409` unless `step` is `mode` (the administrator step comes first). `409` if the client name has not been applied yet.
 
 ### 4.4 `POST /setup/migrate/preflight` (token) — read-only check of the old stack
 Allowed in `step=migrate|history` of the move flow, or when `state=complete` (Settings).

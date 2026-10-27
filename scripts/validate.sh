@@ -37,15 +37,23 @@ import json, sys
 c = json.load(open(sys.argv[1]))
 svc = c["services"]
 sock = sorted(n for n, s in svc.items() if any("docker.sock" in str(v.get("source", "")) for v in s.get("volumes", [])))
-assert sock == ["docker-socket-proxy", "telegraf-host"], "docker.sock holders: %s" % sock
-for n in ("setup", "docker-socket-proxy", "insightengine-ui"):
+assert sock == ["docker-socket-proxy", "ie-config-docker-proxy", "telegraf-host"], "docker.sock holders: %s" % sock
+for n in ("setup", "docker-socket-proxy", "ie-config-docker-proxy", "ie-config", "insightengine-ui"):
     assert not svc[n].get("ports"), "%s must not publish ports" % n
 assert set(svc["docker-socket-proxy"]["networks"]) == {"docker-proxy-net"}, "proxy network"
+assert set(svc["ie-config-docker-proxy"]["networks"]) == {"docker-proxy-net"}, "ie-config proxy network"
 assert c["networks"]["docker-proxy-net"].get("internal") is True, "docker-proxy-net must be internal"
 assert "DOCKER_HOST" in svc["setup"]["environment"] and not any("docker.sock" in str(v.get("source","")) for v in svc["setup"].get("volumes", [])), "setup must use the proxy only"
 env = svc["docker-socket-proxy"]["environment"]
 for k in ("SECRETS", "AUTH", "BUILD", "COMMIT", "SWARM", "SYSTEM", "PLUGINS"):
     assert env.get(k) == "0", "%s must stay 0" % k
+narrow = svc["ie-config-docker-proxy"]["environment"]
+for k in ("SECRETS", "AUTH", "BUILD", "COMMIT", "SWARM", "SYSTEM", "PLUGINS", "IMAGES", "NETWORKS", "VOLUMES", "EXEC"):
+    assert str(narrow.get(k)) == "0", "ie-config proxy %s must stay 0" % k
+assert str(narrow.get("ALLOW_RESTARTS")) == "1"
+assert str(narrow.get("ALLOW_START")) == "0"
+assert str(narrow.get("ALLOW_STOP")) == "0"
+assert str(narrow.get("POST")) == "1"
 PY
   then ok "compose policy (socket holders, no published ports, proxy allow-list)"; else bad "compose policy"; sed 's/^/      /' "$TMP/pol.err"; fi
 else skip "compose policy"; fi
@@ -91,7 +99,9 @@ if have blackbox_exporter; then
 else skip "blackbox_exporter"; fi
 # --- snmp exporter (dry-run needs non-empty SNMP_* env)
 if have snmp_exporter; then
-  if SNMP_V2_COMMUNITY="${SNMP_V2_COMMUNITY:-x}" SNMP_V3_USER="${SNMP_V3_USER:-x}" SNMP_V3_AUTH_PASSWORD="${SNMP_V3_AUTH_PASSWORD:-x}" SNMP_V3_PRIV_PASSWORD="${SNMP_V3_PRIV_PASSWORD:-x}" \
+  : "${SNMP_V3_USER:=x}"
+  : "${SNMP_V3_USERNAME:=$SNMP_V3_USER}"
+  if SNMP_V2_COMMUNITY="${SNMP_V2_COMMUNITY:-x}" SNMP_V3_USER="$SNMP_V3_USER" SNMP_V3_USERNAME="$SNMP_V3_USERNAME" SNMP_V3_AUTH_PASSWORD="${SNMP_V3_AUTH_PASSWORD:-x}" SNMP_V3_PRIV_PASSWORD="${SNMP_V3_PRIV_PASSWORD:-x}" \
      snmp_exporter --config.file=snmp/out/snmp.yml --config.expand-environment-variables --dry-run >"$TMP/s.out" 2>&1; then ok "snmp_exporter --dry-run"; else bad "snmp_exporter --dry-run"; sed 's/^/      /' "$TMP/s.out"; fi
 else skip "snmp_exporter"; fi
 # --- loki

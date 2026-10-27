@@ -1,0 +1,257 @@
+# App registry for ie-config. Paths are relative to CONFIG_ROOT (the install directory).
+# File ids are the only way to address a file. "${CLIENT_SLUG}" and "${PUBLIC_HOST}" and the
+# PORT_* / image variables are expanded from the environment when the process starts.
+version: 1
+apps:
+  - id: prometheus
+    name: Prometheus
+    description: Metrics database. Devices come from the NetBox prometheus-devices endpoint.
+    group: metrics
+    sensitive: false
+    container: "prometheus-${CLIENT_SLUG}"
+    containers: ["prometheus-${CLIENT_SLUG}"]
+    version: "${PROMETHEUS_IMAGE}"
+    ui_url: "https://${PUBLIC_HOST}:${PORT_PROMETHEUS}"
+    files:
+      - {id: prometheus.yml, path: config/prometheus/prometheus.yml, label: Prometheus configuration, language: yaml, editable: true, validator: promtool, has_secrets: false}
+      - {id: alert-rules.yml, path: config/prometheus/alert-rules.yml, label: Alert rules, language: yaml, editable: true, validator: promtool-rules, has_secrets: false}
+      - {id: netbox.token, path: secrets/prometheus/netbox.token, label: NetBox API token, language: text, editable: false, secret_file: true, has_secrets: true, read_only_reason: "Secret file. Replace it with scripts/set-secret.sh prometheus/netbox.token. Contents are never returned."}
+    actions:
+      - {id: reload, label: Reload configuration, kind: reload, dangerous: false, roles: [Administrator, Engineer], http: [{method: POST, url: "http://prometheus:9090/-/reload"}]}
+      - {id: restart, label: Restart Prometheus, kind: restart, dangerous: true, roles: [Administrator], containers: ["prometheus-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate all files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: alertmanager
+    name: Alertmanager
+    description: Alert routing. Outside webhooks are edited in destinations.json; the relay reads that file on every request.
+    group: alerting
+    sensitive: false
+    container: "alertmanager-${CLIENT_SLUG}"
+    version: "${ALERTMANAGER_IMAGE}"
+    ui_url: "https://${PUBLIC_HOST}:${PORT_ALERTMANAGER}"
+    files:
+      - {id: alertmanager.yml, path: config/alertmanager/alertmanager.yml, label: Alertmanager configuration, language: yaml, editable: true, validator: amtool}
+      - {id: insightengine.tmpl, path: config/alertmanager/templates/insightengine.tmpl, label: Notification template, language: text, editable: true, validator: text}
+      - {id: destinations.json, path: config/alert-relay/destinations.json, label: Webhook destinations, language: json, editable: true, validator: json, has_secrets: true}
+    actions:
+      - {id: reload, label: Reload Alertmanager, kind: reload, dangerous: false, roles: [Administrator, Engineer], http: [{method: POST, url: "http://alertmanager:9093/-/reload"}]}
+      - {id: restart, label: Restart Alertmanager, kind: restart, dangerous: true, roles: [Administrator], containers: ["alertmanager-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate all files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: snmp-exporter
+    name: SNMP exporter
+    description: SNMP metrics. snmp.yml is generated; auths use environment variables and are masked if a literal secret is present.
+    group: snmp
+    sensitive: false
+    container: "snmp-exporter-1-${CLIENT_SLUG}"
+    containers: ["snmp-exporter-1-${CLIENT_SLUG}", "snmp-exporter-2-${CLIENT_SLUG}"]
+    version: "${SNMP_EXPORTER_IMAGE}"
+    files:
+      - {id: snmp.yml, path: snmp/out/snmp.yml, label: SNMP exporter configuration, language: yaml, editable: true, validator: snmp, has_secrets: true}
+    actions:
+      - {id: reload, label: Reload SNMP exporters, kind: reload, dangerous: false, roles: [Administrator, Engineer], http: [{method: POST, url: "http://snmp-exporter-1:9116/-/reload"}, {method: POST, url: "http://snmp-exporter-2:9116/-/reload"}]}
+      - {id: restart, label: Restart SNMP exporters, kind: restart, dangerous: true, roles: [Administrator], containers: ["snmp-exporter-1-${CLIENT_SLUG}", "snmp-exporter-2-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate snmp.yml, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: snmp-generator
+    name: SNMP generator
+    description: Builds a candidate snmp.yml from generator.yml and uploaded MIBs. Saving the candidate is a separate edit of the SNMP exporter file.
+    group: snmp
+    sensitive: false
+    container: ""
+    version: "${SNMP_EXPORTER_VERSION}"
+    files:
+      - {id: generator.yml, path: snmp/generator.yml, label: Generator input, language: yaml, editable: true, validator: yaml, has_secrets: true}
+    actions:
+      - {id: generate, label: Generate candidate snmp.yml, kind: generate, dangerous: false, roles: [Administrator, Engineer]}
+      - {id: validate-all, label: Validate generator.yml, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: blackbox-exporter
+    name: Blackbox exporter
+    description: ICMP and other probes. Prometheus sends device addresses here.
+    group: metrics
+    sensitive: false
+    container: "blackbox-exporter-1-${CLIENT_SLUG}"
+    containers: ["blackbox-exporter-1-${CLIENT_SLUG}", "blackbox-exporter-2-${CLIENT_SLUG}"]
+    version: "${BLACKBOX_IMAGE}"
+    files:
+      - {id: blackbox.yml, path: config/blackbox/blackbox.yml, label: Blackbox configuration, language: yaml, editable: true, validator: blackbox}
+    actions:
+      - {id: reload, label: Reload blackbox exporters, kind: reload, dangerous: false, roles: [Administrator, Engineer], http: [{method: POST, url: "http://blackbox-exporter-1:9115/-/reload"}, {method: POST, url: "http://blackbox-exporter-2:9115/-/reload"}]}
+      - {id: restart, label: Restart blackbox exporters, kind: restart, dangerous: true, roles: [Administrator], containers: ["blackbox-exporter-1-${CLIENT_SLUG}", "blackbox-exporter-2-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate blackbox, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: telegraf
+    name: Telegraf
+    description: API and host metric collectors. Syslog is a separate application.
+    group: metrics
+    sensitive: false
+    container: "telegraf-api-${CLIENT_SLUG}"
+    containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}"]
+    version: "${TELEGRAF_IMAGE}"
+    files:
+      - {id: api.conf, path: config/telegraf/api/telegraf.conf, label: API collector, language: toml, editable: true, validator: telegraf}
+      - {id: host.conf, path: config/telegraf/host/telegraf.conf, label: Host metrics, language: toml, editable: true, validator: telegraf}
+    actions:
+      - {id: restart, label: Restart Telegraf, kind: restart, dangerous: true, roles: [Administrator], containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate Telegraf files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: grafana
+    name: Grafana
+    description: Dashboards. Provisioning files are reloaded through the Grafana admin API.
+    group: metrics
+    sensitive: false
+    container: "grafana-${CLIENT_SLUG}"
+    version: "${GRAFANA_IMAGE}"
+    ui_url: "https://${PUBLIC_HOST}:${PORT_GRAFANA}"
+    files:
+      - {id: datasources.yml, path: config/grafana/provisioning/datasources/datasources.yml, label: Datasources, language: yaml, editable: true, validator: yaml, has_secrets: true}
+      - {id: dashboards.yml, path: config/grafana/provisioning/dashboards/dashboards.yml, label: Dashboard provisioning, language: yaml, editable: true, validator: yaml}
+    actions:
+      - {id: reload, label: Reload provisioning, kind: reload, dangerous: false, roles: [Administrator, Engineer], http: [{method: POST, url: "http://grafana:3000/api/admin/provisioning/datasources/reload", username: "${GRAFANA_ADMIN_USER}", password: "${GRAFANA_ADMIN_PASSWORD}"}, {method: POST, url: "http://grafana:3000/api/admin/provisioning/dashboards/reload", username: "${GRAFANA_ADMIN_USER}", password: "${GRAFANA_ADMIN_PASSWORD}"}]}
+      - {id: restart, label: Restart Grafana, kind: restart, dangerous: true, roles: [Administrator], containers: ["grafana-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate Grafana files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: caddy
+    name: Caddy
+    description: TLS reverse proxy. Reloading it changes the front door. Restricted to Administrators.
+    group: platform
+    sensitive: true
+    container: "caddy-${CLIENT_SLUG}"
+    containers: ["caddy-${CLIENT_SLUG}", "scrape-lb-${CLIENT_SLUG}"]
+    version: "${CADDY_IMAGE}"
+    files:
+      - {id: Caddyfile, path: config/caddy/Caddyfile, label: Caddyfile, language: caddyfile, editable: true, validator: caddy}
+      - {id: Caddyfile.scrape-lb, path: config/caddy/Caddyfile.scrape-lb, label: Scrape load balancer, language: caddyfile, editable: true, validator: caddy}
+    actions:
+      - {id: reload, label: Reload Caddy, kind: reload, dangerous: true, roles: [Administrator], http: [{method: POST, url: "http://caddy:2019/load"}]}
+      - {id: restart, label: Restart Caddy, kind: restart, dangerous: true, roles: [Administrator], containers: ["caddy-${CLIENT_SLUG}", "scrape-lb-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate Caddyfiles, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: netbox
+    name: NetBox
+    description: Inventory. extra.py is Python executed by NetBox, so only an Administrator can change it.
+    group: network
+    sensitive: true
+    container: "netbox-${CLIENT_SLUG}"
+    version: "${NETBOX_IMAGE}"
+    ui_url: "https://${PUBLIC_HOST}:${PORT_NETBOX}"
+    files:
+      - {id: extra.py, path: config/netbox/extra.py, label: NetBox extra.py, language: python, editable: true, validator: python}
+      - {id: plugins.py, path: config/netbox/plugins.py, label: NetBox plugins.py, language: python, editable: true, validator: python}
+    actions:
+      - {id: restart, label: Restart NetBox, kind: restart, dangerous: true, roles: [Administrator], containers: ["netbox-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate NetBox files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: activepieces
+    name: Activepieces
+    description: Automation. Its configuration is environment variables, not a file in this tree.
+    group: automation
+    sensitive: true
+    container: "activepieces-app-${CLIENT_SLUG}"
+    version: "${AP_IMAGE}"
+    ui_url: "https://${PUBLIC_HOST}:${PORT_ACTIVEPIECES}"
+    files: []
+    actions:
+      - {id: restart, label: Restart Activepieces, kind: restart, dangerous: true, roles: [Administrator], containers: ["activepieces-app-${CLIENT_SLUG}"]}
+
+  - id: loki
+    name: Loki
+    description: Log storage (profile logs). A syntax check is used when the Loki binary is not in this image.
+    group: data
+    sensitive: false
+    container: "loki-${CLIENT_SLUG}"
+    version: "${LOKI_IMAGE}"
+    files:
+      - {id: loki.yml, path: config/loki/loki.yml, label: Loki configuration, language: yaml, editable: true, validator: yaml}
+    actions:
+      - {id: restart, label: Restart Loki, kind: restart, dangerous: true, roles: [Administrator], containers: ["loki-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate Loki, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: promtail-or-syslog
+    name: Syslog (Telegraf)
+    description: This stack collects syslog with Telegraf, not Promtail (Promtail reached end of life). Profile logs.
+    group: data
+    sensitive: false
+    container: "telegraf-syslog-${CLIENT_SLUG}"
+    version: "${TELEGRAF_IMAGE}"
+    files:
+      - {id: telegraf.conf, path: config/telegraf/syslog/telegraf.conf, label: Syslog collector, language: toml, editable: true, validator: telegraf}
+    actions:
+      - {id: restart, label: Restart syslog collector, kind: restart, dangerous: true, roles: [Administrator], containers: ["telegraf-syslog-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate syslog config, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: oxidized
+    name: Oxidized
+    description: Configuration backups (profile backup). The template is rendered into a volume; placeholders are not the device password.
+    group: network
+    sensitive: false
+    container: "oxidized-${CLIENT_SLUG}"
+    version: "${OXIDIZED_IMAGE}"
+    ui_url: "https://${PUBLIC_HOST}:${PORT_OXIDIZED}"
+    files:
+      - {id: config.tmpl, path: config/oxidized/config.tmpl, label: Oxidized config template, language: yaml, editable: true, validator: text, has_secrets: true}
+    actions:
+      - {id: restart, label: Restart Oxidized, kind: restart, dangerous: true, roles: [Administrator], containers: ["oxidized-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate template, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: trapd
+    name: SNMP traps
+    description: snmptrapd (profile traps). Scripts are mounted from this tree; a restart applies them. Secret files are hidden.
+    group: network
+    sensitive: true
+    container: "trapd-${CLIENT_SLUG}"
+    version: ""
+    files:
+      - {id: entrypoint.sh, path: trapd/entrypoint.sh, label: trapd entrypoint, language: text, editable: true, validator: text}
+      - {id: trap-handler.sh, path: trapd/trap-handler.sh, label: Trap handler, language: text, editable: true, validator: text}
+      - {id: trap_community, path: secrets/trapd/trap_community, label: Trap community, language: text, editable: false, secret_file: true, has_secrets: true, read_only_reason: "Secret file. Use scripts/set-secret.sh trapd/trap_community."}
+      - {id: v3_users.conf, path: secrets/trapd/v3_users.conf, label: SNMPv3 trap users, language: text, editable: false, secret_file: true, has_secrets: true, read_only_reason: "Secret file. Use scripts/set-secret.sh trapd/v3_users.conf."}
+    actions:
+      - {id: restart, label: Restart trap receiver, kind: restart, dangerous: true, roles: [Administrator], containers: ["trapd-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate trap scripts, kind: validate, dangerous: false, roles: [Administrator]}
+
+  - id: netdisco
+    name: Netdisco
+    description: Discovers prefixes selected in sync.yml. The deployment template is rendered with SNMP secrets into a volume Netdisco reads; the rendered file is not returned.
+    group: network
+    sensitive: false
+    container: "netdisco-web-${CLIENT_SLUG}"
+    containers: ["netdisco-web-${CLIENT_SLUG}", "netdisco-backend-${CLIENT_SLUG}", "netdisco-scheduler-${CLIENT_SLUG}"]
+    version: "${NETDISCO_IMAGE_PREFIX}"
+    ui_url: "https://${PUBLIC_HOST}:${PORT_NETDISCO}"
+    files:
+      - {id: deployment.yml, path: config/netdisco/deployment.yml, label: Netdisco deployment template, language: yaml, editable: true, validator: yaml, has_secrets: true}
+      - {id: sync.yml, path: config/discovery/sync.yml, label: NetBox to Netdisco sync, language: yaml, editable: true, validator: yaml}
+      - {id: module-map.yml, path: config/discovery/module-map.yml, label: SNMP module map, language: yaml, editable: true, validator: yaml}
+      - {id: sysobjectid-map.yml, path: config/discovery/sysobjectid-map.yml, label: sysObjectID guesses, language: yaml, editable: true, validator: yaml}
+    actions:
+      - {id: sync-prefixes, label: Sync prefixes to Netdisco now, kind: reload, dangerous: false, roles: [Administrator, Engineer]}
+      - {id: scan-now, label: Scan prefixes now, kind: reload, dangerous: false, roles: [Administrator, Engineer]}
+      - {id: refresh-unapproved, label: Refresh devices not in NetBox, kind: reload, dangerous: false, roles: [Administrator, Engineer]}
+      - {id: restart, label: Restart Netdisco, kind: restart, dangerous: true, roles: [Administrator], containers: ["netdisco-web-${CLIENT_SLUG}", "netdisco-backend-${CLIENT_SLUG}"]}
+      - {id: validate-all, label: Validate Netdisco files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
+
+  - id: postgres
+    name: PostgreSQL
+    description: Read-only status of the InsightEngine database. There is no editable server configuration here.
+    group: data
+    sensitive: true
+    container: "insightengine-postgres-${CLIENT_SLUG}"
+    version: "${POSTGRES_IMAGE}"
+    files: []
+    actions:
+      - {id: restart, label: Restart InsightEngine database, kind: restart, dangerous: true, roles: [Administrator], containers: ["insightengine-postgres-${CLIENT_SLUG}"]}
+
+  - id: host
+    name: Host
+    description: Read-only copies of the host hardening files shipped with the stack. ie-config does not apply them to the operating system.
+    group: platform
+    sensitive: true
+    container: ""
+    version: ""
+    files:
+      - {id: ssh.conf, path: config/host/ssh/ie-hardening.conf, label: SSH hardening, language: text, editable: false, read_only_reason: "Reference only. Applying this to the host OS is outside ie-config."}
+      - {id: sysctl.conf, path: config/host/sysctl/99-ie-hardening.conf, label: sysctl, language: text, editable: false, read_only_reason: "Reference only."}
+      - {id: daemon.json, path: config/host/docker/daemon.json, label: Docker daemon, language: json, editable: false, read_only_reason: "Reference only."}
+    actions: []

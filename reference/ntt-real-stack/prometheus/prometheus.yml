@@ -1,0 +1,734 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: production
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager-ntt:9093']
+      scheme: http
+      timeout: 10s
+      api_version: v2
+
+rule_files:
+  - "/etc/prometheus/alert-rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus-ntt:9090']
+    scrape_interval: 10s
+
+  - job_name: 'snmp-exporter'
+    static_configs:
+      - targets: ['snmp-exporter-ntt:9116']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'blackbox-exporter'
+    static_configs:
+      - targets: ['blackbox-exporter-ntt:9115']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'telegraf'
+    static_configs:
+      - targets: ['telegraf-ntt:9273']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  - job_name: 'netbox'
+    static_configs:
+      - targets: ['netbox-ntt:8080']
+    metrics_path: '/metrics'
+    params:
+      format: ['prometheus']
+    scrape_interval: 30s
+
+  - job_name: 'caddy'
+    static_configs:
+      - targets: ['caddy-ntt:2019']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  - job_name: 'docker-containers'
+    static_configs:
+      - targets: ['telegraf-ntt:9273']
+    metrics_path: '/metrics'
+    params:
+      collect: ['docker']
+    scrape_interval: 15s
+
+
+######################################################################################################
+
+# NetBox ICMP Discovery Configuration
+
+# Uses NetBox devices API with IPv4 addresses 
+######################################################################################################
+          ############################### ICMP SWITCHES ###############################
+######################################################################################################
+  # Access Switches (asw) 
+  - job_name: 'icmp-access-switches'
+    scrape_interval: 10s
+    scrape_timeout: 7s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=access-switch
+        refresh_interval: 5m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+
+
+      # Target the Blackbox Exporter
+      - target_label: __address__
+        replacement: blackbox-exporter-ntt:9115
+      
+ 
+  # Core Switches (CSW) 
+  - job_name: 'icmp-core-switches'
+    scrape_interval: 10s
+    scrape_timeout: 7s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=core-switch
+        refresh_interval: 6m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+
+      # Target the Blackbox Exporter
+      - target_label: __address__
+        replacement: blackbox-exporter-ntt:9115
+
+  # Distribution Switches (DSW) 
+  - job_name: 'icmp-distribution-switches'
+    scrape_interval: 10s
+    scrape_timeout: 7s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=distribution-switch
+        refresh_interval: 6m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the Blackbox Exporter
+      - target_label: __address__
+        replacement: blackbox-exporter-ntt:9115
+
+
+################################################################################################
+          ############################### ICMP SDWAN ###############################
+################################################################################################
+
+  # Fortigate-sdwan-devices 
+  - job_name: 'icmp-fortigate-sdwan-devices'
+    scrape_interval: 10s
+    scrape_timeout: 7s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=sdwan
+        refresh_interval: 7m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the Blackbox Exporter
+      - target_label: __address__
+        replacement: blackbox-exporter-ntt:9115
+
+  # Fortigate-hub-devices 
+  - job_name: 'icmp-fortigate-hub-devices'
+    scrape_interval: 10s
+    scrape_timeout: 7s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=hub
+        refresh_interval: 9m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the Blackbox Exporter
+      - target_label: __address__
+        replacement: blackbox-exporter-ntt:9115
+
+################################################################################################
+          ###################### ICMP WIRELESS CONTROLLER ########################
+################################################################################################
+
+  # Wireless-Lan-Controllers-8540 
+  - job_name: 'icmp-8540-wlc'
+    scrape_interval: 20s
+    scrape_timeout: 15s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
+        refresh_interval: 15m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the Blackbox Exporter
+      - target_label: __address__
+        replacement: blackbox-exporter-ntt:9115
+
+
+#############################################################################################
+          ########################## SNMP SWITCHES ###############################
+          # NetBox SNMP Discovery Configuration
+          # Uses NetBox devices API with IPv4 addresses 
+#############################################################################################
+
+  # Access Switches (asw) 
+  - job_name: 'snmp-access-switches'
+    scrape_interval: 5m
+    scrape_timeout: 4m
+    metrics_path: /snmp
+    params:
+      module: [if_mib,cisco_environ,cisco_mem,cisco_pr]
+      auth: [ntt_snmpv3_auth]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=access-switch
+        refresh_interval: 11m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+
+      # Target the SNMP exporter
+      - target_label: __address__
+        replacement: snmp-exporter-ntt:9116
+ 
+  # Core Switches (CSW) 
+  - job_name: 'snmp-core-switches'
+    scrape_interval: 5m
+    scrape_timeout: 4m
+    metrics_path: /snmp
+    params:
+      module: [if_mib,cisco_environ,cisco_mem,cisco_pro]
+      auth: [ntt_snmpv3_auth]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=core-switch
+        refresh_interval: 12m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the SNMP exporter
+      - target_label: __address__
+        replacement: snmp-exporter-ntt:9116
+
+  # Distribution Switches (DSW) 
+  - job_name: 'snmp-distribution-switches'
+    scrape_interval: 5m
+    scrape_timeout: 4m
+    metrics_path: /snmp
+    params:
+      module: [if_mib,cisco_environ,cisco_mem,cisco_pro,system]
+      auth: [ie_snmp_v2]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=distribution-switch
+        refresh_interval: 12m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the SNMP exporter
+      - target_label: __address__
+        replacement: snmp-exporter-ntt:9116
+
+
+############################################################################################
+          ########################## SNMP SDWAN ###############################
+############################################################################################
+
+  # Fortigate-sdwan-devices 
+  - job_name: 'snmp-fortigate-sdwan-devices'
+    scrape_interval: 5m
+    scrape_timeout: 4m
+    metrics_path: /snmp
+    params:
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+      auth: [ntt_snmpv3_auth]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=sdwan
+        refresh_interval: 13m
+        authorization:
+          type: Token 
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the SNMP exporter
+      - target_label: __address__
+        replacement: snmp-exporter-ntt:9116
+
+
+  # Fortigate-core-fw-devices 
+  - job_name: 'snmp-fortigate-core-fw-devices'
+    scrape_interval: 1m
+    scrape_timeout: 40s
+    metrics_path: /snmp
+    params:
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortigate_est_bandwidth]
+      auth: [ntt_snmpv3_auth]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=core-firewall
+        refresh_interval: 14m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+        tls_config:
+
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the SNMP exporter
+      - target_label: __address__
+        replacement: snmp-exporter-ntt:9116
+
+
+  # Fortigate-hub-devices 
+  - job_name: 'snmp-fortigate-hub-devices'
+    scrape_interval: 5m
+    scrape_timeout: 4m
+    metrics_path: /snmp
+    params:
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+      auth: [ntt_snmpv3_auth]
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=hub
+        refresh_interval: 15m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      # Use primary IPv4 as the target for SNMP
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+
+      # Keep the device name as instance label
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      # Add useful metadata as labels
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+      - source_labels: [__meta_netbox_region]
+        target_label: region 
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+        
+      # Target the SNMP exporter
+      - target_label: __address__
+        replacement: snmp-exporter-ntt:9116
+#
+#  # Core-infrastructure-devices 
+#  - job_name: 'snmp-core-infra-devices'
+#    scrape_interval: 5m
+#    scrape_timeout: 4m
+#    metrics_path: /snmp
+#    params:
+#      module: [if_mib, system, cisco_pro]
+#      auth: [ntt_snmpv3_auth]
+#    http_sd_configs:
+#      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=core-infrastructure
+#        refresh_interval: 16m
+#        authorization:
+#          type: Token
+#          credentials_file: /etc/prometheus/netbox.token
+#        tls_config:
+#
+#    relabel_configs:
+#      # Use primary IPv4 as the target for SNMP
+#      - source_labels: [__address__]
+#        target_label: __param_target
+#      - source_labels: [__param_target]
+#        target_label: instance
+#
+#      # Keep the device name as instance label
+#      - source_labels: [__meta_netbox_name]
+#        target_label: hostname
+#
+#      # Add useful metadata as labels
+#      - source_labels: [__meta_netbox_site_name]
+#        target_label: site
+#      - source_labels: [__meta_netbox_role]
+#        target_label: device_role
+#      - source_labels: [__meta_netbox_device_type]
+#        target_label: model
+#      - source_labels: [__meta_netbox_region]
+#        target_label: region 
+#      - source_labels: [__meta_netbox_primary_ip4]
+#        target_label: ipv4
+#      - source_labels: [__meta_netbox_tenant]
+#        target_label: business_unit
+#      - source_labels: [__meta_netbox_site_group]
+#        target_label: site_type
+#        
+#      # Target the SNMP exporter
+#      - target_label: __address__
+#        replacement: snmp-exporter-ntt:9116
+#
+
+############################################################################################
+          ################### SNMP WIRELESS CONTROLLER ########################
+############################################################################################
+
+  - job_name: 'snmp-cisco-wlc'
+    scrape_interval: 5m
+    scrape_timeout: 4m
+    metrics_path: /snmp
+
+    params:
+      module: [cisco_wlc_universal]
+      auth: [ie_wlc_v2]
+
+    http_sd_configs:
+      - url: http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
+        refresh_interval: 6m
+        authorization:
+          type: Token
+          credentials_file: /etc/prometheus/netbox.token
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+
+      - source_labels: [__param_target]
+        target_label: instance
+
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+
+      - source_labels: [__meta_netbox_device_type]
+        target_label: model
+
+      - source_labels: [__meta_netbox_region]
+        target_label: region
+
+      - source_labels: [__meta_netbox_primary_ip4]
+        target_label: ipv4
+
+      - source_labels: [__meta_netbox_tenant]
+        target_label: business_unit
+
+      - source_labels: [__meta_netbox_site_group]
+        target_label: site_type
+
+      - target_label: __address__
+        replacement: snmp-exporter-ntt:9116
+

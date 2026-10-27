@@ -1,43 +1,48 @@
-# snmp_exporter generator input. UNTESTED here (needs the snmp-generator image
-# and the vendor MIB files in ./snmp/mibs). TODO(Phindani): choose the MIB set
-# per vendor/device class and add modules below; then run
-#   docker compose --profile tools run --rm snmp-generator
-# which writes snmp/out/snmp.yml. Restart/reload the exporters afterwards
-# (docker compose restart snmp-exporter-1 snmp-exporter-2 ...).
-#
-# Credentials stay out of this file: the exporters expand ${...} from their
-# environment (values come from .env).
+# Starter generator input for Cisco, Fortinet and Palo Alto.
+# The live snmp/out/snmp.yml is the generated file from the real stack (auths use
+# ${SNMP_*} so no community or password is stored). Running this generator needs
+# the vendor MIBs in snmp/mibs and replaces nothing until you save the candidate
+# from Settings. Walks below are the standard MIB names the real modules are
+# built from; vendor-only tables appear once those MIBs are uploaded.
 auths:
-  default_auth:
-    version: 2
-    community: ${SNMP_V2_COMMUNITY}
-  v3_auth:
+  ntt_snmpv3_auth:
     version: 3
     security_level: authPriv
-    username: ${SNMP_V3_USER}
+    username: ${SNMP_V3_USERNAME}
     password: ${SNMP_V3_AUTH_PASSWORD}
-    auth_protocol: SHA
-    priv_protocol: AES
+    auth_protocol: SHA256
+    priv_protocol: AES256
     priv_password: ${SNMP_V3_PRIV_PASSWORD}
+  ie_snmp_v2:
+    version: 2
+    community: ${SNMP_V2_COMMUNITY}
+  ie_wlc_v2:
+    version: 2
+    community: ${SNMP_V2_COMMUNITY}
 
 modules:
+  # Cisco switches (IF-MIB + the Cisco entity/memory tables once CISCO-* MIBs are present).
   if_mib:
     walk: [sysUpTime, interfaces, ifXTable]
-    lookups:
-      - source_indexes: [ifIndex]
-        lookup: ifAlias
-      - source_indexes: [ifIndex]
-        lookup: ifDescr
-      - source_indexes: [ifIndex]
-        lookup: ifName
-    overrides:
-      ifAlias:  {ignore: true}
-      ifDescr:  {ignore: true}
-      ifName:   {ignore: true}
-      ifType:   {type: EnumAsInfo}
   system:
     walk: [system]
-  # TODO(Phindani): add vendor/device-class modules here, for example
-  # wireless-controller and access-point tables, once the MIB set is chosen:
-  # wireless_controller:
-  #   walk: [<OIDs or object names from your vendor MIBs>]
+  cisco_environ:
+    walk: [ciscoEnvMonTemperatureStatusTable, ciscoEnvMonFanStatusTable, ciscoEnvMonSupplyStatusTable]
+  cisco_mem:
+    walk: [ciscoMemoryPoolTable]
+  cisco_pro:
+    walk: [cpmCPUTotalTable]
+  cisco_wlc_universal:
+    walk: [bsnAPTable, bsnApIfTable]
+  # Fortinet. FORTINET-FORTIGATE-MIB / FORTINET-CORE-MIB must be in snmp/mibs.
+  if_mib_fortigate:
+    walk: [ifTable, ifXTable]
+  fortigate:
+    walk: [fgSystemInfo, fgHwSensors]
+  fortigate_bandwidth:
+    walk: [fgIntfVlanTable]
+  fortigate_est_bandwidth:
+    walk: [fgVpnTunTable]
+  # Palo Alto. PAN-COMMON-MIB must be uploaded before this module will generate.
+  paloalto_system:
+    walk: [panSys]

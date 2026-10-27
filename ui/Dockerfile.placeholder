@@ -1,0 +1,7 @@
+# Used by install.sh when ui/Dockerfile is absent (before the UI source lands).
+# Same image as ui/Dockerfile in this commit. The follow-up UI import replaces
+# ui/Dockerfile and leaves this file so the stack can still start.
+FROM nginxinc/nginx-unprivileged:1.27-alpine
+COPY placeholder/index.html /usr/share/nginx/html/index.html
+COPY placeholder/healthz /usr/share/nginx/html/healthz
+EXPOSE 8080

@@ -165,6 +165,8 @@ setenv AP_POSTGRES_PASSWORD "$(gen 32)"
 setenv AP_REDIS_PASSWORD "$(gen 32)"
 setenv NETDISCO_DB_PASSWORD "$(gen 32)"
 setenv IE_DB_PASSWORD "$(gen 32)"
+setenv IE_CONFIG_DB_PASSWORD "$(gen 32)"
+setenv SNMP_V3_USERNAME "$(getenv_val SNMP_V3_USER)"
 
 if [ -S /var/run/docker.sock ]; then
   gid="$(stat -c %g /var/run/docker.sock 2>/dev/null || true)"
@@ -221,8 +223,13 @@ fi
 
 # ---- secret files, folders ------------------------------------------------
 mkdir -p secrets data/netdisco/logs data/migration data/setup migration cust-exporter/app config/netdisco/nd-site-local
-write_secret prometheus/netbox.token "unset-placeholder" 65534
-write_secret oxidized/netbox.token "unset-placeholder" 0
+# The Prometheus and Oxidized token files start as the NetBox superuser token so a device
+# added after first-run is monitored with no extra step. This token is privileged.
+# Replace it with a read-only token: scripts/set-secret.sh prometheus/netbox.token
+NB_TOKEN="$(getenv_val NETBOX_SUPERUSER_API_TOKEN)"
+write_secret prometheus/netbox.token "$NB_TOKEN" 65534
+write_secret oxidized/netbox.token "$NB_TOKEN" 0
+unset NB_TOKEN
 write_secret oxidized/device_username "" 0
 write_secret oxidized/device_password "" 0
 write_secret trapd/trap_community "" 10002
@@ -239,15 +246,55 @@ write_secret setup/token "$(gen 48)" 0
 # from here on a failure must not delete .env
 ENV_CREATED=
 
+# Build local images. IE_UI_IMAGE, when set to something other than insightengine-ui:local,
+# is pulled and not built. If ui/Dockerfile is missing, the placeholder Dockerfile is used
+# so the stack still starts (config/ui-placeholder is what that image serves).
+prepare_ui() {
+  local ui
+  ui="$(getenv_val IE_UI_IMAGE)"
+  if [ -n "$ui" ] && [ "$ui" != "insightengine-ui:local" ]; then
+    say "IE_UI_IMAGE is set; the UI image will be pulled and ui/ will not be built"
+    export IE_UI_SKIP_BUILD=1
+    return
+  fi
+  if [ ! -f ui/Dockerfile ]; then
+    say "ui/Dockerfile is not present; building the placeholder UI (Dockerfile.placeholder)"
+    export IE_UI_DOCKERFILE=Dockerfile.placeholder
+  fi
+}
+
 # ---- start the stack ---------------------------------------------------------
 if [ "$START" = 1 ]; then
   say "building local images and pulling the others (this can take several minutes)..."
-  docker compose build
+  prepare_ui
+  nbimg="$(getenv_val NETBOX_IMAGE)"
+  skip=""
+  if [ "${IE_UI_SKIP_BUILD:-0}" = 1 ]; then skip="$skip insightengine-ui"; fi
+  if [ -n "$nbimg" ] && [ "$nbimg" != "insightengine/netbox-lists:local" ]; then
+    say "NETBOX_IMAGE is set; pulling that image and not building the local plugin image"
+    skip="$skip netbox"
+  fi
+  # Only services that declare a build section. Names come from compose config, not from the user.
+  build_list="$(IE_BUILD_SKIP="$skip" python3 - <<'PY'
+import json, os, subprocess
+skip = set(os.environ.get("IE_BUILD_SKIP", "").split())
+raw = subprocess.check_output(["docker", "compose", "config", "--format", "json"])
+cfg = json.loads(raw)
+for name, svc in cfg.get("services", {}).items():
+    if name in skip or not svc.get("build"):
+        continue
+    print(name)
+PY
+)"
+  # shellcheck disable=SC2086
+  [ -n "$build_list" ] && docker compose build $build_list
+  if [ "${IE_UI_SKIP_BUILD:-0}" = 1 ]; then docker compose pull insightengine-ui; fi
+  if [ -n "$nbimg" ] && [ "$nbimg" != "insightengine/netbox-lists:local" ]; then docker compose pull netbox; fi
   docker compose pull --ignore-buildable
   say "starting the stack..."
-  docker compose up -d
+  docker compose up -d --no-build
 else
-  say "--no-start given: nothing started. Later: docker compose build && docker compose pull --ignore-buildable && docker compose up -d"
+  say "--no-start given: nothing started. Later: ./install.sh   (or docker compose build && docker compose up -d)"
 fi
 
 # ---- summary (no secrets printed) --------------------------------------------
@@ -259,5 +306,7 @@ say "Configuration : .env (mode 600) holds the generated passwords. This script 
 say "Certificates  : certs/ca.crt (private CA - import it into browsers that should trust this server)"
 say "FIRST RUN     : open  ${url}/setup/  and paste the setup token."
 say "                The token is in the file  secrets/setup/token  (read it yourself, e.g. 'sudo cat secrets/setup/token')."
-say "                There you choose the client name and: new install / move from the old stack."
+say "                Then: client name, the first administrator email and password, then new install or move."
+say "                The administrator password is chosen on that page. This script does not print it."
+say "ONE CLONE     : this repository is the whole product (stack + UI under ui/). A second clone is not required."
 say "Other        : API tokens (NetBox etc.): scripts/set-secret.sh <name> ; optional features: COMPOSE_PROFILES in .env"
