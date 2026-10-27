@@ -10,7 +10,7 @@
     migrate : scripts/migrate.sh preflight | run | status
     history : scripts/prom-history.sh import ...
 * Persistent single config store: <INSTALL_DIR>/data/setup/config.json
-* State machine: unconfigured -> applying -> (unconfigured/step=mode ...) -> complete | failed
+* State machine: unconfigured -> applying -> (unconfigured/step=admin -> mode ...) -> complete | failed
 See docs/setup-api.md.
 """
 import hashlib
@@ -18,11 +18,14 @@ import hmac
 import json
 import os
 import re
+import secrets
 import shlex
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -299,7 +302,7 @@ def apply_done_factory(was_complete, prev_step):
             if was_complete:
                 CONFIG.update(state="complete", step="done")
             else:
-                CONFIG.update(state="unconfigured", step="mode" if prev_step == "client" else prev_step)
+                CONFIG.update(state="unconfigured", step="admin" if prev_step == "client" else prev_step)
         else:
             CONFIG.update(state="failed", error=err)
         save_config()
@@ -362,6 +365,58 @@ def do_history(args):
 def finish_setup():
     CONFIG.update(state="complete", step="done", error=None)
     save_config()
+    # Seed runs only in the compose service (SETUP_RUN_SEED=yes). Tests leave it unset.
+    # The script reads the NetBox token from a file and does not print it.
+    if os.environ.get("SETUP_RUN_SEED", "").lower() in ("1", "yes", "true", "on"):
+        script = os.path.join(ROOT, "scripts", "seed-netbox.sh")
+
+        def run():
+            run_cmd([script], env_extra={"NETBOX_INTERNAL_URL": os.environ.get("NETBOX_INTERNAL_URL", "http://netbox:8080")}, timeout=600)
+
+        threading.Thread(target=run, name="seed-netbox", daemon=True).start()
+
+
+def _password_ok(password):
+    if not isinstance(password, str) or not (12 <= len(password) <= 200):
+        return False
+    if any(ord(c) < 32 for c in password):
+        return False
+    return any(c.isalpha() for c in password) and any(c.isdigit() for c in password)
+
+
+def _email_ok(email):
+    if not isinstance(email, str):
+        return False
+    email = email.strip()
+    if not (3 <= len(email) <= 320) or email.count("@") != 1 or any(c.isspace() for c in email):
+        return False
+    local, _, domain = email.partition("@")
+    return bool(local) and "." in domain
+
+
+def _generate_password():
+    password = secrets.token_urlsafe(18)
+    if not any(c.isdigit() for c in password):
+        password += "1"
+    if not any(c.isalpha() for c in password):
+        password += "a"
+    return password
+
+
+def bootstrap_admin(email, password):
+    """Ask ie-config to create the first Administrator. The password is not logged."""
+    base = os.environ.get("IE_CONFIG_URL", "http://ie-config:8080").rstrip("/")
+    data = json.dumps({"email": email, "password": password}).encode()
+    req = urllib.request.Request(base + "/internal/bootstrap-admin", data=data, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Authorization", "Bearer " + get_token())
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+    except OSError:
+        return 0, b""
 
 
 # ------------------------------------------------------------------- responses
@@ -544,6 +599,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(200, full_state() if has_auth else public_state())
             routes = {
                 ("POST", "/setup/client"): self.h_client,
+                ("POST", "/setup/admin"): self.h_admin,
                 ("POST", "/setup/mode"): self.h_mode,
                 ("POST", "/setup/migrate/preflight"): self.h_preflight,
                 ("POST", "/setup/migrate/run"): self.h_run,
@@ -584,6 +640,34 @@ class Handler(BaseHTTPRequestHandler):
             jid = start_job("apply", do_apply, apply_done_factory(was_complete, prev_step))
             self.send_json(202, {"state": "applying", "job_id": jid, "client_name": name, "client_slug": slug})
 
+    def h_admin(self):
+        body = self.h_body
+        email = (body.get("email") or "").strip()
+        if not _email_ok(email):
+            raise Err(400, "email is not valid")
+        generate = body.get("generate") is True
+        if generate:
+            password = _generate_password()
+        else:
+            password = body.get("password")
+            if not _password_ok(password):
+                raise Err(400, "password must be 12-200 characters and include a letter and a digit, or set generate=true")
+        with LOCK:
+            if CONFIG["state"] != "unconfigured" or CONFIG["step"] != "admin":
+                raise Err(409, "the administrator is created after the client name (state=%s, step=%s)" % (CONFIG["state"], CONFIG["step"]))
+        code, _raw = bootstrap_admin(email, password)
+        # Do not log the password or the request body.
+        log("bootstrap-admin email=%s result=%s" % (email, code))
+        if code not in (200, 409):
+            raise Err(502, "could not create the administrator (ie-config returned %s)" % code)
+        with LOCK:
+            CONFIG["step"] = "mode"
+            save_config()
+            out = public_state()
+            if generate and code == 200:
+                out["generated_password"] = password
+            self.send_json(200, out)
+
     def h_mode(self):
         mode = self.h_body.get("mode")
         if mode not in ("new", "move"):
@@ -593,8 +677,8 @@ class Handler(BaseHTTPRequestHandler):
                 if mode == "move":
                     return self.send_json(200, {"state": "complete", "note": "already set up; use /setup/migrate/* directly"})
                 raise Err(409, "already complete")
-            if CONFIG["state"] != "unconfigured" or CONFIG["step"] == "client":
-                raise Err(409, "set the client name first (state=%s, step=%s)" % (CONFIG["state"], CONFIG["step"]))
+            if CONFIG["state"] != "unconfigured" or CONFIG["step"] != "mode":
+                raise Err(409, "create the administrator first (state=%s, step=%s)" % (CONFIG["state"], CONFIG["step"]))
             if job_running():
                 raise Err(409, "another action is running")
             CONFIG["mode"] = mode

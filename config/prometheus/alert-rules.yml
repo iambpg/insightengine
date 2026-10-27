@@ -1,8 +1,574 @@
-# Skeleton rules. TODO(Phindani): replace with your existing alert-rules.yml
-# (the original file was not part of the pasted compose, so it was not seen).
 groups:
-  - name: insightengine-basic
-    rules:
+##################################################################
+# ***************** Switch Down or Degraded Alerts ***************
+- name: SiteDown_or_Degraded
+  rules:
+# ***************** ICMP Device Down Alerts *****************  
+      - alert: SiteDown_Core_Switch_Ping_Failed
+        expr: probe_success{device_role="core-switch"} == 0
+        for: 2m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: critical
+          whatisdown: "site_down"
+        annotations:
+          summary: "Core Switch {{ $labels.hostname }} is offline"
+          description: "Core Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to icmp queries for more than 6 minutes"
+
+      - alert: Distribution_Switch_Ping_Failed
+        expr: probe_success{device_role="distribution-switch"} == 0
+        for: 2m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: critical
+          whatisdown: "switch_down"
+        annotations:
+          summary: "Distribution Switch {{ $labels.hostname }} is offline"
+          description: "Distribution Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to icmp queries for more than 6 minutes"          
+
+      - alert: Access_Switch_Ping_Failed
+        expr: probe_success{device_role="access-switch"} == 0
+        for: 2m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: critical
+          whatisdown: "switch_down"
+        annotations:
+          summary: "Access Switch {{ $labels.hostname }} is offline"
+          description: "Access Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to icmp queries for more than 6 minutes"
+
+      - alert: Sdwan_Ping_Failed
+        expr: probe_success{device_role="sdwan"} == 0
+        for: 2m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: critical
+          whatisdown: "site_down"
+        annotations:
+          summary: "sdwan {{ $labels.hostname }} is offline"
+          description: "sdwan {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to icmp queries for more than 6 minutes"
+
+      - alert: Wireless_Controller_Ping_Failed
+        expr: probe_success{device_role="wireless-controller"} == 0
+        for: 2m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: critical
+          whatisdown: "critical_core_down"
+        annotations:
+          summary: "Wireless Controller {{ $labels.hostname }} is offline"
+          description: "Wireless Controller {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to icmp queries for more than 6 minutes"
+
+# ***************** SNMP Device Down Alerts *****************
+      - alert: SiteDown_Core_Switch_Snmp_Failed
+        expr: up{device_role="core-switch"} == 0
+        for: 10m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: major
+          whatisdown: "switch_warning"
+        annotations:
+          summary: "Core Switch {{ $labels.hostname }} snmp down"
+          description: "Core Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to snmp queries for more than 6 minutes"
+
+      - alert: Distribution_Switch_Snmp_Failed
+        expr: up{device_role="distribution-switch"} == 0
+        for: 10m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: major
+          whatisdown: "switch_warning"
+        annotations:
+          summary: "Distribution Switch {{ $labels.hostname }} snmp down"
+          description: "Distribution Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to snmp queries for more than 6 minutes"          
+
+      - alert: Access_Switch_Snmp_Failed
+        expr: up{device_role="access-switch"} == 0
+        for: 10m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: major
+          whatisdown: "switch_warning"
+        annotations:
+          summary: "Access Switch {{ $labels.hostname }} snmp down"
+          description: "Access Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to snmp queries for more than 6 minutes"
+
+      - alert: Sdwan_Snmp_Failed
+        expr: up{device_role="sdwan"} == 0
+        for: 10m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: major
+          whatisdown: "site_warning"
+        annotations:
+          summary: "sdwan {{ $labels.hostname }} snmp down"
+          description: "sdwan {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to snmp queries for more than 6 minutes"
+
+      - alert: Wireless_Controller_Snmp_Failed
+        expr: up{device_role="wireless-controller"} == 0
+        for: 10m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: major
+          whatisdown: "critical_core_warning"
+        annotations:
+          summary: "Wireless Controller {{ $labels.hostname }} snmp down"
+          description: "Wireless Controller {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded to snmp queries for more than 6 minutes"
+
+############################################################################################################################
+
+- name: SDWAN-Health
+  rules:
+      - alert: SDWANInterfaceLinkDown
+        expr: ifOperStatus_info{role="sdwan", ifAdminStatus="up", ifOperStatus="down"} == 1
+        for: 3m
+        labels:
+          severity: critical
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          whatisdown: "link_down"
+        annotations:
+          summary: "SD-WAN link {{ $labels.ifAlias }} is Down"
+          description: "Interface {{ $labels.ifDescr }} is Down on {{ $labels.hostname }} {{ $labels.instance }} is operationally DOWN for >3m (admin state is UP)"
+
+      - alert: Fortigate_SDWAN_HealthCheck
+        expr: |
+          (
+            fgVWLHealthCheckLinkState_info{fgVWLHealthCheckLinkState="dead"}
+          )
+          * on (instance, fgVWLHealthCheckLinkID)
+          group_left(fgVWLHealthCheckLinkIfName)
+          (
+            max by (instance, fgVWLHealthCheckLinkID, fgVWLHealthCheckLinkIfName) (
+              fgVWLHealthCheckLinkIfName
+            )
+          ) == 1
+        for: 10m
+        labels:
+          severity: critical
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          wan_interface: "{{ $labels.fgVWLHealthCheckLinkIfName }}"
+          vendor: fortinet
+          whatisdown: "link_down"
+        annotations:
+          summary: "SD-WAN link_down on {{ $labels.hostname }} {{ $labels.fgVWLHealthCheckLinkIfName }}"
+          description: "SD-WAN {{ $labels.hostname }} has link {{ $labels.fgVWLHealthCheckLinkIfName }} failing health-check for more than 5 minutes."
+
+      - alert: SDWANHighJitter
+        expr: fgVWLHealthCheckLinkJitter{role="sdwan"} > 30
+        for: 5m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          whatisdown: "link_warning"
+        annotations:
+          summary: "High jitter on {{ $labels.fgVWLHealthCheckLinkIfName }} ({{ $labels.fgVWLHealthCheckLinkName }})"
+          description: "Jitter > 30ms for >5m."
+
+      - alert: SDWANHighLatency
+        expr: fgVWLHealthCheckLinkLatency{role="sdwan"} > 150
+        for: 5m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          whatisdown: "link_warning"
+        annotations:
+          summary: "High latency on {{ $labels.fgVWLHealthCheckLinkIfName }} ({{ $labels.fgVWLHealthCheckLinkName }})"
+          description: "Latency > 150ms for >5m."
+
+      - alert: SDWANPacketLoss
+        expr: fgVWLHealthCheckLinkPacketLoss{role="sdwan"} > 1
+        for: 2m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          whatisdown: "link_warning"
+        annotations:
+          summary: "Packet loss on {{ $labels.fgVWLHealthCheckLinkIfName }} ({{ $labels.fgVWLHealthCheckLinkName }})"
+          description: "Loss > 1% for >2m."
+
+      - alert: SDWANHighInputErrors
+        expr: rate(ifInErrors{role="sdwan"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          whatisdown: "link_warning"
+        annotations:
+          summary: "High input errors on {{ $labels.ifAlias }} interface {{ $labels.ifDescr }}"
+          description: "High input errors on {{ $labels.hostname }} for {{ $labels.ifAlias }} interface {{ $labels.ifDescr }} for more than 5m."
+
+      - alert: SDWANHighOutputErrors
+        expr: rate(ifOutErrors{role="sdwan"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          whatisdown: "link_warning"
+        annotations:
+          summary: "High output errors on {{ $labels.ifAlias }} interface {{ $labels.ifDescr }}"
+          description: "High output errors on {{ $labels.hostname }} for {{ $labels.ifAlias }} interface {{ $labels.ifDescr }} for more than 5m."
+
+      - alert: SDWANHighDiscards
+        expr: rate(ifInDiscards{role="sdwan"}[5m]) > 10 or rate(ifOutDiscards{role="sdwan"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          whatisdown: "link_warning"
+        annotations:
+          summary: "High discards on {{ $labels.ifAlias }} interface {{ $labels.ifDescr }}"
+          description: "Inbound or outbound discards > 10 packets/s for 5m."
+
+##################################################################
+# ***************** Device Fresh Uptime Alerts *******************
+- name: Device_Fresh_uptime_under_10_Min
+  rules:
+      - alert: Core_Switch_uptime_under_10_Min
+        expr: sysUpTime{device_role="core-switch"} / 100 < 600
+        for: 1m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: device_power
+        annotations:
+          summary: "Core-switch {{ $labels.hostname }} with ({{ $labels.instance }}) just booted"
+          description: "{{ $labels.hostname }} uptime is less than 10 minutes (likely {{ $value }} seconds since boot). This indicates a reboot or power recovery."
+
+      - alert: Distribution_Switch_uptime_under_10_Min
+        expr: sysUpTime{device_role="distribution-switch"} / 100 < 600
+        for: 1m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: device_power
+        annotations:
+          summary: "Distribution-switch {{ $labels.hostname }} with ({{ $labels.instance }}) just booted"
+          description: "{{ $labels.hostname }} uptime is less than 10 minutes (likely {{ $value }} seconds since boot). This indicates a reboot or power recovery."      
+
+      - alert: Access_Switch_uptime_under_10_min
+        expr: sysUpTime{device_role="access-switch"} / 100 < 600
+        for: 1m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: device_power
+        annotations:
+          summary: "Access-switch {{ $labels.hostname }} with ({{ $labels.instance }}) just booted"
+          description: "{{ $labels.hostname }} uptime is less than 10 minutes (likely {{ $value }} seconds since boot). This indicates a reboot or power recovery."      
+
+      - alert: Fortigate_Sdwan_uptime_under_10_Min
+        expr: fgSysUpTime{device_role="sdwan"} / 100 < 600
+        for: 1m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: device_power
+        annotations:
+          summary: "Fortigate sdwan {{ $labels.hostname }} with ({{ $labels.instance }}) just booted"
+          description: "{{ $labels.hostname }} uptime is less than 10 minutes (likely {{ $value }} seconds since boot). This indicates a reboot or power recovery."
+
+##################################################################
+# ******************* Device Recovery Alerts *********************
+- name: Device-recovery
+  rules:
+      - record: recently_unreachable
+        expr: max_over_time((probe_success == 0)[10m:])
+      - record: up_5m
+        expr: min_over_time(probe_success[5m:])
+      - alert: DeviceRecoveredAfterOutage
+        expr: recently_unreachable == 1 and up_5m == 1
+        for: 0m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: info
+          whatisdown: "device_power"
+        annotations:
+          summary: "Device {{ $labels.hostname }} with ip {{$labels.instance}} recovered (was down 10 minutes ago, now its been up for 5+ minutes)"
+          description: "Device {{ $labels.hostname }} with ip {{$labels.instance}} was unreachable sometime in last 10m but has now been reachable for at least 5m."
+
+##################################################################
+# ********************** AccessPoint Alert ***********************
+- name: AccessPoint_Down_or_Degraded
+  rules:
+      - alert: AccessPoint_Status
+        expr: bsnAPOperationStatus{job="snmp-cisco-wlc"} == 0
+        for: 5m
+        labels:
+          parent: "{{ $labels.hostname }}"
+          severity: critical
+          whatisdown: "ap_down"
+
+        annotations:
+          summary: "Access Point Down"
+          description: "Access Point {{ $labels.bsnAPName }} is down (status = 0) for more than 5 minutes."
+
+##################################################################
+# ***************** Hardware Alerts *****************
+- name: Hardware_Alerts
+  rules:
+      - alert: Switch_HardwareInformationChange
+        expr: changes(entPhysicalSerialNum[1h]) > 0
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: info
+          whatisdown: "hardware_change"
+        annotations:
+          summary: "Hardware information changed"
+          description: "Hardware change detected: \n Model: {{ $labels.entPhysicalModelName }} \n Serial: {{ $labels.entPhysicalSerialNum }} \n Software Version: {{ $labels.entPhysicalSoftwareRev }}"
+
+##################################################################
+# ***************** LAN Down or Degraded Alerts ******************
+- name: LanDown_Degraded
+  rules:
+      - alert: LanDown_Access_Switch_Ping_Failed
+        expr: probe_success{device_role="Access Switch"} == 0
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: critical
+          whatisdown: "switch_down"
+        annotations:
+          summary: "Access Switch {{ $labels.hostname }} is offline"
+          description: "Access Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} has not responded for more than 5 minutes"
+
+      - alert: LanDown_Core_Switch_Downlink
+        expr: ifOperStatus{device_role="Core Switch", ifAlias="!Uplink_to_switch"} == 0
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: critical
+          whatisdown: "switch_down"
+        annotations:
+          summary: "Core Switch {{ $labels.hostname }} downlink to access switch is down"
+          description: "Core Switch {{ $labels.hostname }} with ip: {{ $labels.instance }} downlink to access switch is down"
+
+      - alert: AS_InterfaceErrors_outbound
+        expr: rate(ifOutErrors{ifAlias="!Uplink_to_switch", device_role="Access Switch"}[5m]) > 2
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "switch_degradation"
+        annotations:
+          summary: "LAN Interface outbound errors detected on {{ $labels.hostname }}"
+          description: "Lan Interface {{ $labels.ifName }} is reporting outbound errors on {{ $labels.hostname }}"
+
+      - alert: AS_InterfaceErrors_inbound
+        expr: rate(ifInErrors{ifAlias="!Uplink_to_switch", device_role="Access Switch"}[5m]) > 2
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "switch_degradation"
+        annotations:
+          summary: "LAN Interface inbound errors detected on {{ $labels.hostname }}"
+          description: "Lan Interface {{ $labels.ifName }} is reporting inbound errors on {{ $labels.hostname }}"
+
+      - alert: AP_InterfaceErrors_outbound
+        expr: rate(ifOutErrors{ifAlias="!Uplink_to_AP"}[5m]) > 2
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "ap_degradation"
+        annotations:
+          summary: "AP Interface errors detected on {{ $labels.hostname }}"
+          description: "AP Interface {{ $labels.ifName }} is reporting errors"
+
+      - alert: AP_InterfaceErrors_inbound
+        expr: rate(ifInErrors{ifAlias="!Uplink_to_AP"}[5m]) > 2
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "ap_degradation"
+        annotations:
+          summary: "AP Interface errors detected on {{ $labels.hostname }}"
+          description: "AP Interface {{ $labels.ifName }} is reporting errors"
+
+      - alert: AP_InterfaceDown
+        expr: ifOperStatus{ifAlias="!Uplink_to_AP", device_role="Access Switch"} == 0
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "ap_down"
+        annotations:
+          summary: "AP Interface down on {{ $labels.hostname }}"
+          description: "AP Interface {{ $labels.ifName }} is down"
+
+#################################################################
+# ***************** LAN Down or Degraded Alerts *****************
+- name: Network_Resources
+  rules:
+      - alert: SwitchHighCPU_Core_SW
+        expr: cpmCPUTotal5minRev{device_role="Core Switch"} > 80
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "switch_warning"
+        annotations:
+          summary: "High CPU usage on Core switch {{ $labels.hostname }}"
+          description: "Core Switch CPU usage is above 80% for more than 5 minutes"
+
+      - alert: SwitchHighCPU_Access_SW
+        expr: cpmCPUTotal5minRev{device_role="Access Switch"} > 80
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "switch_warning"
+        annotations:
+          summary: "High CPU usage on Access switch {{ $labels.hostname }}"
+          description: "Access Switch CPU usage is above 80% for more than 5 minutes"
+
+      - alert: SwitchHighCPU_Firewall
+        expr: fgSysCpuUsage{device_role="FIREWALL"} > 75
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "critical_core_warning"
+        annotations:
+          summary: "High CPU usage on Firewall {{ $labels.hostname }}"
+          description: "Firewall CPU usage is above 75% for more than 5 minutes"
+
+      - alert: SwitchHighCPU_Hub
+        expr: fgSysCpuUsage{device_role="HUB"} > 75
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "critical_core_warning"
+        annotations:
+          summary: "High CPU usage on Hub {{ $labels.hostname }}"
+          description: "Hub CPU usage is above 75% for more than 5 minutes"
+
+###################################################################
+# ************ Prometheus Linux Host resources Alerts *************
+- name: Prometheus_Linux Host_resources
+  rules:
+      - alert: Linux_HighCPULoad
+        expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle",instance=~"localhost:9101"}[5m]))) * 100 > 80
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "critical_core_warning"
+        annotations:
+          summary: "High CPU load on {{ $labels.hostname }} - Prometheus host"
+          description: "CPU load is above 80% for more than 5 minutes on {{ $labels.hostname }}. Current value: {{ $value }}%"
+
+      - alert: Linux_HighMemoryUsage
+        expr: node_memory_MemTotal_bytes{instance="localhost:9101"} - avg_over_time(node_memory_MemAvailable_bytes{instance="localhost:9101"}[5m]) > 50206413141
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "critical_core_warning"
+        annotations:
+          summary: "High memory usage on {{ $labels.hostname }} - Prometheus host"
+          description: "Memory usage is above 50gb for more than 5 minutes. Current value: {{ $value }}%"
+
+      - alert: Linux_LowDiskSpace
+        expr: node_filesystem_avail_bytes{instance="localhost:9101", fstype="ext4"} / 1000000000 < 20 
+        for: 5m
+        labels:
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          severity: warning
+          whatisdown: "critical_core_warning"
+        annotations:
+          summary: "Low disk space on {{ $labels.hostname }} - Prometheus host"
+          description: "Disk space is less than 20gb for more than 5 minutes."
+
+###################################################################
+# *********** FortiGate WAN Link Utilization Alerts ***************
+# Utilisation vs the FortiGate estimated-bandwidth statement, so a 1G
+# physical link carved to 100Mbps alerts against 100Mbps.
+#   Bytes:   ifHCInOctets / ifHCOutOctets (counters, from IF-MIB)
+#   Bandwidth: fortigate_if_est_down_bw_kbps / fortigate_if_est_up_bw_kbps
+#              (gauges from the SNMP est-bandwidth OIDs, kbps)
+# Both carry the same ifIndex + ifAlias labels -> Prometheus joins them
+# automatically in the division. Alert by interface alias (e.g. bb1).
+- name: FortiGate-Bandwidth-Utilization
+  rules:
+      - alert: FortiGateDownlinkUtilizationHigh
+        expr: |
+          (
+            increase(ifHCInOctets{ifAlias="bb1"}[10m]) / 600 * 8
+            / on(ifIndex, job, instance) group_left(ifAlias, ifDescr) (fortigate_if_est_down_bw_kbps * 1000)
+          ) * 100 > 10
+        for: 2m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          interface: "{{ $labels.ifAlias }}"
+          whatisdown: "ftg_bandwidth_down"
+        annotations:
+          summary: "FortiGate {{ $labels.hostname }} downlink {{ $labels.ifAlias }} >10% util"
+          description: "Downlink utilisation {{ $value | humanizePercentage }} on {{ $labels.ifAlias }} ({{ $labels.ifDescr }}) vs {{ $labels.instance }}"
+
+      - alert: FortiGateUplinkUtilizationHigh
+        expr: |
+          (
+            increase(ifHCOutOctets{ifAlias="bb1"}[10m]) / 600 * 8
+            / on(ifIndex, job, instance) group_left(ifAlias, ifDescr) (fortigate_if_est_up_bw_kbps * 1000)
+          ) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          device: "{{ $labels.hostname }}"
+          ipaddress: "{{ $labels.instance }}"
+          interface: "{{ $labels.ifAlias }}"
+          whatisdown: "ftg_bandwidth_up"
+        annotations:
+          summary: "FortiGate {{ $labels.hostname }} uplink {{ $labels.ifAlias }} >10% util"
+          description: "Uplink utilisation {{ $value | humanizePercentage }} on {{ $labels.ifAlias }} ({{ $labels.ifDescr }}) vs {{ $labels.instance }}"
+
+###################################################################
+
+- name: insightengine-collectors
+  rules:
       - alert: DeviceUnreachable
         expr: probe_success{job=~"icmp-.*"} == 0
         for: 5m

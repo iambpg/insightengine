@@ -1,0 +1,27 @@
+modules:
+  icmp:
+    prober: icmp
+    timeout: 15s
+    icmp:
+      preferred_ip_protocol: "ip4"
+      dont_fragment: false
+      payload_size: 56
+
+  icmp_ttl5:
+    prober: icmp
+    timeout: 15s
+    icmp:
+      preferred_ip_protocol: "ip4"
+      ttl: 5
+      dont_fragment: false
+      payload_size: 56
+
+  icmp_custom:
+    prober: icmp
+    timeout: 15s
+    icmp:
+      preferred_ip_protocol: "ip4"
+      # Uncomment and set the source IP to bind ICMP probes to a specific interface:
+      # source_ip_address: "{{ HOST_IP }}"
+      dont_fragment: false
+      payload_size: 56

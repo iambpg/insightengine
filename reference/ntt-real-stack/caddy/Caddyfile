@@ -1,0 +1,246 @@
+# Global configuration
+{
+    # Enable automatic HTTPS with internal CA
+    auto_https disable_redirects
+
+    # Log settings
+    log {
+        level INFO
+        output file /data/access.log {
+            roll_size 100mb
+            roll_keep 5
+        }
+    }
+
+    # Admin API - secure to localhost only
+    admin 0.0.0.0:2019
+}
+
+# Define common headers for all sites (security headers + HSTS)
+(common_headers) {
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        -Server
+    }
+}
+
+# Define TLS settings (self-signed cert with IP SAN)
+(tls_cert) {
+    tls /etc/caddy/certs/server.crt /etc/caddy/certs/server.key
+}
+
+# ============================================
+# HTTP → HTTPS redirect (port 80)
+# ============================================
+:80 {
+    redir https://{host}:9090{uri} 301
+}
+
+# ============================================
+# Prometheus - Metrics and Alerting (HTTPS)
+# ============================================
+:9090 {
+    import tls_cert
+    import common_headers
+
+    reverse_proxy prometheus-ntt:9090 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+    }
+
+    # Basic authentication for Prometheus
+    basicauth {
+        admin REDACTED
+    }
+
+    # Request logging
+    log {
+        output file /data/prometheus_access.log {
+            roll_size 50mb
+            roll_keep 3
+        }
+    }
+}
+
+# ============================================
+# Grafana - Visualization Dashboard (HTTPS)
+# ============================================
+:3000 {
+    import tls_cert
+    import common_headers
+
+    reverse_proxy grafana-ntt:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+        transport http {
+            dial_timeout 60s
+            response_header_timeout 60s
+        }
+    }
+
+    # Increase body size for large dashboards
+    request_body {
+        max_size 20MB
+    }
+
+    log {
+        output file /data/grafana_access.log {
+            roll_size 50mb
+            roll_keep 3
+        }
+    }
+}
+
+# ============================================
+# Alertmanager - Alert Management (HTTPS)
+# ============================================
+:9093 {
+    import tls_cert
+    import common_headers
+
+    reverse_proxy alertmanager-ntt:9093 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+    }
+
+    # Basic authentication for Alertmanager
+    basicauth {
+        admin REDACTED
+    }
+
+    log {
+        output file /data/alertmanager_access.log {
+            roll_size 50mb
+            roll_keep 3
+        }
+    }
+}
+
+# ============================================
+# Netbox - IPAM and DCIM (HTTPS)
+# ============================================
+:8080 {
+    import tls_cert
+    import common_headers
+
+    reverse_proxy netbox-ntt:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+        transport http {
+            dial_timeout 120s
+            response_header_timeout 120s
+        }
+    }
+
+    log {
+        output file /data/netbox_access.log {
+            roll_size 50mb
+            roll_keep 3
+        }
+    }
+}
+
+# ============================================
+# SNMP Exporter - Network Device Metrics (HTTPS, IP restricted)
+# ============================================
+:9116 {
+    import tls_cert
+    import common_headers
+
+    # Restrict access to internal networks only (RFC-1918)
+    @allowed {
+        remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    }
+
+    handle @allowed {
+        basicauth {
+            admin REDACTED
+        }
+        reverse_proxy snmp-exporter-ntt:9116 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    handle {
+        respond "Access Denied" 403
+    }
+
+    log {
+        output file /data/snmp_exporter_access.log {
+            roll_size 50mb
+            roll_keep 3
+        }
+    }
+}
+
+# ============================================
+# Blackbox Exporter - Endpoint Monitoring (HTTPS, IP restricted)
+# ============================================
+:9115 {
+    import tls_cert
+    import common_headers
+
+    # Restrict access to internal networks only (RFC-1918)
+    @allowed {
+        remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    }
+
+    handle @allowed {
+        basicauth {
+            admin REDACTED
+        }
+        reverse_proxy blackbox-exporter-ntt:9115 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    handle {
+        respond "Access Denied" 403
+    }
+
+    log {
+        output file /data/blackbox_exporter_access.log {
+            roll_size 50mb
+            roll_keep 3
+        }
+    }
+}
+
+# ============================================
+# Activepieces - Workflow Automation (HTTPS)
+# ============================================
+:5678 {
+    import tls_cert
+    import common_headers
+
+    reverse_proxy activepieces-ntt:80 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+        transport http {
+            dial_timeout 60s
+            response_header_timeout 60s
+        }
+    }
+
+    log {
+        output file /data/activepieces_access.log {
+            roll_size 50mb
+            roll_keep 3
+        }
+    }
+}

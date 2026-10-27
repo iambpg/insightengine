@@ -11,7 +11,7 @@
 # containers (see README "Renaming the client").
 #
 # Profiles (COMPOSE_PROFILES in .env):
-#   (none)   core: setup, docker-socket-proxy, insightengine-ui (placeholder), caddy, prometheus, alertmanager, alert-relay, grafana,
+#   (none)   core: setup, docker-socket-proxy, ie-config, insightengine-ui (built from ./ui), caddy, prometheus, alertmanager, alert-relay, grafana,
 #            snmp-exporter-1..2, blackbox-exporter-1..2, telegraf-api,
 #            telegraf-host, netbox (+worker, postgres, redis), activepieces
 #            (+worker, postgres, redis), netdisco (+postgres), insightengine-postgres
@@ -43,6 +43,8 @@ x-snmp-exporter: &snmp-exporter
     # Referenced from snmp/out/snmp.yml as ${SNMP_V2_COMMUNITY} etc. (see README)
     SNMP_V2_COMMUNITY: ${SNMP_V2_COMMUNITY:-unset-placeholder}
     SNMP_V3_USER: ${SNMP_V3_USER:-unset-placeholder}
+    # snmp.yml (from the running stack) references ${SNMP_V3_USERNAME}. Keep it equal to SNMP_V3_USER.
+    SNMP_V3_USERNAME: ${SNMP_V3_USERNAME:-unset-placeholder}
     SNMP_V3_AUTH_PASSWORD: ${SNMP_V3_AUTH_PASSWORD:-unset-placeholder}
     SNMP_V3_PRIV_PASSWORD: ${SNMP_V3_PRIV_PASSWORD:-unset-placeholder}
   volumes:
@@ -52,6 +54,7 @@ x-snmp-exporter: &snmp-exporter
     - --config.expand-environment-variables
     - --snmp.module-concurrency=${SNMP_MODULE_CONCURRENCY:-4}
     - --web.listen-address=:9116
+    - --web.enable-lifecycle
     - --log.level=warn
   healthcheck:
     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9116/-/healthy"]
@@ -73,10 +76,12 @@ x-blackbox: &blackbox
   networks: [monitoring-net]
   cap_add: [NET_RAW]            # ICMP probes
   volumes:
-    - ./config/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    # Directory mount so an atomic rename by ie-config is visible without a restart.
+    - ./config/blackbox:/etc/blackbox_exporter:ro
   command:
-    - --config.file=/etc/blackbox_exporter/config.yml
+    - --config.file=/etc/blackbox_exporter/blackbox.yml
     - --web.listen-address=:9115
+    - --web.enable-lifecycle
     - --log.level=warn
   healthcheck:
     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9115/-/healthy"]
@@ -92,7 +97,9 @@ x-blackbox: &blackbox
         memory: 128m
 
 x-netbox: &netbox
-  image: ${NETBOX_IMAGE}        # TODO(Phindani): must contain your 'lists' plugin
+  # Empty NETBOX_IMAGE builds insightengine/netbox-lists:local (stock NetBox + our lists plugin).
+  # Set NETBOX_IMAGE to pull a different image (the real stack used hishaam02/netbox-lists:v4.6-5.0.0).
+  image: ${NETBOX_IMAGE:-insightengine/netbox-lists:local}
   restart: unless-stopped
   logging: *default-logging
   networks: [monitoring-net]
@@ -129,6 +136,11 @@ x-netbox: &netbox
     - netbox-media:/opt/netbox/netbox/media:rw
     - netbox-reports:/opt/netbox/netbox/reports:rw
     - netbox-scripts:/opt/netbox/netbox/scripts:rw
+    # File mounts: a rename is not visible until the container restarts (Settings apply = restart).
+    # Do not mount a directory over /etc/netbox/config; that would hide configuration.py.
+    - ./config/netbox/extra.py:/etc/netbox/config/extra.py:ro
+    - ./config/netbox/plugins.py:/etc/netbox/config/plugins.py:ro
+    - ./config/discovery/module-map.yml:/etc/ie/module-map.yml:ro
 
 x-activepieces-env: &activepieces-env
   # Names follow https://www.activepieces.com/docs/install/configuration/environment-variables
@@ -176,8 +188,8 @@ networks:
     ipam:
       config:
         - subnet: ${MONITORING_SUBNET:-10.50.0.0/24}
-  # Only the setup service and the docker-socket-proxy live here. No egress,
-  # nothing else can reach the proxy.
+  # Setup, ie-config, and the two socket proxies live here. No egress.
+  # ie-config-docker-proxy is a second, narrower proxy (restart/inspect/list only).
   docker-proxy-net:
     driver: bridge
     internal: true
@@ -234,6 +246,7 @@ volumes:
   oxidized-config:
   oxidized-data:
   trapd-state:
+  netdisco-local:
 
 services:
   # ===========================================================================
@@ -309,6 +322,9 @@ services:
       INSTALL_DIR: ${INSTALL_DIR:?run install.sh}
       SETUP_PUBLIC_AFTER_COMPLETE: ${SETUP_PUBLIC_AFTER_COMPLETE:-no}
       SETUP_OLD_STACK_ROOT: ${SETUP_OLD_STACK_ROOT:-/opt}
+      IE_CONFIG_URL: http://ie-config:8080
+      NETBOX_INTERNAL_URL: http://netbox:8080
+      SETUP_RUN_SEED: "yes"
     working_dir: ${INSTALL_DIR}
     extra_hosts:
       - "host.docker.internal:host-gateway"       # to reach an old Prometheus on the host
@@ -331,17 +347,144 @@ services:
       resources:
         limits: {memory: "${SETUP_MEM:-512m}", cpus: "1"}   # ESTIMATE
 
-  # PLACEHOLDER for the custom InsightEngine UI. Caddy sends "/" here only once the
-  # setup state is "complete". TODO(Phindani): set IE_UI_IMAGE (and IE_UI_PORT) to the
-  # real UI image and delete the volumes line (it only serves the placeholder page).
+  # Narrower socket proxy for ie-config: list/inspect and restart of this project's containers.
+  # POST=1 also enables DELETE in tecnativa/docker-socket-proxy. EXEC, images, networks,
+  # volumes, secrets, and start/stop stay off. See docs/config-api.md.
+  ie-config-docker-proxy:
+    image: ${DOCKER_PROXY_IMAGE:-tecnativa/docker-socket-proxy:v0.5.0}
+    container_name: ie-config-docker-proxy
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [docker-proxy-net]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: "1"
+      INFO: "1"
+      PING: "1"
+      VERSION: "1"
+      POST: "1"
+      ALLOW_RESTARTS: "1"
+      ALLOW_START: "0"
+      ALLOW_STOP: "0"
+      IMAGES: "0"
+      NETWORKS: "0"
+      VOLUMES: "0"
+      EXEC: "0"
+      AUTH: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      SECRETS: "0"
+      CONFIGS: "0"
+      SWARM: "0"
+      SERVICES: "0"
+      TASKS: "0"
+      NODES: "0"
+      PLUGINS: "0"
+      SYSTEM: "0"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2375/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits: {memory: 128m, cpus: "0.5"}
+
+  ie-config:
+    build:
+      context: ./config-api
+    image: insightengine/ie-config:local
+    container_name: ie-config
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net, docker-proxy-net]
+    depends_on:
+      insightengine-postgres: {condition: service_healthy}
+      ie-config-docker-proxy: {condition: service_healthy}
+    environment:
+      CONFIG_ROOT: /opt/insightengine
+      APPS_FILE: /app/apps.yml
+      DATABASE_URL: postgresql+psycopg://ie_config:${IE_CONFIG_DB_PASSWORD:?run install.sh}@insightengine-postgres:5432/ie_config
+      HISTORY_DIR: /opt/insightengine/data/config-history
+      COOKIE_SECURE: "1"
+      SETUP_TOKEN_FILE: /run/secrets/setup_token
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      PUBLIC_HOST: ${PUBLIC_HOST:?run install.sh}
+      DOCKER_PROXY_URL: http://ie-config-docker-proxy:2375
+      NETBOX_URL: http://netbox:8080
+      NETBOX_TOKEN_FILE: /opt/insightengine/secrets/prometheus/netbox.token
+      NETDISCO_DATABASE_URL: postgresql://netdisco:${NETDISCO_DB_PASSWORD:?run install.sh}@netdisco-postgres:5432/${NETDISCO_DB_NAME:-netdisco}
+      NETDISCO_OUT_DIR: /var/lib/ie/netdisco-local
+      IE_CONFIG_SCHEDULER: "1"
+      SNMP_V2_COMMUNITY: ${SNMP_V2_COMMUNITY:-unset-placeholder}
+      SNMP_V3_USER: ${SNMP_V3_USER:-unset-placeholder}
+      SNMP_V3_USERNAME: ${SNMP_V3_USERNAME:-unset-placeholder}
+      SNMP_V3_AUTH_PASSWORD: ${SNMP_V3_AUTH_PASSWORD:-unset-placeholder}
+      SNMP_V3_PRIV_PASSWORD: ${SNMP_V3_PRIV_PASSWORD:-unset-placeholder}
+      GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run install.sh}
+      PROMETHEUS_IMAGE: ${PROMETHEUS_IMAGE:-}
+      ALERTMANAGER_IMAGE: ${ALERTMANAGER_IMAGE:-}
+      SNMP_EXPORTER_IMAGE: ${SNMP_EXPORTER_IMAGE:-}
+      SNMP_EXPORTER_VERSION: ${SNMP_EXPORTER_VERSION:-}
+      BLACKBOX_IMAGE: ${BLACKBOX_IMAGE:-}
+      TELEGRAF_IMAGE: ${TELEGRAF_IMAGE:-}
+      GRAFANA_IMAGE: ${GRAFANA_IMAGE:-}
+      CADDY_IMAGE: ${CADDY_IMAGE:-}
+      NETBOX_IMAGE: ${NETBOX_IMAGE:-insightengine/netbox-lists:local}
+      AP_IMAGE: ${AP_IMAGE:-}
+      LOKI_IMAGE: ${LOKI_IMAGE:-}
+      NETDISCO_IMAGE_PREFIX: ${NETDISCO_IMAGE_PREFIX:-}
+      OXIDIZED_IMAGE: ${OXIDIZED_IMAGE:-}
+      POSTGRES_IMAGE: ${POSTGRES_IMAGE:-}
+      PORT_PROMETHEUS: ${PORT_PROMETHEUS:-9090}
+      PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-9093}
+      PORT_GRAFANA: ${PORT_GRAFANA:-3000}
+      PORT_NETBOX: ${PORT_NETBOX:-8444}
+      PORT_ACTIVEPIECES: ${PORT_ACTIVEPIECES:-8081}
+      PORT_NETDISCO: ${PORT_NETDISCO:-5000}
+      PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
+    volumes:
+      - ./config:/opt/insightengine/config
+      - ./snmp:/opt/insightengine/snmp
+      - ./trapd:/opt/insightengine/trapd
+      - ./data:/opt/insightengine/data
+      - ./secrets/prometheus/netbox.token:/opt/insightengine/secrets/prometheus/netbox.token:ro
+      - ./config-api/apps.yml:/app/apps.yml:ro
+      - netdisco-local:/var/lib/ie/netdisco-local
+    secrets:
+      - source: setup_token
+        target: setup_token
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: {memory: 512m, cpus: "1"}
+
+  # Customer UI. Built from ./ui (insightengine-ui:local) unless IE_UI_IMAGE names another image.
+  # install.sh falls back to ui/Dockerfile.placeholder when ui/Dockerfile is absent.
+  # No volume over the html directory: that would hide the real UI after it is imported.
   insightengine-ui:
-    image: ${IE_UI_IMAGE:-nginxinc/nginx-unprivileged:1.27-alpine}
+    image: ${IE_UI_IMAGE:-insightengine-ui:local}
+    build:
+      context: ./ui
+      dockerfile: ${IE_UI_DOCKERFILE:-Dockerfile}
     container_name: insightengine-ui-${CLIENT_SLUG}
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
-    volumes:
-      - ./config/ui-placeholder/index.html:/usr/share/nginx/html/index.html:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     deploy:
       resources:
         limits: {memory: 256m, cpus: "0.5"}   # ESTIMATE
@@ -425,8 +568,8 @@ services:
       CLIENT_SLUG: ${CLIENT_SLUG}
       CLIENT_NAME: ${CLIENT_NAME}
     volumes:
-      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./config/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      # Directory mount so ie-config's atomic rename is the file Prometheus reloads.
+      - ./config/prometheus:/etc/prometheus:ro
       - ./certs/ca.crt:/etc/prometheus/certs/ca.crt:ro
       - prom-data:/prometheus
     secrets:
@@ -501,14 +644,14 @@ services:
     logging: *default-logging
     networks: [monitoring-net]
     volumes:
-      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ./config/alertmanager/templates:/etc/alertmanager/templates:ro
+      - ./config/alertmanager:/etc/alertmanager:ro
       - alertmanager-data:/alertmanager
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
       - --data.retention=${ALERTMANAGER_RETENTION:-720h}
       - --web.external-url=https://${PUBLIC_HOST}:${PORT_ALERTMANAGER:-9093}
+      - --web.enable-lifecycle
       - --cluster.listen-address=
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
@@ -534,7 +677,7 @@ services:
       DESTINATIONS_FILE: /etc/alert-relay/destinations.json
     volumes:
       # Placeholder: the UI will later write this file. Read on every request.
-      - ./config/alert-relay/destinations.json:/etc/alert-relay/destinations.json:ro
+      - ./config/alert-relay:/etc/alert-relay:ro
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=3)"]
       interval: 30s
@@ -592,8 +735,7 @@ services:
     environment:
       CLIENT_SLUG: ${CLIENT_SLUG}
     volumes:
-      - ./config/telegraf/api/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-      - ./config/telegraf/api/telegraf.d:/etc/telegraf/telegraf.d:ro
+      - ./config/telegraf/api:/etc/telegraf:ro
       - ./certs/ca.crt:/etc/telegraf/ca.crt:ro
     secrets:
       - fortigate_token
@@ -629,7 +771,7 @@ services:
       HOST_RUN: /hostfs/run
       HOST_MOUNT_PREFIX: /hostfs
     volumes:
-      - ./config/telegraf/host/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./config/telegraf/host:/etc/telegraf:ro
       # SECURITY FLAG: both mounts are read-only but still expose a lot. A read-only
       # Docker socket is NOT harmless (the API can still be read: env vars,
       # labels, mounts). Safer alternatives are described in the README
@@ -738,6 +880,10 @@ services:
 
   netbox:
     <<: *netbox
+    build:
+      context: ./netbox
+      args:
+        NETBOX_BASE_IMAGE: ${NETBOX_BASE_IMAGE:-netboxcommunity/netbox:v4.6.3}
     container_name: netbox-${CLIENT_SLUG}
     depends_on:
       netbox-postgres: {condition: service_healthy}
@@ -897,8 +1043,6 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
-    depends_on:
-      netdisco-postgres: {condition: service_healthy}
     environment: &netdisco-env
       NETDISCO_DB_HOST: netdisco-postgres
       NETDISCO_DB_PORT: "5432"
@@ -908,8 +1052,11 @@ services:
     volumes:
       # TODO(Phindani): the old file also mounted the whole 'config' dir, which
       # shadows the image's shipped defaults. Only nd-site-local is mounted here.
-      - ./config/netdisco/nd-site-local:/home/netdisco/nd-site-local
+      - netdisco-local:/home/netdisco/nd-site-local
       - ./data/netdisco/logs:/home/netdisco/netdisco/logs
+    depends_on:
+      netdisco-postgres: {condition: service_healthy}
+      ie-config: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'Netdisco::Backend' || pgrep -f 'netdisco-backend' || exit 1"]
       interval: 15s
@@ -931,7 +1078,7 @@ services:
       netdisco-backend: {condition: service_healthy}
     environment: *netdisco-env
     volumes:
-      - ./config/netdisco/nd-site-local:/home/netdisco/nd-site-local
+      - netdisco-local:/home/netdisco/nd-site-local
       - ./data/netdisco/logs:/home/netdisco/netdisco/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:5000/ -o /dev/null || wget -qO /dev/null http://localhost:5000/ || exit 1"]
@@ -943,9 +1090,29 @@ services:
       resources:
         limits: {memory: "${NETDISCO_WEB_MEM:-1g}", cpus: "1"}   # ESTIMATE
 
+  # Runs netdisco-do against prefixes ie-config wrote into the shared volume.
+  # If ie-config is down, this service waits: the volume would otherwise be empty.
+  netdisco-scheduler:
+    image: ${NETDISCO_IMAGE_PREFIX}-backend
+    container_name: netdisco-scheduler-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    entrypoint: ["sh", "/scheduler.sh"]
+    environment: *netdisco-env
+    volumes:
+      - ./scripts/netdisco-scheduler.sh:/scheduler.sh:ro
+      - netdisco-local:/home/netdisco/nd-site-local
+    depends_on:
+      ie-config: {condition: service_healthy}
+      netdisco-backend: {condition: service_healthy}
+    deploy:
+      resources:
+        limits: {memory: 512m, cpus: "0.5"}
+
   # ===========================================================================
-  # INSIGHTENGINE backend database (own PostgreSQL: users, roles, settings,
-  # incident records). The backend/UI services are not part of this bundle.
+  # INSIGHTENGINE PostgreSQL: settings users (ie_config) live here.
+  # Init scripts run only when the data volume is empty.
   # ===========================================================================
   insightengine-postgres:
     image: ${POSTGRES_IMAGE}
@@ -957,8 +1124,12 @@ services:
       POSTGRES_DB: ${IE_DB_NAME:-insightengine}
       POSTGRES_USER: ${IE_DB_USER:-insightengine}
       POSTGRES_PASSWORD: ${IE_DB_PASSWORD:?run install.sh}
+      IE_CONFIG_DB_PASSWORD: ${IE_CONFIG_DB_PASSWORD:?run install.sh}
+      TELEGRAF_PG_PASSWORD: ${TELEGRAF_PG_PASSWORD:-}
+      AP_DATA_PASSWORD: ${AP_DATA_PASSWORD:-}
     volumes:
       - insightengine-postgres-data:/var/lib/postgresql
+      - ./config/insightengine-postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER"]
       interval: 10s
@@ -983,7 +1154,7 @@ services:
     environment:
       LOKI_RETENTION_PERIOD: ${LOKI_RETENTION_PERIOD:-2160h}
     volumes:
-      - ./config/loki/loki.yml:/etc/loki/loki.yml:ro
+      - ./config/loki:/etc/loki:ro
       - loki-data:/loki
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
@@ -1011,7 +1182,7 @@ services:
       - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/udp"
       - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/tcp"
     volumes:
-      - ./config/telegraf/syslog/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./config/telegraf/syslog:/etc/telegraf:ro
     command: ["telegraf", "--config", "/etc/telegraf/telegraf.conf"]
     depends_on:
       loki: {condition: service_healthy}
@@ -1118,6 +1289,7 @@ services:
       LOKI_URL: http://loki:3100
       TRAP_ALERT_TTL_SECONDS: ${TRAP_ALERT_TTL_SECONDS:-3600}
       SNMP_PERSISTENT_DIR: /var/lib/trapd
+      TRAP_HANDLER: /opt/ie-trapd/trap-handler.sh
     ports:
       - "${HOST_BIND:-0.0.0.0}:${PORT_TRAPS:-162}:1162/udp"
     secrets:
@@ -1125,6 +1297,7 @@ services:
       - trap_v3_users
     volumes:
       - ./snmp/mibs:/usr/share/snmp/mibs/custom:ro
+      - ./trapd:/opt/ie-trapd:ro
       - trapd-state:/var/lib/trapd
     healthcheck:
       test: ["CMD-SHELL", "pgrep snmptrapd >/dev/null || exit 1"]

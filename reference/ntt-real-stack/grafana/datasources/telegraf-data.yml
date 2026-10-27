@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: Telegraf Data
+    type: postgres
+    access: proxy
+    url: shared-postgres-ntt:5432
+    database: ${TELEGRAF_PG_DB}
+    user: ${TELEGRAF_PG_USER}
+    secureJsonData:
+      password: ${TELEGRAF_PG_PASSWORD}
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1400
+    isDefault: false
+    editable: false

@@ -1,21 +1,9 @@
-# =============================================================================
-# Prometheus config EXAMPLE for ~20,000 devices per client.
-#
-# * Client identity: external_labels use ${CLIENT_SLUG}/${CLIENT_NAME}, expanded
-#   by Prometheus (--enable-feature=expand-external-labels) from the container
-#   environment that compose fills from .env. Nothing else here names the client.
-# * Devices come from NetBox via http_sd (no generated files).
-#   The endpoint path /api/plugins/lists/prometheus-devices/ is AS USED IN
-#   PHINDANI'S CURRENT STACK. Its plugin name/version and its __meta_netbox_*
-#   labels are NOT verified here. TODO(Phindani): confirm the plugin.
-# * Role slugs (access-switch, ...) and every interval are EXAMPLES / ESTIMATES.
-#   In the original paste the URL contained "&amp;" (an HTML artefact); here it
-#   is a plain "&".
-# * TLS: verified with certs/ca.crt (no insecure_skip_verify). server_name is
-#   "caddy" because the call goes to https://caddy:8443.
-# * Exporter traffic goes through scrape-lb (internal load balancer):
-#   scrape-lb:9116 -> snmp-exporter-N, scrape-lb:9115 -> blackbox-exporter-N.
-# =============================================================================
+# Device discovery matches the real stack's NetBox plugin
+# (/api/plugins/lists/prometheus-devices/), reached through the internal Caddy
+# listener so TLS is checked with certs/ca.crt. Refresh is 5m, so a new active
+# device with a primary IP shows up within the 5-10 minute window.
+# Module and auth come from the job, then from __meta_netbox_snmp_* when the
+# plugin set them (role / manufacturer / platform).
 global:
   scrape_interval: 60s
   scrape_timeout: 30s
@@ -33,28 +21,28 @@ alerting:
         - targets: ['alertmanager:9093']
 
 scrape_configs:
-  # ---------------------------------------------------------------- self/infra
   - job_name: prometheus
     static_configs: [{targets: ['localhost:9090']}]
   - job_name: alertmanager
     static_configs: [{targets: ['alertmanager:9093']}]
-  - job_name: loki
-    static_configs: [{targets: ['loki:3100']}]          # only when profile "logs" is on
   - job_name: snmp-exporter
-    # add snmp-exporter-3 / -4 when the "scale" profile is on
     static_configs: [{targets: ['snmp-exporter-1:9116', 'snmp-exporter-2:9116']}]
   - job_name: blackbox-exporter
-    # add blackbox-exporter-3 when the "scale" profile is on
     static_configs: [{targets: ['blackbox-exporter-1:9115', 'blackbox-exporter-2:9115']}]
   - job_name: telegraf-api
     static_configs: [{targets: ['telegraf-api:9273']}]
   - job_name: telegraf-host
     static_configs: [{targets: ['telegraf-host:9273']}]
   - job_name: telegraf-syslog
-    static_configs: [{targets: ['telegraf-syslog:9273']}]   # only when profile "logs" is on
+    static_configs: [{targets: ['telegraf-syslog:9273']}]
+  - job_name: netbox
+    metrics_path: /metrics
+    static_configs: [{targets: ['netbox:8080']}]
+    params:
+      format: [prometheus]
+  - job_name: loki
+    static_configs: [{targets: ['loki:3100']}]
 
-  # ================================================================== ICMP
-  # One job per role so each role gets its own interval. Clone as needed.
   - job_name: icmp-access-switches
     scrape_interval: 30s
     scrape_timeout: 10s
@@ -62,9 +50,9 @@ scrape_configs:
     params:
       module: [icmp]
     http_sd_configs:
-      - &netbox_sd                                   # shared auth/TLS settings
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-switch   # as used in his current stack
-        refresh_interval: 1m
+      - &netbox_sd
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-switch
+        refresh_interval: 5m
         authorization:
           type: Token
           credentials_file: /run/secrets/netbox_token
@@ -106,7 +94,7 @@ scrape_configs:
         url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=core-switch
     relabel_configs: *icmp_relabels
 
-  - job_name: icmp-routers
+  - job_name: icmp-distribution-switches
     scrape_interval: 15s
     scrape_timeout: 8s
     metrics_path: /probe
@@ -114,10 +102,10 @@ scrape_configs:
       module: [icmp]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=router
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=distribution-switch
     relabel_configs: *icmp_relabels
 
-  - job_name: icmp-firewalls
+  - job_name: icmp-fortigate-sdwan-devices
     scrape_interval: 15s
     scrape_timeout: 8s
     metrics_path: /probe
@@ -125,21 +113,21 @@ scrape_configs:
       module: [icmp]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=firewall
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=sdwan
     relabel_configs: *icmp_relabels
 
-  - job_name: icmp-sdwan-edges
-    scrape_interval: 30s
-    scrape_timeout: 10s
+  - job_name: icmp-fortigate-hub-devices
+    scrape_interval: 15s
+    scrape_timeout: 8s
     metrics_path: /probe
     params:
       module: [icmp]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=sdwan-edge
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=hub
     relabel_configs: *icmp_relabels
 
-  - job_name: icmp-wireless-controllers
+  - job_name: icmp-8540-wlc
     scrape_interval: 15s
     scrape_timeout: 8s
     metrics_path: /probe
@@ -150,7 +138,7 @@ scrape_configs:
         url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
     relabel_configs: *icmp_relabels
 
-  - job_name: icmp-access-points
+  - job_name: icmp-other
     scrape_interval: 60s
     scrape_timeout: 10s
     metrics_path: /probe
@@ -158,21 +146,32 @@ scrape_configs:
       module: [icmp]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-point
-    relabel_configs: *icmp_relabels
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active
+    relabel_configs:
+      - source_labels: [__meta_netbox_role]
+        regex: access-switch|core-switch|distribution-switch|sdwan|hub|wireless-controller|core-firewall
+        action: drop
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - target_label: __address__
+        replacement: scrape-lb:9115
 
-  # ================================================================== SNMP
-  # module/auth names must exist in snmp/out/snmp.yml (see snmp/generator.yml).
-  # TODO(Phindani): once the plugin can expose an SNMP module per device, one
-  # job could cover many roles via a relabel on that field (not verified).
   - job_name: snmp-access-switches
     scrape_interval: 60s
     scrape_timeout: 45s
-    sample_limit: 20000                   # ESTIMATE: ~48-port switch
+    sample_limit: 20000
     metrics_path: /snmp
     params:
-      module: [if_mib]
-      auth: [default_auth]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+      auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
         url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-switch
@@ -197,91 +196,121 @@ scrape_configs:
         target_label: business_unit
       - source_labels: [__meta_netbox_site_group]
         target_label: site_type
+      - source_labels: [__meta_netbox_platform]
+        target_label: platform
+      - source_labels: [__meta_netbox_manufacturer]
+        target_label: manufacturer
+      - source_labels: [__meta_netbox_snmp_module]
+        regex: (.+)
+        target_label: __param_module
+      - source_labels: [__meta_netbox_snmp_auth]
+        regex: (.+)
+        target_label: __param_auth
       - target_label: __address__
         replacement: scrape-lb:9116
 
   - job_name: snmp-core-switches
-    scrape_interval: 30s
-    scrape_timeout: 25s
+    scrape_interval: 60s
+    scrape_timeout: 45s
     sample_limit: 50000
     metrics_path: /snmp
     params:
-      module: [if_mib]
-      auth: [default_auth]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+      auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
         url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=core-switch
     relabel_configs: *snmp_relabels
 
-  - job_name: snmp-routers
+  - job_name: snmp-distribution-switches
     scrape_interval: 60s
     scrape_timeout: 45s
     sample_limit: 50000
     metrics_path: /snmp
     params:
-      module: [if_mib]
-      auth: [default_auth]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, system]
+      auth: [ie_snmp_v2]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=router
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=distribution-switch
     relabel_configs: *snmp_relabels
 
-  - job_name: snmp-firewalls
+  - job_name: snmp-fortigate-sdwan-devices
     scrape_interval: 60s
     scrape_timeout: 45s
-    sample_limit: 50000
     metrics_path: /snmp
     params:
-      module: [if_mib]
-      auth: [default_auth]
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+      auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=firewall
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=sdwan
     relabel_configs: *snmp_relabels
 
-  - job_name: snmp-sdwan-edges
+  - job_name: snmp-fortigate-hub-devices
     scrape_interval: 60s
     scrape_timeout: 45s
-    sample_limit: 20000
     metrics_path: /snmp
     params:
-      module: [if_mib]
-      auth: [default_auth]
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+      auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=sdwan-edge
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=hub
     relabel_configs: *snmp_relabels
 
-  - job_name: snmp-wireless-controllers
+  - job_name: snmp-fortigate-core-fw-devices
+    scrape_interval: 60s
+    scrape_timeout: 45s
+    metrics_path: /snmp
+    params:
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortigate_est_bandwidth]
+      auth: [ntt_snmpv3_auth]
+    http_sd_configs:
+      - <<: *netbox_sd
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=core-firewall
+    relabel_configs: *snmp_relabels
+
+  - job_name: snmp-cisco-wlc
     scrape_interval: 120s
     scrape_timeout: 110s
-    sample_limit: 500000   # ESTIMATE: ~6,000 APs per controller; prefer telemetry/API for per-AP data
+    sample_limit: 500000
     metrics_path: /snmp
     params:
-      module: [system]
-      auth: [default_auth]
+      module: [cisco_wlc_universal]
+      auth: [ie_wlc_v2]
     http_sd_configs:
       - <<: *netbox_sd
         url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
     relabel_configs: *snmp_relabels
 
-  - job_name: snmp-access-points
-    scrape_interval: 300s
+  - job_name: snmp-other
+    scrape_interval: 120s
     scrape_timeout: 60s
-    sample_limit: 2000
     metrics_path: /snmp
     params:
-      module: [system]
-      auth: [default_auth]
+      module: [if_mib]
+      auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-point
-    relabel_configs: *snmp_relabels
-
-  # =============================================================== optional
-  # Legacy file-based targets (the old vasa_switches_shard_1.json). Kept ONLY as
-  # a commented option; NetBox http_sd above replaces it.
-  # - job_name: legacy-file-sd
-  #   file_sd_configs:
-  #     - files: ['/etc/prometheus/vasa_switches_shard_1.json']
-  #       refresh_interval: 5m
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active
+    relabel_configs:
+      - source_labels: [__meta_netbox_role]
+        regex: access-switch|core-switch|distribution-switch|sdwan|hub|wireless-controller|core-firewall
+        action: drop
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__meta_netbox_name]
+        target_label: hostname
+      - source_labels: [__meta_netbox_role]
+        target_label: device_role
+      - source_labels: [__meta_netbox_snmp_module]
+        regex: (.+)
+        target_label: __param_module
+      - source_labels: [__meta_netbox_snmp_auth]
+        regex: (.+)
+        target_label: __param_auth
+      - target_label: __address__
+        replacement: scrape-lb:9116

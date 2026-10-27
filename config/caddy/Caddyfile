@@ -54,6 +54,16 @@ https://{$PUBLIC_HOST} {
 		}
 	}
 
+	# Settings API. Same setup gate as the UI. /internal/bootstrap-admin is not under /api/v1.
+	@settings path /api/v1 /api/v1/*
+	handle @settings {
+		forward_auth setup:8099 {
+			uri /setup/gate
+			header_up X-Setup-Edge 1
+		}
+		reverse_proxy ie-config:8080
+	}
+
 	handle {
 		forward_auth setup:8099 {
 			uri /setup/gate

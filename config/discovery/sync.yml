@@ -1,0 +1,10 @@
+# Which NetBox prefixes Netdisco scans. Edited from Settings > Applications > Netdisco.
+# prefix_selector: tag | custom_field | all
+# scan_all_active_prefixes: true scans every active prefix and ignores the tag.
+prefix_selector: tag
+tag: ie-scan
+custom_field: ie_scan
+scan_all_active_prefixes: false
+interval_hours: 6
+default_site_slug: discovered
+default_role_slug: access-switch

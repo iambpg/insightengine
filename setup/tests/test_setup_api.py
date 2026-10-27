@@ -2,7 +2,37 @@
 """End-to-end test of setup/server.py against a stub docker CLI and stub scripts in a
 temporary project dir. It proves the API/state machine/validation logic ONLY - no real
 Docker daemon, no real migration. Run: python3 setup/tests/test_setup_api.py"""
-import json, os, shutil, subprocess, sys, tempfile, time, unittest, urllib.request, urllib.error
+import json, os, shutil, subprocess, sys, tempfile, threading, time, unittest, urllib.request, urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+class _AdminStub(BaseHTTPRequestHandler):
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        # The stub records that a password arrived and never writes it out.
+        try:
+            body = json.loads(raw.decode())
+        except ValueError:
+            body = {}
+        if not body.get("email") or not body.get("password"):
+            self.send_response(400); self.end_headers(); return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"ok":true}')
+
+    def log_message(self, fmt, *args):
+        return
+
+
+def _start_admin_stub():
+    server = ThreadingHTTPServer(("127.0.0.1", 18250), _AdminStub)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+_start_admin_stub()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SERVER = os.path.join(os.path.dirname(HERE), "server.py")
@@ -81,7 +111,8 @@ class T(unittest.TestCase):
         env = dict(os.environ, INSTALL_DIR=cls.root, SETUP_TOKEN_FILE=cls.tokfile, SETUP_PORT=str(PORT),
                    SETUP_BIND="127.0.0.1", SETUP_OLD_STACK_ROOT=cls.oldroot, SETUP_STATIC_DIR=STATIC,
                    PATH=os.path.join(HERE, "stubbin") + os.pathsep + os.environ["PATH"],
-                   STUB_DOCKER_LOG=os.path.join(cls.root, "docker.calls"))
+                   STUB_DOCKER_LOG=os.path.join(cls.root, "docker.calls"),
+                   IE_CONFIG_URL="http://127.0.0.1:18250")
         cls.p = subprocess.Popen([sys.executable, SERVER], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
@@ -118,7 +149,11 @@ class T(unittest.TestCase):
         c, s = call("POST", "/setup/client", {"client_name": "Acme Corp"})
         self.assertEqual((c, s["client_slug"]), (202, "acme-corp"))
         s = wait_job()
-        self.assertEqual((s["state"], s["step"]), ("unconfigured", "mode"))
+        self.assertEqual((s["state"], s["step"]), ("unconfigured", "admin"))
+        self.assertEqual(call("POST", "/setup/mode", {"mode": "new"})[0], 409)
+        c, s = call("POST", "/setup/admin", {"email": "admin@example.com", "password": "correct-horse-1"})
+        self.assertEqual((c, s["step"]), (200, "mode"))
+        self.assertNotIn("correct-horse-1", rd(os.path.join(self.root, "data", "setup", "setup.log")))
         env = rd(os.path.join(self.root, ".env"))
         self.assertIn("CLIENT_NAME='Acme Corp'", env); self.assertIn("CLIENT_SLUG='acme-corp'", env)
         self.assertIn("SECRET_STAYS='keep-me'", env)
@@ -216,7 +251,12 @@ class TMove(unittest.TestCase):
     def test_10_move_first_run(self):
         os.environ.pop("STUB_PF_ERRORS", None)
         self.assertEqual(call("POST", "/setup/client", {"client_name": "Gamma"})[0], 202)
-        s = wait_job(); self.assertEqual(s["step"], "mode")
+        s = wait_job(); self.assertEqual(s["step"], "admin")
+        c, s = call("POST", "/setup/admin", {"email": "ops@example.com", "generate": True})
+        self.assertEqual((c, s["step"]), (200, "mode"))
+        pw = s.get("generated_password")
+        self.assertTrue(isinstance(pw, str) and len(pw) >= 12)
+        self.assertNotIn(pw, rd(os.path.join(self.root, "data", "setup", "setup.log")))
         self.assertEqual(call("POST", "/setup/mode", {"mode": "move"})[1]["step"], "migrate")
         # history not yet allowed
         self.assertEqual(call("POST", "/setup/prom-history", {"mode": "fresh"})[0], 409)

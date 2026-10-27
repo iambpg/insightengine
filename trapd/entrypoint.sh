@@ -17,6 +17,11 @@ if [ -s /run/secrets/trap_v3_users ]; then
   #   authUser log,execute <user>
   cat /run/secrets/trap_v3_users >> "$CONF"
 fi
-echo 'traphandle default /usr/local/bin/trap-handler.sh' >> "$CONF"
+# TRAP_HANDLER lets a directory mount of ./trapd replace the script baked into the image.
+HANDLER="${TRAP_HANDLER:-/usr/local/bin/trap-handler.sh}"
+case "$HANDLER" in
+  *[!A-Za-z0-9_./-]*) echo "invalid TRAP_HANDLER" >&2; exit 1 ;;
+esac
+printf 'traphandle default %s\n' "$HANDLER" >> "$CONF"
 export SNMPCONFPATH=/var/lib/trapd
 exec snmptrapd -f -n -Lo -C -c "$CONF" -M /usr/share/snmp/mibs:/usr/share/snmp/mibs/custom -m ALL udp:1162

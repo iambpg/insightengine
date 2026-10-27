@@ -7,7 +7,7 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     jsonData:
-      timeInterval: 60s
+      timeInterval: 15s
       httpMethod: POST
   - name: Loki
     uid: loki
@@ -23,3 +23,28 @@ datasources:
     url: http://alertmanager:9093
     jsonData:
       implementation: prometheus
+  # Analytics databases on insightengine-postgres. Grafana does not expand ${...} in
+  # provisioning files the way Prometheus does. These placeholders match the real stack's
+  # syntax; set the passwords in Grafana, or render this file outside git, before use.
+  - name: Telegraf Data
+    uid: telegraf-data
+    type: postgres
+    access: proxy
+    url: insightengine-postgres:5432
+    user: telegraf_data
+    secureJsonData:
+      password: ${TELEGRAF_PG_PASSWORD}
+    jsonData:
+      database: telegraf_data
+      sslmode: disable
+  - name: Activepieces Data
+    uid: activepieces-data
+    type: postgres
+    access: proxy
+    url: insightengine-postgres:5432
+    user: activepieces_data
+    secureJsonData:
+      password: ${AP_DATA_PASSWORD}
+    jsonData:
+      database: activepieces_data
+      sslmode: disable
