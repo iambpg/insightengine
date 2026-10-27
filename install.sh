@@ -14,8 +14,9 @@
 #   1. checks prerequisites (openssl, awk, sed, docker + compose plugin)
 #   2. creates .env (mode 600) with openssl-generated secrets - never printed -
 #      with CLIENT_NAME=unconfigured / CLIENT_SLUG=unconfigured
-#   3. probes every published host port (ss, lsof, and Docker) and writes free
-#      PORT_* values into .env
+#   3. probes every published host port (ss, lsof, Docker, and iptables NAT)
+#      and writes free PORT_* values into .env. A Kubernetes loadbalancer
+#      DNAT (k3s Traefik on the node IP) is invisible to ss.
 #   4. creates a private CA + server certificate, secret files, data folders
 #   5. builds/pulls images and starts the stack (docker compose up -d), including the
 #      "setup" service
@@ -103,8 +104,67 @@ fix_perms() {
 # proto is tcp, udp, or both (Docker allocates each protocol separately).
 TAKEN_PORTS=" "
 PORT_PLAN=""
+PORT_BUSY_REASON=""
+IPTABLES_NAT_CACHE=""
+IPTABLES_NAT_LOADED=0
+load_iptables_nat() {
+  # Empty when iptables is missing or not readable (non-root). Cached so the
+  # probe does not take the xtables lock once per port.
+  if [ "$IPTABLES_NAT_LOADED" = 1 ]; then return 0; fi
+  IPTABLES_NAT_LOADED=1
+  IPTABLES_NAT_CACHE=""
+  local bin dump
+  for bin in iptables ip6tables; do
+    if command -v "$bin" >/dev/null 2>&1; then
+      dump="$("$bin" -t nat -S 2>/dev/null || true)"
+      IPTABLES_NAT_CACHE="${IPTABLES_NAT_CACHE}"$'\n'"${dump}"
+    fi
+  done
+}
+public_host_ip_pattern() {
+  # ERE alternation of addresses for the -d match. A bare IP is itself.
+  # A DNS name is resolved; failure leaves the pattern empty (no match).
+  local raw="" ip first=1 out=""
+  if printf '%s' "$PUBLIC_HOST" | grep -Eq '^[0-9.]+$|^[0-9A-Fa-f:]+:[0-9A-Fa-f:]*$'; then
+    raw="$PUBLIC_HOST"
+  elif command -v getent >/dev/null 2>&1; then
+    raw="$(getent ahosts "$PUBLIC_HOST" 2>/dev/null | awk '{print $1}' | sort -u)"
+  fi
+  [ -n "$raw" ] || return 1
+  while IFS= read -r ip; do
+    [ -n "$ip" ] || continue
+    ip="$(printf '%s' "$ip" | sed 's/[.]/\\./g')"
+    if [ "$first" = 1 ]; then out="$ip"; first=0; else out="${out}|${ip}"; fi
+  done <<EOF
+$raw
+EOF
+  [ -n "$out" ] || return 1
+  printf '%s' "$out"
+}
+kube_lb_claims_port() { # kube_lb_claims_port <port> -> 0 when KUBE-SERVICES DNATs PUBLIC_HOST
+  # k3s Traefik (ServiceLB) installs, for example:
+  #   -A KUBE-SERVICES -d <node-ip>/32 ... --comment "... loadbalancer IP" --dport 443 -j ...
+  # ss does not show that. Docker can still publish 443 and never receive the packet.
+  # A dport match on a different address, or a Docker DNAT, is not this rule.
+  local port=$1 line ips
+  load_iptables_nat
+  [ -n "${IPTABLES_NAT_CACHE//[[:space:]]/}" ] || return 1
+  ips="$(public_host_ip_pattern 2>/dev/null || true)"
+  [ -n "$ips" ] || return 1
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    printf '%s\n' "$line" | grep -Eq -- "--dport ${port}([[:space:]]|$)" || continue
+    printf '%s\n' "$line" | grep -q 'KUBE-SERVICES' || continue
+    printf '%s\n' "$line" | grep -qi 'loadbalancer' || continue
+    printf '%s\n' "$line" | grep -Eq -- "-d (${ips})/(32|128)" && return 0
+  done <<EOF
+$IPTABLES_NAT_CACHE
+EOF
+  return 1
+}
 host_port_busy() { # host_port_busy <port> <tcp|udp|both>
   local port=$1 proto=$2 published
+  PORT_BUSY_REASON=""
   case " $TAKEN_PORTS " in
     *" $port "*) return 0 ;;
   esac
@@ -122,12 +182,27 @@ host_port_busy() { # host_port_busy <port> <tcp|udp|both>
     # ":80->" must not match ":8080->".
     if printf '%s\n' "$published" | grep -Eq ":${port}->"; then return 0; fi
   fi
+  if kube_lb_claims_port "$port"; then
+    PORT_BUSY_REASON="claimed by a Kubernetes loadbalancer (iptables KUBE-SERVICES DNAT for ${PUBLIC_HOST}; ss does not show this)"
+    return 0
+  fi
   return 1
 }
+say_port_move() { # say_port_move <label> <from> <to> <reason>
+  local label=$1 from=$2 to=$3 reason=$4
+  if [ -n "$reason" ]; then
+    say "$label: port $from is $reason; using $to" >&2
+  else
+    say "$label: port $from is in use; using $to" >&2
+  fi
+}
 choose_host_port() { # choose_host_port <label> <default> <preferred> <proto>  -> stdout
-  local label=$1 default=$2 preferred=$3 proto=$4 start candidate n
+  local label=$1 default=$2 preferred=$3 proto=$4 start candidate n reason=""
   if [ "$PORTS" = default ]; then
     if host_port_busy "$default" "$proto"; then
+      if [ -n "$PORT_BUSY_REASON" ]; then
+        die "$label port $default is ${PORT_BUSY_REASON}. Re-run without --default-ports so a free port can be chosen."
+      fi
       die "$label port $default is in use. Re-run without --default-ports so a free port can be chosen."
     fi
     printf '%s' "$default"
@@ -138,8 +213,9 @@ choose_host_port() { # choose_host_port <label> <default> <preferred> <proto>  -
     printf '%s' "$start"
     return 0
   fi
+  reason=$PORT_BUSY_REASON
   if [ "$start" != "$preferred" ] && ! host_port_busy "$preferred" "$proto"; then
-    say "$label: port $start is in use; using $preferred" >&2
+    say_port_move "$label" "$start" "$preferred" "$reason"
     printf '%s' "$preferred"
     return 0
   fi
@@ -147,7 +223,7 @@ choose_host_port() { # choose_host_port <label> <default> <preferred> <proto>  -
   n=0
   while [ "$n" -lt 200 ]; do
     if ! host_port_busy "$candidate" "$proto"; then
-      say "$label: port $start is in use; using $candidate" >&2
+      say_port_move "$label" "$start" "$candidate" "$reason"
       printf '%s' "$candidate"
       return 0
     fi

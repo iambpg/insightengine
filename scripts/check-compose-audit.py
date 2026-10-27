@@ -294,6 +294,27 @@ def module_map_errors(services: dict, root: Path) -> list[str]:
     return errors
 
 
+def caddy_sni_errors(root: Path) -> list[str]:
+    """default_sni covers every public TLS site. scrape-lb is HTTP only."""
+    errors = []
+    main = root / "config/caddy/Caddyfile"
+    scrape = root / "config/caddy/Caddyfile.scrape-lb"
+    if not main.is_file():
+        return ["config/caddy/Caddyfile is missing"]
+    text = main.read_text()
+    if "default_sni {$PUBLIC_HOST}" not in text:
+        errors.append("Caddyfile must set default_sni {$PUBLIC_HOST} for IP clients that send no SNI")
+    for line in text.splitlines():
+        code = line.split("#", 1)[0].strip()
+        if code.startswith("fallback_sni"):
+            errors.append("Caddyfile must not use fallback_sni; that applies only when SNI is present")
+        if code.startswith("https://") and "{$PUBLIC_HOST}" not in code and not code.startswith("https://caddy:"):
+            errors.append(f"TLS site is not PUBLIC_HOST or the internal caddy name: {code}")
+    if scrape.is_file() and "https://" in scrape.read_text():
+        errors.append("scrape-lb Caddyfile serves TLS; it needs default_sni or it must stay HTTP")
+    return errors
+
+
 def plugin_errors(root: Path) -> list[str]:
     errors = []
     init_path = root / "netbox/netbox_lists/__init__.py"
@@ -528,6 +549,7 @@ def main() -> int:
     services = data.get("services") or {}
     errors = audit(data, ROOT, full=True)
     errors.extend(plugin_errors(ROOT))
+    errors.extend(caddy_sni_errors(ROOT))
     names = ", ".join(sorted(services))
     print(f"checked {len(services)} services: {names}")
     for item in failures:

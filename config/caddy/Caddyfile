@@ -5,6 +5,17 @@
 {
 	auto_https off
 	admin localhost:2019
+	# Browsers omit SNI when the URL is an IP (RFC 6066). Without a default,
+	# Caddy selects a certificate by the socket's local address, which inside
+	# the container is the bridge IP, and the handshake ends in
+	# "tlsv1 alert internal error". default_sni is the documented Caddy 2.11
+	# option for an empty ClientHello ServerName. fallback_sni is different:
+	# it applies only when SNI is present and matches no certificate.
+	# One global value covers every https://{$PUBLIC_HOST}:{$PORT_*} site
+	# (UI, NetBox, Grafana, Prometheus, Alertmanager, Activepieces, Netdisco,
+	# Oxidized). The internal https://caddy:8443 site is reached with SNI
+	# "caddy" (Prometheus server_name); it does not need this default.
+	default_sni {$PUBLIC_HOST}
 }
 
 (tls_local) {
