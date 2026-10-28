@@ -172,8 +172,14 @@ def test_mask_and_restore():
 def test_bootstrap_csrf_and_roles(world):
     client = world["client"]
     assert client.get("/healthz").json()["ok"] is True
+    assert client.get("/internal/user-count").status_code == 401
+    counted = client.get("/internal/user-count", headers={"Authorization": "Bearer setup-token-value"})
+    assert counted.status_code == 200
+    assert counted.json() == {"count": 0}
     assert client.post("/internal/bootstrap-admin", json={"email": "a@b.co", "password": "Adminpass1234"}).status_code == 401
     _bootstrap(client)
+    counted = client.get("/internal/user-count", headers={"Authorization": "Bearer setup-token-value"})
+    assert counted.json()["count"] == 1
     assert client.post(
         "/internal/bootstrap-admin",
         headers={"Authorization": "Bearer setup-token-value"},

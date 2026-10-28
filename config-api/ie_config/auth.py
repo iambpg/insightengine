@@ -172,6 +172,44 @@ class Auth:
         with self.sf() as db:
             return len(db.scalars(select(User.id)).all())
 
+    def account_status(self) -> str:
+        """One line for the reset script: ``empty``, ``users``, or ``admin <email>``."""
+        with self.sf() as db:
+            if self._no_users(db):
+                return "empty"
+            user = db.scalar(select(User).where(User.role == "Administrator").order_by(User.id))
+            if user is None:
+                return "users"
+            return "admin " + user.email
+
+    def create_first_admin(self, email: str, password: str, ip: str) -> dict:
+        """Create the Administrator when the users table is empty.
+
+        The password is hashed and is not written into the audit row.
+        """
+        email = validate_email(email)
+        password = validate_password(password)
+        with self.sf() as db:
+            if not self._no_users(db):
+                raise ApiError(
+                    409, "already_bootstrapped",
+                    "users already exist; reset a password instead of creating one",
+                )
+            user = User(email=email, password_hash=hash_password(password), role="Administrator", failed_attempts=0)
+            db.add(user)
+            db.flush()
+            db.add(AuditRow(
+                user_email=user.email,
+                role="Administrator",
+                action="admin-created",
+                app="ie-config",
+                result="ok",
+                source_ip=(ip or "")[:64],
+                detail="first administrator created",
+            ))
+            db.commit()
+            return {"email": user.email}
+
     def reset_password(self, email: str | None, password: str, ip: str) -> dict:
         """Replace one user's password. The password is not stored in the audit row."""
         password = validate_password(password)
@@ -181,13 +219,19 @@ class Auth:
                 user = db.scalar(select(User).where(User.email == email_n))
                 if user is None:
                     if self._no_users(db):
-                        raise ApiError(409, "no_users", "no users exist yet; open /setup/ to create the first administrator")
+                        raise ApiError(
+                            409, "no_users",
+                            "no users exist yet; re-run reset-admin-password.sh so it can create the administrator",
+                        )
                     raise ApiError(404, "no_user", "no user with that email")
             else:
                 user = db.scalar(select(User).where(User.role == "Administrator").order_by(User.id))
                 if user is None:
                     if self._no_users(db):
-                        raise ApiError(409, "no_users", "no users exist yet; open /setup/ to create the first administrator")
+                        raise ApiError(
+                            409, "no_users",
+                            "no users exist yet; re-run reset-admin-password.sh so it can create the administrator",
+                        )
                     raise ApiError(404, "no_admin", "no Administrator exists; pass --email")
             user.password_hash = hash_password(password)
             user.failed_attempts = 0

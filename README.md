@@ -39,7 +39,7 @@ git clone <this-repo> insightengine && cd insightengine
 sudo ./install.sh --public-host monitor.example.com      # or: INSTALL_PUBLIC_HOST=... sudo -E ./install.sh
 ```
 
-A forgotten ie-config password is reset with `sudo ./scripts/reset-admin-password.sh` (see [docs/reset-admin-password.md](docs/reset-admin-password.md)). It does not print the new password. If no user exists yet, open `/setup/` instead.
+A forgotten ie-config password is reset with `sudo ./scripts/reset-admin-password.sh` (see [docs/reset-admin-password.md](docs/reset-admin-password.md)). It does not print the new password. If the users table is empty, the same command asks for an email and creates the Administrator.
 
 `install.sh` flags: `--public-host HOST` (default: first IP / host name of this machine — the value goes into the TLS certificate and `PUBLIC_HOST`),
 `--alt-ports` / `--default-ports` (default: **automatic** — every published host port is probed with `ss`, `lsof`, Docker's published ports, and, when `iptables` is readable, NAT rules. A Kubernetes loadbalancer DNAT for this host's :80 or :443, such as k3s Traefik, is invisible to `ss`; that port is treated as taken and the installer says why. A free default is kept. A busy port is replaced on its own: its preferred alternative, then the next free port. One busy port does not move the others. `--default-ports` stops if a default is busy. `--alt-ports` starts from the preferred alternatives), `--no-start` (prepare files only), `--fix-perms`, `--help`.

@@ -1,7 +1,9 @@
 """Run ie-config: python -m ie_config
 
 ``python -m ie_config reset-admin`` reads the new password from stdin and does
-not log it. ``scripts/reset-admin-password.sh`` is the supported way to call it.
+not log it. ``--status`` only reports whether the users table is empty.
+``--create --email`` creates the first Administrator when it is empty.
+``scripts/reset-admin-password.sh`` is the supported way to call it.
 """
 
 import logging

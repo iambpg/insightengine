@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Reset an ie-config user's password. Root only.
+# Reset an ie-config password, or create the first Administrator if the
+# users table is empty. Root only.
 #
 #   sudo ./scripts/reset-admin-password.sh
 #   sudo ./scripts/reset-admin-password.sh --email admin@example.com
 #   sudo ./scripts/reset-admin-password.sh --self-test
 #
-# The password is read with `read -s` on a terminal, or from stdin otherwise.
-# It is not printed, not written to the audit detail, and not passed as a
-# docker argument. The container is the compose service ie-config in this
-# project (container name ie-config; it is not suffixed with CLIENT_SLUG).
+# The password is read with read -s (or stdin) and is never printed.
+# An empty users table prompts for an email and creates an Administrator.
+# The container is compose service ie-config (name ie-config, not CLIENT_SLUG).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -73,34 +73,77 @@ read_password() {
   else
     IFS= read -r password || true
   fi
+  password="${password%$'\r'}"
   printf '%s' "$password"
 }
 
+prompt_email() {
+  if [ -n "$EMAIL" ]; then
+    return 0
+  fi
+  if [ -t 0 ]; then
+    printf 'Administrator email: ' >&2
+    IFS= read -r EMAIL || true
+  else
+    IFS= read -r EMAIL || true
+  fi
+  EMAIL="${EMAIL%$'\r'}"
+  [ -n "$EMAIL" ] || die "an email is required when the users table is empty"
+}
+
+invoke_ie_config() {
+  # $1 is reset or create. The password is read here and passed only on stdin.
+  local mode=$1 password
+  local -a args
+  password="$(read_password)"
+  args=(python -m ie_config reset-admin)
+  if [ "$mode" = create ]; then
+    args+=(--create --email "$EMAIL")
+  elif [ -n "$EMAIL" ]; then
+    args+=(--email "$EMAIL")
+  fi
+  if ! printf '%s' "$password" | docker exec -i "$cid" "${args[@]}"; then
+    unset password
+    exit 1
+  fi
+  unset password
+}
+
 run_reset() {
-  local project cid
+  local project cid status_out status_line errf
   if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
     die "Docker is not running, so ie-config cannot be reset from here"
   fi
   project="$(resolve_compose_project "" "$ROOT/.env" "$ROOT" "$ROOT/docker-compose.yml")"
   cid="$(find_ie_config "$project")"
   if [ -z "$cid" ]; then
-    die "no ie-config container in compose project ${project}. If no administrator exists yet, open /setup/."
+    die "no ie-config container in compose project ${project}"
   fi
-  local password
-  password="$(read_password)"
-  # stdin of the container process only. Not an argument, so it is not in `ps`.
-  if [ -n "$EMAIL" ]; then
-    if ! printf '%s' "$password" | docker exec -i "$cid" python -m ie_config reset-admin --email "$EMAIL"; then
-      unset password
-      exit 1
-    fi
-  else
-    if ! printf '%s' "$password" | docker exec -i "$cid" python -m ie_config reset-admin; then
-      unset password
-      exit 1
-    fi
+  errf="$(mktemp)"
+  if ! status_out="$(docker exec "$cid" python -m ie_config reset-admin --status 2>"$errf")"; then
+    detail="$(tr '\n' ' ' < "$errf" || true)"
+    rm -f "$errf"
+    die "could not read whether ie-config has users (${detail})"
   fi
-  unset password
+  rm -f "$errf"
+  status_line="$(printf '%s\n' "$status_out" | awk 'NF { print; exit }')"
+  case "$status_line" in
+    empty)
+      say "ie-config has no users. Creating the first Administrator." >&2
+      prompt_email
+      invoke_ie_config create
+      ;;
+    admin\ *)
+      invoke_ie_config reset
+      ;;
+    users)
+      [ -n "$EMAIL" ] || die "ie-config has users but no Administrator; pass --email"
+      invoke_ie_config reset
+      ;;
+    *)
+      die "unexpected ie-config account status"
+      ;;
+  esac
 }
 
 if [ "$SELF_TEST" = 1 ]; then
@@ -125,36 +168,79 @@ case "$1" in
     esac
     ;;
   exec)
-    cat > "$MOCK_DIR/stdin"
     case "$*" in
+      *--status*)
+        printf '%s\n' "${MOCK_STATUS:-admin admin@example.com}"
+        ;;
       *"$MOCK_SECRET"*)
         echo 'password appeared in docker arguments' >&2
         exit 3
         ;;
+      *--create*)
+        cat > "$MOCK_DIR/stdin"
+        printf '%s\n' 'administrator created'
+        ;;
+      *)
+        cat > "$MOCK_DIR/stdin"
+        printf '%s\n' 'password reset for admin@example.com'
+        ;;
     esac
-    printf '%s\n' 'password reset for admin@example.com'
     ;;
   *) exit 0 ;;
 esac
 EOF
   chmod +x "$bin/docker"
   : > "$log"
-  # shellcheck disable=SC2031
-  env -u COMPOSE_PROJECT_NAME \
-    RESET_SKIP_ROOT=1 \
-    "PATH=${bin}:${PATH}" \
-    MOCK_LOG="$log" \
-    MOCK_DIR="$tmp/state" \
-    MOCK_SECRET="$secret" \
-    bash "$0" --email admin@example.com >"$tmp/out" 2>"$tmp/err" <<<"$secret"
+  run_case() {
+    local status=$1
+    shift
+    : > "$log"
+    : > "$tmp/state/stdin"
+    # shellcheck disable=SC2031
+    env -u COMPOSE_PROJECT_NAME \
+      RESET_SKIP_ROOT=1 \
+      "PATH=${bin}:${PATH}" \
+      MOCK_LOG="$log" \
+      MOCK_DIR="$tmp/state" \
+      MOCK_SECRET="$secret" \
+      MOCK_STATUS="$status" \
+      bash "$0" "$@" >"$tmp/out" 2>"$tmp/err"
+  }
+  run_case "admin admin@example.com" --email admin@example.com <<<"$secret"
   grep -q 'password reset for admin@example.com' "$tmp/out"
   grep -q 'service=ie-config' "$log"
   grep -q 'com.docker.compose.project=insightengine' "$log"
   grep -q 'reset-admin' "$log"
   grep -q -- '--email admin@example.com' "$log"
+  if grep -q -- '--create' "$log"; then
+    echo 'reset path used --create' >&2
+    exit 1
+  fi
   [ "$(cat "$tmp/state/stdin")" = "$secret" ]
   if grep -F -q "$secret" "$tmp/out" || grep -F -q "$secret" "$tmp/err" || grep -F -q "$secret" "$log"; then
     echo 'password leaked into output or the docker command log' >&2
+    exit 1
+  fi
+  run_case empty --email newadmin@example.com <<<"$secret"
+  grep -q 'administrator created' "$tmp/out"
+  grep -q -- '--create' "$log"
+  grep -q -- '--email newadmin@example.com' "$log"
+  [ "$(cat "$tmp/state/stdin")" = "$secret" ]
+  if grep -F -q "$secret" "$tmp/out" || grep -F -q "$secret" "$tmp/err" || grep -F -q "$secret" "$log"; then
+    echo 'password leaked while creating the administrator' >&2
+    exit 1
+  fi
+  if grep -q '/setup/' "$tmp/out" || grep -q '/setup/' "$tmp/err"; then
+    echo 'empty users table pointed at /setup/' >&2
+    exit 1
+  fi
+  printf '%s\n%s\n' 'piped@example.com' "$secret" | run_case empty
+  grep -q 'administrator created' "$tmp/out"
+  grep -q -- '--create' "$log"
+  grep -q -- '--email piped@example.com' "$log"
+  [ "$(cat "$tmp/state/stdin")" = "$secret" ]
+  if grep -F -q "$secret" "$tmp/out" || grep -F -q "$secret" "$tmp/err" || grep -F -q "$secret" "$log"; then
+    echo 'password leaked while reading the email from stdin' >&2
     exit 1
   fi
   if [ "$(id -u)" -ne 0 ]; then
@@ -167,6 +253,7 @@ EOF
   fi
   rm -rf "$tmp"
   echo "PASS  reset-admin-password forwards stdin to ie-config and does not record the password"
+  echo "PASS  an empty users table creates an Administrator and does not point at /setup/"
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     echo "NOTE  a Docker daemon is available; this self-test still used a mock and did not change a live database"
   else

@@ -1,6 +1,7 @@
 """Password reset does not keep the password in the audit row."""
 
-import os
+import json
+import logging
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -77,9 +78,35 @@ def test_reset_refuses_an_empty_database(tmp_path):
         auth.reset_password(None, "NewPassword99", "local-reset")
     except ApiError as exc:
         assert exc.code == "no_users"
-        assert "/setup/" in exc.message
+        assert "reset-admin-password.sh" in exc.message
+        assert "/setup/" not in exc.message
     else:
         raise AssertionError("empty database was reset")
+
+
+def test_create_first_admin_when_users_is_empty(tmp_path):
+    settings = _settings(tmp_path)
+    factory, _engine = make_session_factory(settings.database_url)
+    auth = Auth(factory, settings)
+    assert auth.account_status() == "empty"
+    password = "FirstAdmin99"
+    created = auth.create_first_admin("admin@example.com", password, "local-reset")
+    assert created == {"email": "admin@example.com"}
+    assert auth.account_status() == "admin admin@example.com"
+    with factory() as db:
+        user = db.query(User).one()
+        assert user.role == "Administrator"
+        assert verify_password(password, user.password_hash)
+        row = db.query(AuditRow).one()
+        assert row.action == "admin-created"
+        blob = " ".join([row.detail or "", row.comment or "", row.file_id or ""])
+        assert password not in blob
+    try:
+        auth.create_first_admin("other@example.com", "SecondAdmin99", "local-reset")
+    except ApiError as exc:
+        assert exc.code == "already_bootstrapped"
+    else:
+        raise AssertionError("a second administrator was created over existing users")
 
 
 def test_reset_uses_the_same_password_rules(tmp_path):
@@ -96,6 +123,48 @@ def test_reset_uses_the_same_password_rules(tmp_path):
     with factory() as db:
         user = db.query(User).one()
         assert verify_password("OldPassword12", user.password_hash)
+
+
+def test_ie_config_logs_complete_setup_with_no_users(tmp_path, caplog):
+    settings = _settings(tmp_path)
+    factory, _engine = make_session_factory(settings.database_url)
+    auth = Auth(factory, settings)
+    from ie_config.app import warn_complete_setup_without_users
+    warn_complete_setup_without_users(settings, auth)
+    setup = tmp_path / "data" / "setup"
+    setup.mkdir(parents=True)
+    (setup / "config.json").write_text(json.dumps({"state": "unconfigured"}), encoding="utf-8")
+    with caplog.at_level(logging.ERROR):
+        warn_complete_setup_without_users(settings, auth)
+    assert caplog.text == ""
+    (setup / "config.json").write_text(json.dumps({"state": "complete"}), encoding="utf-8")
+    with caplog.at_level(logging.ERROR):
+        warn_complete_setup_without_users(settings, auth)
+    assert "users table is empty" in caplog.text
+    auth.create_user("admin@example.com", "OldPassword12", "Administrator")
+    caplog.clear()
+    with caplog.at_level(logging.ERROR):
+        warn_complete_setup_without_users(settings, auth)
+    assert caplog.text == ""
+
+
+def test_cli_creates_when_empty_and_does_not_print_the_password(tmp_path, monkeypatch, capsys):
+    settings = _settings(tmp_path)
+    monkeypatch.setenv("DATABASE_URL", settings.database_url)
+    monkeypatch.setenv("CONFIG_ROOT", settings.config_root)
+    from ie_config.reset_admin import reset_admin
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO("BrandNewPass1"))
+    code = reset_admin(["--status"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out.strip() == "empty"
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO("BrandNewPass1\n"))
+    code = reset_admin(["--create", "--email", "admin@example.com"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.out.strip() == "administrator created for admin@example.com"
+    assert "BrandNewPass1" not in captured.out
+    assert "BrandNewPass1" not in captured.err
 
 
 def test_cli_reads_stdin_and_does_not_print_the_password(tmp_path, monkeypatch, capsys):
