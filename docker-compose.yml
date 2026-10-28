@@ -119,7 +119,7 @@ x-netbox: &netbox
     SECRET_KEY: ${NETBOX_SECRET_KEY:?run install.sh}
     API_TOKEN_PEPPER_1: ${NETBOX_API_TOKEN_PEPPER_1:?run install.sh}
     ALLOWED_HOSTS: ${PUBLIC_HOST} caddy netbox localhost
-    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:${PORT_NETBOX:-8444}
+    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:${PORT_NETBOX:-8080}
     CORS_ORIGIN_ALLOW_ALL: "false"
     SKIP_SUPERUSER: "false"
     SUPERUSER_NAME: ${NETBOX_SUPERUSER_NAME:-admin}
@@ -181,17 +181,18 @@ x-caddy-env: &caddy-env
   CLIENT_SLUG: ${CLIENT_SLUG}
   CLIENT_NAME: ${CLIENT_NAME}
   PUBLIC_HOST: ${PUBLIC_HOST:?run install.sh}
-  # Empty when PORT_HTTPS is 443; otherwise ":8443" (install.sh). Used by the HTTP->HTTPS redirect.
+  # Empty when PORT_HTTPS is 443; otherwise ":57400" (install.sh). Used by the HTTP->HTTPS redirect.
   HTTPS_PORT_SUFFIX: ${HTTPS_PORT_SUFFIX:-}
-  PORT_HTTP: ${PORT_HTTP:-80}
+  PORT_HTTP: ${PORT_HTTP:-8086}
   PORT_HTTPS: ${PORT_HTTPS:-443}
+  PORT_HTTP3: ${PORT_HTTP3:-443}
   PORT_GRAFANA: ${PORT_GRAFANA:-3000}
   PORT_PROMETHEUS: ${PORT_PROMETHEUS:-9090}
   PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-9093}
   PORT_ACTIVEPIECES: ${PORT_ACTIVEPIECES:-8081}
   PORT_NETDISCO: ${PORT_NETDISCO:-5000}
   PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
-  PORT_NETBOX: ${PORT_NETBOX:-8444}
+  PORT_NETBOX: ${PORT_NETBOX:-8080}
   ADMIN_BASIC_USER: ${ADMIN_BASIC_USER:-admin}
   ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH:?run install.sh}
   IE_UI_PORT: ${IE_UI_PORT:-8080}
@@ -491,10 +492,16 @@ services:
       PORT_PROMETHEUS: ${PORT_PROMETHEUS:-9090}
       PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-9093}
       PORT_GRAFANA: ${PORT_GRAFANA:-3000}
-      PORT_NETBOX: ${PORT_NETBOX:-8444}
+      PORT_HTTP: ${PORT_HTTP:-8086}
+      PORT_HTTPS: ${PORT_HTTPS:-443}
+      PORT_HTTP3: ${PORT_HTTP3:-443}
+      PORT_NETBOX: ${PORT_NETBOX:-8080}
       PORT_ACTIVEPIECES: ${PORT_ACTIVEPIECES:-8081}
       PORT_NETDISCO: ${PORT_NETDISCO:-5000}
       PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
+      PORT_SNMP_EXPORTER: ${PORT_SNMP_EXPORTER:-9116}
+      PORT_BLACKBOX: ${PORT_BLACKBOX:-9115}
+      PORT_TELEGRAF: ${PORT_TELEGRAF:-57500}
     volumes:
       - ./config:/opt/insightengine/config
       - ./snmp:/opt/insightengine/snmp
@@ -559,16 +566,18 @@ services:
     ports:
       # Host port and container port are the same value. Caddyfile site
       # addresses use these PORT_* variables, as do external-url / root_url.
-      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP:-80}:${PORT_HTTP:-80}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP:-8086}:${PORT_HTTP:-8086}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:${PORT_HTTPS:-443}"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:${PORT_HTTPS:-443}/udp"          # HTTP/3
+      # HTTP/3 UDP. Host port 443 even when HTTPS tcp is 57400; the packet is
+      # delivered to Caddy's HTTPS listen port inside the container.
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP3:-443}:${PORT_HTTPS:-443}/udp"
       - "${HOST_BIND:-0.0.0.0}:${PORT_GRAFANA:-3000}:${PORT_GRAFANA:-3000}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_PROMETHEUS:-9090}:${PORT_PROMETHEUS:-9090}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_ALERTMANAGER:-9093}:${PORT_ALERTMANAGER:-9093}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_ACTIVEPIECES:-8081}:${PORT_ACTIVEPIECES:-8081}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_NETDISCO:-5000}:${PORT_NETDISCO:-5000}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_OXIDIZED:-8888}:${PORT_OXIDIZED:-8888}"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_NETBOX:-8444}:${PORT_NETBOX:-8444}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_NETBOX:-8080}:${PORT_NETBOX:-8080}"
     environment: *caddy-env
     volumes:
       - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -680,6 +689,8 @@ services:
   snmp-exporter-1:
     <<: *snmp-exporter
     container_name: snmp-exporter-1-${CLIENT_SLUG}
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${PORT_SNMP_EXPORTER:-9116}:9116"
   snmp-exporter-2:
     <<: *snmp-exporter
     container_name: snmp-exporter-2-${CLIENT_SLUG}
@@ -698,6 +709,8 @@ services:
   blackbox-exporter-1:
     <<: *blackbox
     container_name: blackbox-exporter-1-${CLIENT_SLUG}
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${PORT_BLACKBOX:-9115}:9115"
   blackbox-exporter-2:
     <<: *blackbox
     container_name: blackbox-exporter-2-${CLIENT_SLUG}
@@ -845,6 +858,9 @@ services:
       HOST_VAR: /hostfs/var
       HOST_RUN: /hostfs/run
       HOST_MOUNT_PREFIX: /hostfs
+    ports:
+      # Prometheus inside the network still scrapes telegraf-host:9273.
+      - "${HOST_BIND:-0.0.0.0}:${PORT_TELEGRAF:-57500}:9273"
     volumes:
       - ./config/telegraf/host:/etc/telegraf:ro
       # SECURITY FLAG: both mounts are read-only but still expose a lot. A read-only

@@ -34,7 +34,7 @@ What I need from you:
 | Alertmanager (+ alert-relay webhook) | Alert routing. The relay forwards alerts to webhook destinations. |
 | Grafana | Dashboards. |
 | Telegraf | API collector (firewalls, controllers), host metrics, syslog. |
-| NetBox, Netdisco | Inventory and source of truth; discovery. NetBox moved off “/” to its own port PORT_NETBOX (8444). |
+| NetBox, Netdisco | Inventory and source of truth; discovery. NetBox moved off “/” to its own port PORT_NETBOX (8080). The UI HTTP front is PORT_HTTP (8086). |
 | Activepieces | Automation; replaces n8n (n8n flows are not migrated). |
 | Loki, Oxidized, SNMP trap receiver | Syslog storage, config backups, traps (optional profiles). |
 | PostgreSQL (one per app) | netbox-postgres, activepieces-postgres, netdisco-postgres, insightengine-postgres. |

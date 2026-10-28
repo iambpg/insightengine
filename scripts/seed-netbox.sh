@@ -18,7 +18,7 @@ cd "$ROOT"
 
 envval() { local l; l="$(grep -E "^$1=" .env | head -n1 || true)"; l="${l#*=}"; l="${l#\'}"; l="${l%\'}"; printf '%s' "$l"; }
 CLIENT_NAME="$(envval CLIENT_NAME)"; CLIENT_SLUG="$(envval CLIENT_SLUG)"
-PUBLIC_HOST="$(envval PUBLIC_HOST)"; PORT_NETBOX="$(envval PORT_NETBOX)"; PORT_NETBOX="${PORT_NETBOX:-8444}"
+PUBLIC_HOST="$(envval PUBLIC_HOST)"; PORT_NETBOX="$(envval PORT_NETBOX)"; PORT_NETBOX="${PORT_NETBOX:-8080}"
 if [ -z "$CLIENT_SLUG" ] || [ "$CLIENT_SLUG" = unconfigured ]; then
   echo "client not set yet - finish the first-run page (/setup/) first" >&2
   exit 1
