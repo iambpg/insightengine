@@ -15,8 +15,37 @@ umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 APPLY=0
-[ "${1:-}" = "--apply" ] && APPLY=1
-[ "${1:-}" = "--help" ] && { sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+SELF_TEST=0
+case "${1:-}" in
+  --apply) APPLY=1 ;;
+  --self-test) SELF_TEST=1 ;;
+  --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  "") ;;
+  *) echo "unknown argument: $1" >&2; exit 2 ;;
+esac
+
+# NetBox 4.6.3 returns key (12 chars) and token (40-char secret, no nbt_ prefix).
+# Older responses may already be nbt_<key>.<secret>. Empty if neither form is present.
+compose_provision_token() {
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); t=d.get("token") or ""; k=d.get("key") or ""; print(t if t.startswith("nbt_") else ("nbt_%s.%s"%(k,t) if k and t else ""))' "$1"
+}
+
+if [ "$SELF_TEST" -eq 1 ]; then
+  sample="$(mktemp)"
+  trap 'rm -f "$sample"' EXIT
+  printf '%s' '{"id":9,"key":"abcdefghijkl","token":"0123456789abcdef0123456789abcdef01234567"}' > "$sample"
+  got="$(compose_provision_token "$sample")"
+  [ "$got" = "nbt_abcdefghijkl.0123456789abcdef0123456789abcdef01234567" ]
+  printf '%s' '{"id":9,"key":"abcdefghijkl","token":"nbt_abcdefghijkl.0123456789abcdef0123456789abcdef01234567"}' > "$sample"
+  got="$(compose_provision_token "$sample")"
+  [ "$got" = "nbt_abcdefghijkl.0123456789abcdef0123456789abcdef01234567" ]
+  printf '%s' '{"id":9,"key":"","token":""}' > "$sample"
+  got="$(compose_provision_token "$sample")"
+  [ -z "$got" ]
+  echo "PASS  provision token assembly"
+  exit 0
+fi
+
 [ -f .env ] || { echo "no .env" >&2; exit 1; }
 
 envval() {
@@ -77,24 +106,67 @@ if [ "$code" != "201" ]; then
   rm -f "$resp"
   exit 1
 fi
-token="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("token") or "")' "$resp")"
-rm -f "$resp"
-case "$token" in
-  nbt_*.*) ;;
-  *) echo "provision response did not include a v2 token" >&2; unset token; exit 1 ;;
-esac
+token="$(compose_provision_token "$resp")"
+tid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("id") or "")' "$resp")"
+drop_provisioned() {
+  # The 201 already created a token. Delete it when we cannot store it, so a
+  # failed run does not leave an orphan that the next run would duplicate.
+  [ -n "$token" ] && [ -n "$tid" ] || return 0
+  printf 'Authorization: Bearer %s\n' "$token" > "$hdr"
+  curl_api -o /dev/null -w '' -X DELETE -H @"$hdr" -H 'Accept: application/json' \
+    "$base/api/users/tokens/${tid}/" || true
+}
+if ! printf '%s' "$token" | grep -Eq '^nbt_.+\..+'; then
+  echo "provision response did not include a v2 token; deleting the token NetBox just created" >&2
+  drop_provisioned
+  unset token
+  rm -f "$resp"
+  exit 1
+fi
 write_one() {
   local path=$1 uid=$2
   mkdir -p "$(dirname "$path")"
-  printf '%s' "$token" > "$path"
-  chmod 400 "$path" || true
+  printf '%s' "$token" > "$path" || return 1
+  chmod 400 "$path" || return 1
   if [ "$(id -u)" -eq 0 ]; then
-    chown "$uid:$uid" "$path" || true
+    chown "$uid:$uid" "$path" || return 1
   fi
 }
-write_one secrets/prometheus/netbox.token 65534
-write_one secrets/oxidized/netbox.token 0
-write_one secrets/cust-exporter/netbox.token 0
+if ! write_one secrets/prometheus/netbox.token 65534 \
+  || ! write_one secrets/oxidized/netbox.token 0 \
+  || ! write_one secrets/cust-exporter/netbox.token 0; then
+  echo "could not store the token; deleting it" >&2
+  drop_provisioned
+  unset token
+  exit 1
+fi
+# Drop earlier insightengine tokens left by runs that exited before writing the files.
+printf 'Authorization: Bearer %s\n' "$token" > "$hdr"
+listf="${resp}.list"
+if curl_api -o "$listf" -w '' -H @"$hdr" -H 'Accept: application/json' "$base/api/users/tokens/?limit=200"; then
+  ids="$(python3 -c 'import json,sys
+keep=sys.argv[1]
+try:
+    data=json.load(open(sys.argv[2]))
+except (OSError, ValueError):
+    data={}
+for row in data.get("results") or []:
+    if str(row.get("description") or "") != "insightengine":
+        continue
+    if str(row.get("id") or "") == keep:
+        continue
+    print(row.get("id") or "")
+' "$tid" "$listf")"
+  old=""
+  for old in $ids; do
+    [ -n "$old" ] || continue
+    curl_api -o /dev/null -w '' -X DELETE -H @"$hdr" -H 'Accept: application/json' \
+      "$base/api/users/tokens/${old}/" || true
+  done
+fi
+rm -f "$resp" "$listf"
 unset token
 echo "wrote a new NetBox v2 token into the secret files (value not printed)"
-echo "restart ie-config, prometheus and oxidized so they read it"
+echo "restart ie-config and prometheus, recreate oxidized and netbox-device-types so they read it:"
+echo "  docker compose restart ie-config prometheus"
+echo "  docker compose up -d --force-recreate --no-deps oxidized netbox-device-types"

@@ -45,6 +45,10 @@ The suggested site is the NetBox site on the most specific active prefix that co
 
 Display names ("Access switch", "Test Site") are slugified. The manufacturer comes from the Netdisco vendor (or the sysObjectID guess). Palo Alto is slug `palo-alto`. An existing library device type is reused when the model or part number matches one row; otherwise a stub type is created. Platform is created and set when the form or the guess has one.
 
-NetBox requires the IP to be assigned to an interface before it can be the primary address. Approve creates the device, then the interface, then the IP on that interface, then sets `primary_ip4`. If any step after the device fails, the device is deleted so it does not appear in `/api/v1/devices`.
+NetBox requires the IP to be assigned to an interface before it can be the primary address. Approve creates the device, then the interface, then the IP on that interface, then sets `primary_ip4`. If any step after the device fails, the device is deleted so it does not appear in `/api/v1/devices`. A Netdisco family string such as `37xxStack` is matched to a library device type through `config/discovery/device-type-aliases.yml` (Settings → Netdisco). A stub type is created only when nothing in the library matches.
+
+`GET /api/v1/discovery/scans` moves a row from `queued` to `finished` after the scheduler writes `scan-finished` later than the row was created.
+
+Oxidized's default device filter is `status=active`, so an approved device and a device added by hand are both backed up. See `docs/upgrade.md`.
 
 A pending row whose address is already a NetBox device primary IP, or any assigned IP address, is removed from the queue on the next refresh.

@@ -146,6 +146,8 @@ class T(unittest.TestCase):
         self.assertEqual(call("POST", "/setup/mode", {"mode": "new"})[0], 409)   # client first
 
     def test_03_new_install_flow(self):
+        env_path = os.path.join(self.root, ".env")
+        before = os.stat(env_path)
         c, s = call("POST", "/setup/client", {"client_name": "Acme Corp"})
         self.assertEqual((c, s["client_slug"]), (202, "acme-corp"))
         s = wait_job()
@@ -154,10 +156,12 @@ class T(unittest.TestCase):
         c, s = call("POST", "/setup/admin", {"email": "admin@example.com", "password": "correct-horse-1"})
         self.assertEqual((c, s["step"]), (200, "mode"))
         self.assertNotIn("correct-horse-1", rd(os.path.join(self.root, "data", "setup", "setup.log")))
-        env = rd(os.path.join(self.root, ".env"))
+        env = rd(env_path)
         self.assertIn("CLIENT_NAME='Acme Corp'", env); self.assertIn("CLIENT_SLUG='acme-corp'", env)
         self.assertIn("SECRET_STAYS='keep-me'", env)
-        self.assertEqual(os.stat(os.path.join(self.root, ".env")).st_mode & 0o777, 0o600)
+        after = os.stat(env_path)
+        self.assertEqual(after.st_mode & 0o777, 0o600)
+        self.assertEqual((after.st_uid, after.st_gid), (before.st_uid, before.st_gid))
         calls = rd(os.path.join(self.root, "docker.calls"))
         self.assertIn("up -d --no-build caddy netbox prometheus", calls)
         self.assertNotIn("docker-socket-proxy", calls.split("up -d")[1])

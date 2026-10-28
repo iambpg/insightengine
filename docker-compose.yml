@@ -250,6 +250,10 @@ secrets:
 #     at the volume root.
 #   netdisco-postgres: PostgreSQL 18 image, PGDATA=/var/lib/postgresql/18/docker,
 #     named volume at /var/lib/postgresql. That match is correct; do not move it.
+#   netdisco-db-role: same image, but it only uses the shared socket. A tmpfs
+#     on /var/lib/postgresql covers the image VOLUME so recreate does not add
+#     an anonymous volume. Other stateful services mount the image VOLUME path
+#     (redis /data, grafana, prometheus, alertmanager, loki, caddy, oxidized).
 #   redis (netbox, netbox cache, activepieces): image VOLUME /data, named volumes
 #     at /data. Queue redis uses AOF. The cache instance is disposable.
 #   prometheus /prometheus, alertmanager /alertmanager, grafana /var/lib/grafana,
@@ -1090,7 +1094,8 @@ services:
     volumes:
       - activepieces-cache:/usr/src/app/cache
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:80/ || exit 1"]
+      # The Activepieces image has curl and does not ship wget.
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:80/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1105,8 +1110,10 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
+    # Wait until the app is healthy so workers do not all insert piece_metadata at once.
+    # A duplicate-key error on that table during a cold start is benign if it still appears.
     depends_on:
-      activepieces-app: {condition: service_started}
+      activepieces-app: {condition: service_healthy}
     environment:
       <<: *activepieces-env
       AP_CONTAINER_TYPE: WORKER
@@ -1184,6 +1191,11 @@ services:
     volumes:
       - netdisco-pg-socket:/var/run/postgresql
       - ./config/netdisco/align-db-role.sh:/align-db-role.sh:ro
+    # The postgres image VOLUME is /var/lib/postgresql. This one-shot only uses
+    # the shared socket. Without a mount there, every recreate adds an anonymous
+    # volume. tmpfs covers the image VOLUME and is discarded with the container.
+    tmpfs:
+      - /var/lib/postgresql
     depends_on:
       netdisco-postgres:
         condition: service_healthy
@@ -1416,7 +1428,7 @@ services:
       CLIENT_SLUG: ${CLIENT_SLUG}
       OXIDIZED_INTERVAL: ${OXIDIZED_INTERVAL:-14400}
       OXIDIZED_THREADS: ${OXIDIZED_THREADS:-60}
-      OXIDIZED_NETBOX_FILTER: ${OXIDIZED_NETBOX_FILTER:-status=active&tag=oxidized}
+      OXIDIZED_NETBOX_FILTER: ${OXIDIZED_NETBOX_FILTER:-status=active}
       OXIDIZED_UID: "30000"
     volumes:
       - ./config/oxidized:/templates:ro
@@ -1437,6 +1449,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
+    entrypoint: ["/bin/sh", "/usr/local/bin/oxidized-run.sh"]
     depends_on:
       oxidized-init: {condition: service_completed_successfully}
     environment:
@@ -1446,6 +1459,7 @@ services:
       - oxidized-config:/home/oxidized/.config/oxidized
       - oxidized-data:/home/oxidized/data
       - ./certs/ca.crt:/usr/local/share/ca-certificates/insightengine-ca.crt:ro
+      - ./config/oxidized/oxidized-run.sh:/usr/local/bin/oxidized-run.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8888/nodes -o /dev/null || wget -q --spider http://127.0.0.1:8888/nodes || exit 1"]
       interval: 60s

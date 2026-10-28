@@ -32,6 +32,7 @@ $PARALLEL = 64 unless defined $PARALLEL && $PARALLEL =~ /^\d+$/;
 $PARALLEL = 1 if $PARALLEL < 1;
 $PARALLEL = 256 if $PARALLEL > 256;
 my $COMMUNITY = $ENV{SNMP_V2_COMMUNITY} // '';
+$COMMUNITY =~ s/\s+\z//;
 $COMMUNITY = '' if $COMMUNITY eq 'unset-placeholder';
 
 if (@ARGV && $ARGV[0] eq '--self-test') {

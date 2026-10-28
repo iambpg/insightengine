@@ -18,7 +18,7 @@ from sqlalchemy import select
 from .actions import Reloader, container_states
 from .auth import SETTINGS_ROLES, Auth, check_bearer, client_ip, read_setup_token, require_csrf, validate_email, validate_password
 from .db import AuditRow, make_session_factory
-from .discovery import Discovery, NetBoxWriter, guess_device, load_yaml, unapproved_for_ui
+from .discovery import Discovery, NetBoxWriter, guess_device, load_device_aliases, load_yaml, unapproved_for_ui
 from .errors import ApiError, error_body
 from .fleet import mount_fleet
 from .masking import leftover_placeholders, mask_text, restore_secrets
@@ -133,6 +133,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                     cfg = discovery.read_sync_settings()
                     discovery.sync_prefixes()
                     discovery.refresh_unapproved()
+                    discovery.note_scans_finished()
                 except Exception as exc:
                     log.warning("discovery loop: %s", exc.__class__.__name__)
                 try:
@@ -739,7 +740,9 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         try:
             # The only NetBox device create on the discovery path. Reject and the
             # unapproved list never call this.
-            created = NetBoxWriter(settings.netbox_url, headers).approve_device(candidate, guess, discovery.read_sync_settings())
+            created = NetBoxWriter(settings.netbox_url, headers).approve_device(
+                candidate, guess, discovery.read_sync_settings(), load_device_aliases(discovery.alias_path()),
+            )
         except Exception as exc:
             _audit(sf, user, "discovery-approve", client_ip(request), "failed", "netdisco", "", "", exc.__class__.__name__)
             raise ApiError(502, "netbox_error", "NetBox did not accept the device")

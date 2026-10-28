@@ -1,0 +1,17 @@
+# Netdisco's device.model is often a family string, not a library model name.
+# prefer: library model names to try first (exact, then normalized).
+# contains: if prefer misses, reuse a library type whose model contains this text.
+# A stub type is created only when nothing in the library matches.
+aliases:
+  37xxstack:
+    prefer:
+      - Catalyst 3750-48TS
+      - Catalyst 3750-24TS
+    contains:
+      - "3750"
+  29xxstack:
+    prefer:
+      - Catalyst 2960-48TC-L
+      - Catalyst 2960-24TC-L
+    contains:
+      - "2960"

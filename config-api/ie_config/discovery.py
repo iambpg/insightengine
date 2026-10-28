@@ -701,7 +701,39 @@ class Discovery:
             db.refresh(row)
             return _scan_public(row)
 
+    def alias_path(self) -> str:
+        return os.path.join(self.config_root, "config", "discovery", "device-type-aliases.yml")
+
+    def note_scans_finished(self) -> int:
+        """Mark queued scans finished once the scheduler has written scan-finished after they started."""
+        path = self._out("scan-finished")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                stamp = _parse_stamp(fh.read())
+        except OSError:
+            return 0
+        if stamp is None:
+            return 0
+        updated = 0
+        with self.sf() as db:
+            rows = db.scalars(select(DiscoveryScan).where(DiscoveryScan.status == "queued")).all()
+            for row in rows:
+                started = row.started_at
+                if started is None:
+                    continue
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+                if started <= stamp:
+                    row.status = "finished"
+                    row.finished_at = stamp
+                    row.message = "Netdisco finished that probe. Devices that answered and are not in NetBox show up in this list."
+                    updated += 1
+            if updated:
+                db.commit()
+        return updated
+
     def list_scans(self) -> list[dict]:
+        self.note_scans_finished()
         with self.sf() as db:
             rows = db.scalars(select(DiscoveryScan).order_by(DiscoveryScan.id.desc()).limit(20)).all()
             return [_scan_public(row) for row in rows]
@@ -839,6 +871,31 @@ def _public(row: DiscoveryCandidate) -> dict:
     return body
 
 
+def _parse_stamp(text: str):
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _norm_model(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def load_device_aliases(path: str) -> dict:
+    """Map a normalized Netdisco model string to library search hints."""
+    data = load_yaml(path, {})
+    raw = data.get("aliases") if isinstance(data, dict) else None
+    out = {}
+    for key, spec in (raw or {}).items():
+        if isinstance(spec, dict):
+            out[_norm_model(str(key))] = spec
+    return out
+
+
 def _iso(value) -> str | None:
     if value is None:
         return None
@@ -875,25 +932,65 @@ class NetBoxWriter:
             return results[0]
         return self._req("POST", list_path, body)
 
-    def find_device_type(self, manufacturer_id: int, model: str) -> dict | None:
-        """Reuse a device type that already exists (for example from the preloaded library)."""
-        if not model or model.lower() == "unknown":
-            return None
-        encoded = quote(model, safe="")
-        for key in ("model", "part_number"):
-            res = self._req(
-                "GET",
-                "/api/dcim/device-types/?manufacturer_id=%s&%s=%s" % (manufacturer_id, key, encoded),
-            ).get("results") or []
-            if len(res) == 1:
-                return res[0]
+    def _one_type(self, manufacturer_id: int, field: str, value: str) -> dict | None:
+        encoded = quote(value, safe="")
         res = self._req(
             "GET",
-            "/api/dcim/device-types/?manufacturer_id=%s&q=%s&limit=2" % (manufacturer_id, encoded),
+            "/api/dcim/device-types/?manufacturer_id=%s&%s=%s" % (manufacturer_id, field, encoded),
         ).get("results") or []
-        return res[0] if len(res) == 1 else None
+        if len(res) == 1:
+            return res[0]
+        wanted = _norm_model(value)
+        same = [row for row in res if _norm_model(row.get("model") or "") == wanted or _norm_model(row.get("part_number") or "") == wanted]
+        return same[0] if len(same) == 1 else None
 
-    def approve_device(self, candidate: dict, guess: dict, sync_settings: dict) -> dict:
+    def find_device_type(self, manufacturer_id: int, model: str, aliases: dict | None = None) -> dict | None:
+        """Reuse a library device type. A stub is only for a model with no library hit."""
+        if not model or model.lower() == "unknown":
+            return None
+        aliases = aliases or {}
+        spec = aliases.get(_norm_model(model)) or {}
+        prefer = [str(item) for item in (spec.get("prefer") or []) if str(item).strip()]
+        contains = [str(item) for item in (spec.get("contains") or []) if str(item).strip()]
+        names = []
+        for item in prefer + [model]:
+            if item not in names:
+                names.append(item)
+        for name in names:
+            for field in ("model", "part_number"):
+                found = self._one_type(manufacturer_id, field, name)
+                if found is not None:
+                    return found
+        needles = contains or ([model] if not spec else [])
+        for needle in needles:
+            encoded = quote(needle, safe="")
+            rows = self._req(
+                "GET",
+                "/api/dcim/device-types/?manufacturer_id=%s&q=%s&limit=50" % (manufacturer_id, encoded),
+            ).get("results") or []
+            wanted = _norm_model(needle)
+            ranked = [
+                row for row in rows
+                if wanted and (
+                    wanted in _norm_model(row.get("model") or "")
+                    or wanted in _norm_model(row.get("part_number") or "")
+                    or wanted in _norm_model(row.get("slug") or "")
+                )
+            ]
+            for name in prefer:
+                target = _norm_model(name)
+                for row in ranked:
+                    blob = _norm_model(row.get("model") or "") + _norm_model(row.get("part_number") or "")
+                    if target and target in blob:
+                        return row
+            if len(ranked) == 1:
+                return ranked[0]
+            if ranked and spec:
+                ranked.sort(key=lambda row: len(row.get("model") or ""))
+                return ranked[0]
+        return None
+
+    def approve_device(self, candidate: dict, guess: dict, sync_settings: dict, aliases: dict | None = None) -> dict:
         # The UI sends names ("Access switch", "Test Site"); NetBox slugs are lower-case with dashes.
         site_name = (candidate.get("site") or sync_settings.get("default_site_slug") or "discovered").strip()
         site_slug = _slug(site_name)
@@ -904,7 +1001,7 @@ class NetBoxWriter:
         if (candidate.get("model") or "").strip():
             model = candidate["model"].strip()[:64]
         manufacturer = self.ensure("/api/dcim/manufacturers/", mfr_slug, {"name": mfr_name, "slug": mfr_slug})
-        dtype = self.find_device_type(manufacturer["id"], model)
+        dtype = self.find_device_type(manufacturer["id"], model, aliases)
         if dtype is None:
             model_slug = _slug(model)[:40]
             dtype = self.ensure("/api/dcim/device-types/", model_slug, {
@@ -935,6 +1032,12 @@ class NetBoxWriter:
             "site": site["id"],
             "status": "active",
         }
+        # Optional. Backups use status=active, so a missing tag must not fail approval.
+        try:
+            self.ensure("/api/extras/tags/", "oxidized", {"name": "oxidized", "slug": "oxidized", "color": "ff9800"})
+            device_body["tags"] = [{"slug": "oxidized"}]
+        except Exception:
+            pass
         if platform_id:
             device_body["platform"] = platform_id
         device = self._req("POST", "/api/dcim/devices/", device_body)

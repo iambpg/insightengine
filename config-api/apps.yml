@@ -228,6 +228,7 @@ apps:
       - {id: sync.yml, path: config/discovery/sync.yml, label: NetBox to Netdisco sync, language: yaml, editable: true, validator: yaml}
       - {id: module-map.yml, path: config/discovery/module-map.yml, label: SNMP module map, language: yaml, editable: true, validator: yaml}
       - {id: sysobjectid-map.yml, path: config/discovery/sysobjectid-map.yml, label: sysObjectID guesses, language: yaml, editable: true, validator: yaml}
+      - {id: device-type-aliases.yml, path: config/discovery/device-type-aliases.yml, label: Netdisco model to library device type, language: yaml, editable: true, validator: yaml}
     actions:
       - {id: sync-prefixes, label: Sync prefixes to Netdisco now, kind: reload, dangerous: false, roles: [Administrator, Engineer]}
       - {id: scan-now, label: Scan prefixes now, kind: reload, dangerous: false, roles: [Administrator, Engineer]}

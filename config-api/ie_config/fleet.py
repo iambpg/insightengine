@@ -834,8 +834,6 @@ class FleetService:
                 found = self._find_device(rows, key)
                 if found is None and is_form_key(key):
                     found = self._representative(rows, key)
-                if found is None and is_form_key(key):
-                    return _empty_detail(key, self._now_dt())
                 if found is None:
                     raise ApiError(404, "not_found", "unknown device")
                 detail = self._detail(client, found, rows)

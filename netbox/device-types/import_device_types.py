@@ -167,6 +167,20 @@ def handle(nb, kind, path, fields, manufacturer_id, existing_by_key, filename):
     return None
 
 
+def read_token():
+    """Read the token on every attempt so a provisioned file is picked up without a restart."""
+    path = os.environ.get("NETBOX_TOKEN_FILE") or ""
+    if path:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                value = fh.read().strip()
+            if value and value != "unset-placeholder":
+                return value
+        except OSError:
+            pass
+    return (os.environ.get("NETBOX_TOKEN") or "").strip()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--library", default=os.environ.get("LIBRARY_DIR", "/library"))
@@ -177,21 +191,22 @@ def main():
     parser.add_argument("--report", default=os.environ.get("REPORT", "/tmp/import-report.json"))
     parser.add_argument("--strict", action="store_true", help="exit 1 if any entry failed")
     args = parser.parse_args()
-    if os.environ.get("NETBOX_TOKEN"):
-        token = os.environ["NETBOX_TOKEN"].strip()
-    else:
-        with open(os.environ["NETBOX_TOKEN_FILE"], encoding="utf-8") as fh:
-            token = fh.read().strip()
-    client = NB(os.environ.get("NETBOX_URL", "http://netbox:8080"), token)
+    url = os.environ.get("NETBOX_URL", "http://netbox:8080")
+    client = None
     started = time.time()
     while True:
-        try:
-            response = client.req("GET", "/api/dcim/manufacturers/", params={"limit": 1})
-            if response.status_code == 200:
-                break
-            print("NetBox answered %s (token invalid or not ready); retrying" % response.status_code, flush=True)
-        except Exception as exc:
-            print("waiting for NetBox:", exc.__class__.__name__, flush=True)
+        token = read_token()
+        if not token:
+            print("NetBox token file is empty; retrying", flush=True)
+        else:
+            client = NB(url, token)
+            try:
+                response = client.req("GET", "/api/dcim/manufacturers/", params={"limit": 1})
+                if response.status_code == 200:
+                    break
+                print("NetBox answered %s (token invalid or not ready); retrying" % response.status_code, flush=True)
+            except Exception as exc:
+                print("waiting for NetBox:", exc.__class__.__name__, flush=True)
         if time.time() - started > args.wait:
             print("NetBox not usable after %ss" % args.wait, flush=True)
             return 1

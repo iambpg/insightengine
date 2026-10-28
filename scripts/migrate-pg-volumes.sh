@@ -26,6 +26,7 @@ cd "$ROOT"
 APPLY=0
 FORCE=0
 REMOVE_SOURCE=0
+SELF_TEST=0
 PROJECT="${COMPOSE_PROJECT_NAME:-}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17.9}"
 
@@ -42,15 +43,41 @@ while [ $# -gt 0 ]; do
     --remove-source) REMOVE_SOURCE=1; shift ;;
     --project) PROJECT="${2:-}"; shift 2 ;;
     --image) POSTGRES_IMAGE="${2:-}"; shift 2 ;;
+    --self-test) SELF_TEST=1; shift ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+env_file_value() {
+  local key=$1 file=${2:-.env} line
+  [ -f "$file" ] || return 0
+  line="$(grep -E "^${key}=" "$file" | tail -n1 || true)"
+  line="${line#*=}"
+  line="${line#\'}"
+  line="${line%\'}"
+  printf '%s' "$line"
+}
+
+if [ "$SELF_TEST" -eq 1 ]; then
+  tmp="$(mktemp -d)"
+  printf "%s\n" "COMPOSE_PROJECT_NAME='from-dotenv'" > "$tmp/.env"
+  got="$(env_file_value COMPOSE_PROJECT_NAME "$tmp/.env")"
+  rm -rf "$tmp"
+  [ "$got" = "from-dotenv" ]
+  echo "PASS  migrate reads COMPOSE_PROJECT_NAME from .env"
+  exit 0
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is not available; nothing was changed" >&2
   exit 1
 fi
 
+if [ -z "$PROJECT" ]; then
+  # --project and a shell COMPOSE_PROJECT_NAME win. Otherwise match compose,
+  # which reads COMPOSE_PROJECT_NAME from .env.
+  PROJECT="$(env_file_value COMPOSE_PROJECT_NAME)"
+fi
 if [ -z "$PROJECT" ]; then
   PROJECT="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
   [ -n "$PROJECT" ] || PROJECT="insightengine"

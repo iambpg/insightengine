@@ -37,7 +37,8 @@ source:
   default: http
   http:
     # Device list straight from NetBox (same CA-verified internal endpoint).
-    # Only devices matching OXIDIZED_NETBOX_FILTER are backed up.
+    # Default filter is status=active: approved discoveries and devices added
+    # by hand. tag=oxidized is optional; that tag 400s until seed creates it.
     # TODO(Phindani): NetBox platform names/slugs must match Oxidized model
     # names (ios, junos, fortios, panos, ...). Verify the 'model' mapping.
     url: https://caddy:8443/api/dcim/devices/?@@NETBOX_FILTER@@&limit=1000

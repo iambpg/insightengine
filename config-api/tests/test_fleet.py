@@ -388,12 +388,8 @@ def test_empty_install_is_not_an_error(stack):
     assert alerts.status_code == 200
     assert alerts.json() == []
     detail = client.get("/api/v1/devices/switch-stack")
-    assert detail.status_code == 200, detail.text
-    empty = detail.json()
-    assert DETAIL_KEYS <= set(empty)
-    assert empty["hostname"] == "—"
-    assert empty["faceplate"]["form_factor"] == "switch-stack"
-    assert empty["issues"] == []
+    assert detail.status_code == 404, detail.text
+    assert detail.json()["error"]["code"] == "not_found"
     assert client.get("/api/v1/devices/switch-stack/metrics/throughput?range=1h").json() == []
     assert client.get("/api/v1/devices/switch-stack/ports/top?metric=util").json() == []
     health = client.get("/api/v1/health")

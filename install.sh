@@ -23,7 +23,9 @@
 #
 # Re-run: if .env exists and .install-started contains exactly past-secret-generation,
 # the script resumes at certificates, image build, and start. It does not regenerate
-# or print secrets, and it does not rewrite .env, ports, or secret files.
+# or print secrets that are already set. A missing or empty required key (an older
+# .env has no NETBOX_SUPERUSER_API_KEY) is filled in. Ports and other values stay.
+# Use --no-start when you still need to copy Postgres data before the stack starts.
 # --public-host and the port flags apply only when .env is first created.
 # If .env exists without that marker, the script stops and leaves .env untouched.
 #
@@ -397,8 +399,44 @@ cleanup_env() {
 }
 trap cleanup_env EXIT
 
+# Fill a required secret only when the key is absent or empty. A non-empty
+# value is the one the running databases already use and must not be replaced.
+backfill_empty() {
+  local key=$1 len=$2 cur
+  cur="$(getenv_val "$key")"
+  if [ -z "$cur" ]; then
+    setenv "$key" "$(gen "$len")"
+    say "backfilled $key (missing or empty; existing secrets were not changed)"
+  fi
+}
+
 if [ "$RESUME" = 1 ]; then
   say "resuming install: secret generation already finished (.install-started). Continuing at certificates, image build, and start."
+  # Every compose `:?run install.sh` secret. Only NETBOX_SUPERUSER_API_KEY is new;
+  # the rest are filled solely if an older or partial .env left them blank.
+  backfill_empty NETBOX_SUPERUSER_API_KEY 12
+  backfill_empty NETBOX_SUPERUSER_API_TOKEN 40
+  backfill_empty NETBOX_SUPERUSER_PASSWORD 24
+  backfill_empty NETBOX_DB_PASSWORD 32
+  backfill_empty NETBOX_REDIS_PASSWORD 32
+  backfill_empty NETBOX_REDIS_CACHE_PASSWORD 32
+  backfill_empty NETBOX_SECRET_KEY 64
+  backfill_empty NETBOX_API_TOKEN_PEPPER_1 64
+  backfill_empty GRAFANA_ADMIN_PASSWORD 24
+  backfill_empty GRAFANA_SECRET_KEY 48
+  backfill_empty AP_ENCRYPTION_KEY 32
+  backfill_empty AP_JWT_SECRET 48
+  backfill_empty AP_POSTGRES_PASSWORD 32
+  backfill_empty AP_REDIS_PASSWORD 32
+  backfill_empty NETDISCO_DB_PASSWORD 32
+  backfill_empty IE_DB_PASSWORD 32
+  backfill_empty IE_CONFIG_DB_PASSWORD 32
+  oxf="$(getenv_val OXIDIZED_NETBOX_FILTER)"
+  if [ -z "$oxf" ] || [ "$oxf" = "status=active&tag=oxidized" ]; then
+    setenv OXIDIZED_NETBOX_FILTER "status=active"
+    say "Oxidized backs up every active device (status=active). tag=oxidized is optional and 400s until that tag exists."
+  fi
+  unset oxf
   if [ "$PUBLIC_HOST_FROM_FLAG" = 1 ] || [ -n "${INSTALL_PUBLIC_HOST:-}" ] || [ "$PORTS" != auto ]; then
     warn "--public-host, INSTALL_PUBLIC_HOST, and port choices apply only when .env is first created; this run keeps the existing .env"
   fi

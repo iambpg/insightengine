@@ -60,6 +60,7 @@ N="$(json_str "$CLIENT_NAME")"; S="$(json_str "$CLIENT_SLUG")"
 ensure tenant /api/tenancy/tenants/ "$CLIENT_SLUG" "{\"name\": $N, \"slug\": $S}"
 ensure region /api/dcim/regions/    "$CLIENT_SLUG" "{\"name\": $N, \"slug\": $S}"
 ensure tag /api/extras/tags/ ie-scan '{"name":"ie-scan","slug":"ie-scan","color":"2196f3"}'
+ensure tag /api/extras/tags/ oxidized '{"name":"oxidized","slug":"oxidized","color":"ff9800"}'
 # Device roles the Prometheus jobs select. A device with one of these roles and a primary IP is monitored.
 for pair in \
   access-switch:"Access switch" \

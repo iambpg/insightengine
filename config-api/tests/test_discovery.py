@@ -15,6 +15,7 @@ from ie_config.db import DiscoveryCandidate, make_session_factory
 from ie_config.discovery import (
     Discovery,
     NetBoxWriter,
+    load_device_aliases,
     manufacturer_identity,
     site_for_ip,
     site_name_from_prefix,
@@ -45,6 +46,21 @@ class NetBoxHandler(BaseHTTPRequestHandler):
         fail = self.server.fail_on
         if fail and method == fail[0] and parsed.path.startswith(fail[1]):
             self._json(fail[2], {"detail": "no"})
+            return
+        if method == "GET" and parsed.path.startswith("/api/dcim/device-types/") and getattr(self.server, "mode", "") == "alias":
+            query = parse_qs(parsed.query)
+            model = (query.get("model") or [""])[0]
+            needle = (query.get("q") or [""])[0]
+            if model == "Catalyst 3750-48TS":
+                self._json(200, {"results": [{"id": 77, "model": "Catalyst 3750-48TS", "slug": "ws-c3750-48ts", "part_number": "WS-C3750-48TS-S"}]})
+                return
+            if needle:
+                self._json(200, {"results": [
+                    {"id": 78, "model": "Catalyst 3750-24TS", "slug": "ws-c3750-24ts"},
+                    {"id": 77, "model": "Catalyst 3750-48TS", "slug": "ws-c3750-48ts"},
+                ]})
+                return
+            self._json(200, {"results": []})
             return
         if method == "GET" and parsed.path.startswith("/api/dcim/device-types/") and "model" in parsed.query and "PA-820" in parsed.query:
             self._json(200, {"results": [{"id": 9, "slug": "pa-820", "model": "PA-820"}]})
@@ -264,6 +280,54 @@ def test_rendered_deployment_is_readable_by_netdisco(tmp_path):
     uid = path.stat().st_uid
     assert uid == 901 or mode & 0o044
     assert os.access(path, os.R_OK)
+
+
+def test_netdisco_family_model_reuses_library_type(tmp_path):
+    server = _server()
+    server.mode = "alias"
+    try:
+        base = "http://127.0.0.1:%s" % server.server_address[1]
+        aliases = {
+            "37xxstack": {
+                "prefer": ["Catalyst 3750-48TS"],
+                "contains": ["3750"],
+            }
+        }
+        writer = NetBoxWriter(base, {"Authorization": "Bearer nbt_example.secret"})
+        created = writer.approve_device(
+            {"ip": "10.1.1.9", "name": "stack1", "vendor": "cisco", "model": "37xxStack", "site": "Test Site"},
+            {"role": "access-switch"},
+            {},
+            aliases,
+        )
+        assert created["device_id"] == 10
+        posted = [call for call in server.calls if call[0] == "POST" and call[1].startswith("/api/dcim/devices")]
+        body = json.loads(posted[0][3])
+        assert body["device_type"] == 77
+        assert not any(call[0] == "POST" and call[1].startswith("/api/dcim/device-types") for call in server.calls)
+    finally:
+        server.shutdown()
+
+
+def test_alias_file_normalizes_netdisco_names():
+    aliases = load_device_aliases(str(ROOT / "config" / "discovery" / "device-type-aliases.yml"))
+    assert "3750" in aliases["37xxstack"]["contains"]
+    assert aliases["37xxstack"]["prefer"][0] == "Catalyst 3750-48TS"
+
+
+def test_queued_scan_is_finished_after_the_scheduler(tmp_path):
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    (tmp_path / "nd").mkdir()
+    created = discovery.queue_manual_scan("prefix", "10.2.0.0/24")
+    assert created["status"] == "queued"
+    stamp = "2099-01-01T00:00:00Z"
+    (tmp_path / "nd" / "scan-finished").write_text(stamp + "\n", encoding="utf-8")
+    assert discovery.note_scans_finished() == 1
+    rows = discovery.list_scans()
+    assert rows[0]["status"] == "finished"
+    assert rows[0]["finishedAt"] == stamp
 
 
 def test_bearer_header_for_v2_token(tmp_path):

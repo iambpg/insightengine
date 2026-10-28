@@ -42,10 +42,13 @@ touch_secret() {
   fi
 }
 
+# A distinct subnet so this project does not collide with a stack already using 10.50.0.0/24.
+SUBNET="10.254.$(( ($$ % 200) + 20 )).0/24"
 # compose interpolates the whole file, including services this test does not start.
 sed -E \
-  "s/^(CLIENT_NAME)=.*/\1='PG Persist'/; s/^(CLIENT_SLUG)=.*/\1='${SLUG}'/; s/^(PUBLIC_HOST)=.*/\1='127.0.0.1'/; s/^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*/\1='persist-test-secret'/; s/^ADMIN_BASIC_HASH=.*/ADMIN_BASIC_HASH='x'/; s#^INSTALL_DIR=.*#INSTALL_DIR='${ROOT}'#" \
+  "s/^(CLIENT_NAME)=.*/\1='PG Persist'/; s/^(CLIENT_SLUG)=.*/\1='${SLUG}'/; s/^(PUBLIC_HOST)=.*/\1='127.0.0.1'/; s/^MONITORING_SUBNET=.*/MONITORING_SUBNET=${SUBNET}/; s/^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*/\1='persist-test-secret'/; s/^ADMIN_BASIC_HASH=.*/ADMIN_BASIC_HASH='x'/; s#^INSTALL_DIR=.*#INSTALL_DIR='${ROOT}'#" \
   .env.example > "$TMP/env"
+echo "using subnet ${SUBNET}"
 
 for rel in \
   secrets/prometheus/netbox.token \

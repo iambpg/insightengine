@@ -20,6 +20,7 @@ Exit 0 when every check passes. Exit 1 and print one line per problem.
 from __future__ import annotations
 
 import ast
+import os
 import re
 import sys
 from pathlib import Path
@@ -92,10 +93,15 @@ def mount_kind(source: str, root: Path) -> str:
     path = Path(source)
     if not path.is_absolute():
         path = root / source
-    if path.is_dir():
-        return "dir"
-    if path.is_file():
-        return "file"
+    try:
+        if path.is_dir():
+            return "dir"
+        if path.is_file():
+            return "file"
+    except OSError:
+        # An installed tree can have root-owned mode 400 secrets. Stat failing
+        # must not crash the audit.
+        return "unknown"
     if "." in path.name:
         return "file"
     return "dir"
@@ -606,6 +612,22 @@ services:
     )
     if not any("PGDATA" in item or "/var/lib/postgresql/data" in item for item in bad_pg):
         failures.append(f"self-test postgres volume: {bad_pg}")
+    locked = Path("/tmp/ie-audit-locked")
+    if locked.exists():
+        import shutil
+        shutil.rmtree(locked, ignore_errors=True)
+    locked.mkdir()
+    secret = locked / "token"
+    secret.write_text("x", encoding="utf-8")
+    os.chmod(locked, 0)
+    try:
+        kind = mount_kind(str(secret), Path("/"))
+    finally:
+        os.chmod(locked, 0o755)
+        import shutil
+        shutil.rmtree(locked, ignore_errors=True)
+    if os.geteuid() != 0 and kind != "unknown":
+        failures.append(f"self-test mount_kind permission: {kind}")
     plugin_bad = plugin_errors(Path("/tmp/ie-audit-missing"))
     if not plugin_bad:
         failures.append("self-test plugin: missing tree was accepted")
