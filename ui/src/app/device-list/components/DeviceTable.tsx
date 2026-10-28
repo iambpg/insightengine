@@ -7,7 +7,6 @@ import EmptyState from '@/components/ui/EmptyState';
 import { HealthBadge } from '@/components/ui/Badge';
 import { devicePath } from '@/lib/apiMode';
 import { TableSkeleton } from '@/components/ui/Skeleton';
-import { devicePath } from '@/lib/apiMode';
 import type { DeviceRow } from '@/lib/types';
 import type { ColumnKey } from './ColumnMenu';
 import PortBar from './PortBar';

@@ -7,9 +7,9 @@
 # else from NETBOX_SUPERUSER_API_TOKEN in .env. The token is passed to curl via
 # a private header file (never on the command line, never printed).
 #
-# TODO(Phindani): NetBox 4.5+ uses v2 tokens ("nbt_<key>.<token>", sent as
-# "Authorization: Bearer ..."); older versions use "Token <token>". The script
-# picks the scheme from the prefix. Confirm against the NetBox version you pin.
+# NetBox 4.6 v2 tokens are "nbt_<key>.<secret>" with "Authorization: Bearer".
+# v1 "Authorization: Token" is deprecated in 4.6 and removed in 5.0.
+# scripts/lib-netbox-auth.sh picks the scheme and never prints the token.
 set -euo pipefail
 umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,15 +24,10 @@ if [ -z "$CLIENT_SLUG" ] || [ "$CLIENT_SLUG" = unconfigured ]; then
   exit 1
 fi
 
-tok=""
-if [ -n "${NETBOX_TOKEN_FILE:-}" ]; then tok="$(cat "$NETBOX_TOKEN_FILE")"
-elif [ -s secrets/prometheus/netbox.token ] && [ "$(cat secrets/prometheus/netbox.token)" != "unset-placeholder" ]; then tok="$(cat secrets/prometheus/netbox.token)"
-else tok="$(envval NETBOX_SUPERUSER_API_TOKEN)"; fi
-[ -n "$tok" ] || { echo "no API token available" >&2; exit 1; }
-
+# shellcheck disable=SC1091
+. "$(dirname "$0")/lib-netbox-auth.sh"
 hdr="$(mktemp)"; trap 'rm -f "$hdr"' EXIT
-case "$tok" in nbt_*) printf 'Authorization: Bearer %s\n' "$tok" > "$hdr" ;; *) printf 'Authorization: Token %s\n' "$tok" > "$hdr" ;; esac
-unset tok
+netbox_write_auth_header "$hdr" || { echo "no API token available" >&2; exit 1; }
 # Inside the setup container, NETBOX_INTERNAL_URL=http://netbox:8080 (the public --resolve target is the container itself).
 if [ -n "${NETBOX_INTERNAL_URL:-}" ]; then
   BASE="${NETBOX_INTERNAL_URL%/}"
@@ -65,6 +60,7 @@ N="$(json_str "$CLIENT_NAME")"; S="$(json_str "$CLIENT_SLUG")"
 ensure tenant /api/tenancy/tenants/ "$CLIENT_SLUG" "{\"name\": $N, \"slug\": $S}"
 ensure region /api/dcim/regions/    "$CLIENT_SLUG" "{\"name\": $N, \"slug\": $S}"
 ensure tag /api/extras/tags/ ie-scan '{"name":"ie-scan","slug":"ie-scan","color":"2196f3"}'
+ensure tag /api/extras/tags/ oxidized '{"name":"oxidized","slug":"oxidized","color":"ff9800"}'
 # Device roles the Prometheus jobs select. A device with one of these roles and a primary IP is monitored.
 for pair in \
   access-switch:"Access switch" \

@@ -6,6 +6,13 @@
 # schedule keys are the Netdisco worker names. The scheduler container also runs
 # discover/macsuck/arpnip for each prefix in scan-prefixes.txt.
 
+# SNMP timing comes from Settings → Netdisco → sync.yml (ie-config substitutes these).
+# snmptimeout is microseconds (1000000 = 1 second). snmp_try_slow_connect false
+# skips Netdisco's second, slow pass over addresses that did not answer.
+snmptimeout: ${SNMP_TIMEOUT_US}
+snmpretries: ${SNMP_RETRIES}
+snmp_try_slow_connect: ${SNMP_TRY_SLOW}
+
 device_auth:
   - tag: default
     community: ${SNMP_V2_COMMUNITY}

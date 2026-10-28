@@ -59,9 +59,18 @@ def now():
 # ----------------------------------------------------------------- persistence
 def _atomic_write(path, text, mode=0o600):
     tmp = "%s.tmp.%d" % (path, os.getpid())
+    st = os.stat(path) if os.path.exists(path) else None
+    if st is not None:
+        mode = st.st_mode & 0o777
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     with os.fdopen(fd, "w") as f:
         f.write(text)
+    os.chmod(tmp, mode)
+    if st is not None:
+        try:
+            os.chown(tmp, st.st_uid, st.st_gid)
+        except OSError:
+            pass
     os.replace(tmp, path)
 
 

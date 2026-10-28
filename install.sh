@@ -23,7 +23,9 @@
 #
 # Re-run: if .env exists and .install-started contains exactly past-secret-generation,
 # the script resumes at certificates, image build, and start. It does not regenerate
-# or print secrets, and it does not rewrite .env, ports, or secret files.
+# or print secrets that are already set. A missing or empty required key (an older
+# .env has no NETBOX_SUPERUSER_API_KEY) is filled in. Ports and other values stay.
+# Use --no-start when you still need to copy Postgres data before the stack starts.
 # --public-host and the port flags apply only when .env is first created.
 # If .env exists without that marker, the script stops and leaves .env untouched.
 #
@@ -49,22 +51,73 @@ gen() {  # gen <length>  -> random alphanumeric (hex) string, no special chars
   local n=$1
   openssl rand -hex $(( n / 2 + 1 )) | cut -c1-"$n"
 }
+# .env stays mode 600. Under sudo, give it back to the invoking user so a later
+# non-root `docker compose` can read it. Secret files keep their container owners.
+own_private_env() {
+  local f=$1 gid
+  [ -f "$f" ] || return 0
+  chmod 600 "$f" || true
+  if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    gid="$(id -g "$SUDO_USER" 2>/dev/null || true)"
+    if [ -n "$gid" ]; then
+      chown "$SUDO_USER:$gid" "$f" || true
+    fi
+  fi
+}
+# Collapse repeated KEY= lines (keep the last). Comments and blank lines stay.
+dedupe_env() {
+  local file=${1:-.env} tmp
+  [ -f "$file" ] || return 0
+  tmp="$(mktemp "${file}.XXXXXX")"
+  awk '
+    /^[A-Za-z_][A-Za-z0-9_]*=/ {
+      key = $0
+      sub(/=.*/, "", key)
+      last[key] = NR
+      text[NR] = $0
+      keys[NR] = key
+      assign[NR] = 1
+      next
+    }
+    { text[NR] = $0; assign[NR] = 0 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        if (assign[i] && last[keys[i]] != i) continue
+        print text[i]
+      }
+    }
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+  own_private_env "$file"
+}
 # setenv KEY VALUE : replace KEY=... in .env (value from the environment, so no
-# shell/sed escaping issues). QUOTE=single wraps the value in single quotes.
+# shell/sed escaping issues). The value is wrapped in single quotes.
+# Every exact KEY= line is replaced once; a missing key is appended once.
 setenv() {
-  local key=$1 val=$2 tmp
-  tmp="$(mktemp .env.XXXXXX)"
+  local key=$1 val=$2 tmp file
+  file="${ENV_FILE:-.env}"
+  tmp="$(mktemp "${file}.XXXXXX")"
   KEY="$key" VAL="$val" awk '
     BEGIN { k = ENVIRON["KEY"]; v = ENVIRON["VAL"]; done = 0 }
-    index($0, k "=") == 1 { print k "=\x27" v "\x27"; done = 1; next }
-    { print }
-    END { if (!done) print k "=\x27" v "\x27" }' .env > "$tmp"
-  mv "$tmp" .env
-  chmod 600 .env
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      if (index(line, k "=") == 1) {
+        if (!done) print k "=\x27" v "\x27"
+        done = 1
+        next
+      }
+      print line
+    }
+    END { if (!done) print k "=\x27" v "\x27" }
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+  own_private_env "$file"
 }
-getenv_val() {  # read a value back from .env (unquoted)
-  local line
-  line="$(grep -E "^$1=" .env | head -n1 || true)"; line="${line#*=}"; line="${line#\'}"; line="${line%\'}"; printf '%s' "$line"
+getenv_val() {  # read a value back from .env (unquoted). Last assignment wins.
+  local line file
+  file="${ENV_FILE:-.env}"
+  line="$(grep -E "^$1=" "$file" | tail -n1 || true)"; line="${line#*=}"; line="${line#\'}"; line="${line%\'}"; printf '%s' "$line"
 }
 
 # secret files must have NO trailing newline
@@ -295,6 +348,12 @@ print_port_table() {
   say "  SNMP traps        ${traps}/udp"
 }
 
+# Tests source this file to call setenv/dedupe_env. Stop before any install work.
+# scripts/test-env-once.sh sources this file. Return only in that case.
+if [ "${INSTALL_SH_SOURCE_ONLY:-}" = 1 ] && [ "${BASH_SOURCE[0]}" != "$0" ]; then
+  return 0
+fi
+
 PUBLIC_HOST_FROM_FLAG=0
 PUBLIC_HOST="${INSTALL_PUBLIC_HOST:-}"
 PORTS="${INSTALL_PORTS:-auto}"      # auto | alt | default
@@ -340,8 +399,44 @@ cleanup_env() {
 }
 trap cleanup_env EXIT
 
+# Fill a required secret only when the key is absent or empty. A non-empty
+# value is the one the running databases already use and must not be replaced.
+backfill_empty() {
+  local key=$1 len=$2 cur
+  cur="$(getenv_val "$key")"
+  if [ -z "$cur" ]; then
+    setenv "$key" "$(gen "$len")"
+    say "backfilled $key (missing or empty; existing secrets were not changed)"
+  fi
+}
+
 if [ "$RESUME" = 1 ]; then
   say "resuming install: secret generation already finished (.install-started). Continuing at certificates, image build, and start."
+  # Every compose `:?run install.sh` secret. Only NETBOX_SUPERUSER_API_KEY is new;
+  # the rest are filled solely if an older or partial .env left them blank.
+  backfill_empty NETBOX_SUPERUSER_API_KEY 12
+  backfill_empty NETBOX_SUPERUSER_API_TOKEN 40
+  backfill_empty NETBOX_SUPERUSER_PASSWORD 24
+  backfill_empty NETBOX_DB_PASSWORD 32
+  backfill_empty NETBOX_REDIS_PASSWORD 32
+  backfill_empty NETBOX_REDIS_CACHE_PASSWORD 32
+  backfill_empty NETBOX_SECRET_KEY 64
+  backfill_empty NETBOX_API_TOKEN_PEPPER_1 64
+  backfill_empty GRAFANA_ADMIN_PASSWORD 24
+  backfill_empty GRAFANA_SECRET_KEY 48
+  backfill_empty AP_ENCRYPTION_KEY 32
+  backfill_empty AP_JWT_SECRET 48
+  backfill_empty AP_POSTGRES_PASSWORD 32
+  backfill_empty AP_REDIS_PASSWORD 32
+  backfill_empty NETDISCO_DB_PASSWORD 32
+  backfill_empty IE_DB_PASSWORD 32
+  backfill_empty IE_CONFIG_DB_PASSWORD 32
+  oxf="$(getenv_val OXIDIZED_NETBOX_FILTER)"
+  if [ -z "$oxf" ] || [ "$oxf" = "status=active&tag=oxidized" ]; then
+    setenv OXIDIZED_NETBOX_FILTER "status=active"
+    say "Oxidized backs up every active device (status=active). tag=oxidized is optional and 400s until that tag exists."
+  fi
+  unset oxf
   if [ "$PUBLIC_HOST_FROM_FLAG" = 1 ] || [ -n "${INSTALL_PUBLIC_HOST:-}" ] || [ "$PORTS" != auto ]; then
     warn "--public-host, INSTALL_PUBLIC_HOST, and port choices apply only when .env is first created; this run keeps the existing .env"
   fi
@@ -379,6 +474,8 @@ else
   setenv NETBOX_SECRET_KEY "$(gen 64)"
   setenv NETBOX_API_TOKEN_PEPPER_1 "$(gen 64)"
   setenv NETBOX_SUPERUSER_PASSWORD "$(gen 24)"
+  # NetBox >= 4.5 v2 token: 12-character key + 40-character secret.
+  setenv NETBOX_SUPERUSER_API_KEY "$(gen 12)"
   setenv NETBOX_SUPERUSER_API_TOKEN "$(gen 40)"
   setenv AP_ENCRYPTION_KEY "$(gen 32)"
   setenv AP_JWT_SECRET "$(gen 48)"
@@ -414,10 +511,17 @@ else
   unset ADMIN_PW hash
 
   mkdir -p secrets
-  NB_TOKEN="$(getenv_val NETBOX_SUPERUSER_API_TOKEN)"
+  # v2 token string clients send: nbt_<key>.<secret> (Authorization: Bearer).
+  NB_TOKEN="nbt_$(getenv_val NETBOX_SUPERUSER_API_KEY).$(getenv_val NETBOX_SUPERUSER_API_TOKEN)"
+  case "$NB_TOKEN" in
+    nbt_*.*) ;;
+    *) die "could not build the NetBox API token" ;;
+  esac
   write_secret prometheus/netbox.token "$NB_TOKEN" 65534
   write_secret oxidized/netbox.token "$NB_TOKEN" 0
+  write_secret cust-exporter/netbox.token "$NB_TOKEN" 0
   unset NB_TOKEN
+  dedupe_env .env
   write_secret oxidized/device_username "" 0
   write_secret oxidized/device_password "" 0
   write_secret trapd/trap_community "" 10002
@@ -425,7 +529,6 @@ else
   for s in fortigate_token panos_api_key ise_credentials dnac_credentials sdwan_credentials; do
     write_secret "telegraf/$s" "" 10001
   done
-  write_secret cust-exporter/netbox.token "unset-placeholder" 0
   write_secret setup/token "$(gen 48)" 0
   [ "$PERM_WARN" = 1 ] && warn "not root: secret files for container users are mode 0644. Run 'sudo ./install.sh --fix-perms' to tighten them."
 
@@ -509,6 +612,8 @@ fi
 
 # ---- summary (no secrets printed) --------------------------------------------
 say ""
+if [ -f .env ]; then own_private_env .env; fi
+
 say "=== done ==="
 print_port_table
 say "Configuration : .env (mode 600) holds the generated passwords. This script does not print them."

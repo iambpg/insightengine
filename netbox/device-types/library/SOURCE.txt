@@ -1,0 +1,1 @@
+6a2703f7303e6f770bcfed16140ca2bc688a037a  netbox-community/devicetype-library (Mon Oct 26 2026 14:27 UTC); only Cisco, Fortinet, Palo Alto Networks; YAML only (no elevation-images)

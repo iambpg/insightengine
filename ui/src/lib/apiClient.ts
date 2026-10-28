@@ -15,6 +15,7 @@ import type {
   AuditPage,
   AuditQuery,
   DiffResult,
+  DiscoveryCatalog,
   DiscoveryScan,
   FileDocument,
   HistoryDocument,
@@ -126,6 +127,11 @@ export const api = {
   // BACKEND: GET /api/v1/discovery/unapproved
   async listDiscovered(): Promise<UnapprovedDevice[]> {
     return (await backend()).listDiscovered();
+  },
+
+  // BACKEND: GET /api/v1/discovery/catalog
+  async discoveryCatalog(): Promise<DiscoveryCatalog> {
+    return (await backend()).discoveryCatalog();
   },
 
   // BACKEND: GET /api/v1/alerts?status=&severity=&site=

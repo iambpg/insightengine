@@ -16,19 +16,10 @@ PORT_PROMETHEUS="$(envval PORT_PROMETHEUS)"; PORT_PROMETHEUS="${PORT_PROMETHEUS:
 SLUG="$(envval CLIENT_SLUG)"
 if [ -z "$SLUG" ] || [ "$SLUG" = unconfigured ]; then echo "finish first-run setup first" >&2; exit 1; fi
 
-tok=""
-if [ -s secrets/prometheus/netbox.token ] && [ "$(cat secrets/prometheus/netbox.token)" != "unset-placeholder" ]; then
-  tok="$(cat secrets/prometheus/netbox.token)"
-else
-  tok="$(envval NETBOX_SUPERUSER_API_TOKEN)"
-fi
-[ -n "$tok" ] || { echo "no NetBox token" >&2; exit 1; }
+# shellcheck disable=SC1091
+. "$(dirname "$0")/lib-netbox-auth.sh"
 hdr="$(mktemp)"; trap 'rm -f "$hdr"' EXIT
-case "$tok" in
-  nbt_*) printf 'Authorization: Bearer %s\n' "$tok" > "$hdr" ;;
-  *) printf 'Authorization: Token %s\n' "$tok" > "$hdr" ;;
-esac
-unset tok
+netbox_write_auth_header "$hdr" || { echo "no NetBox token" >&2; exit 1; }
 
 NB="https://${PUBLIC_HOST}:${PORT_NETBOX}"
 nb() { # METHOD PATH [json]

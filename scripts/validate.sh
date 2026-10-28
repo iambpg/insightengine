@@ -19,7 +19,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 ENVFILE=.env
 if [ ! -f .env ]; then
   ENVFILE="$TMP/env"
-  sed -E "s/^(CLIENT_NAME)=.*/\1='Example Client'/; s/^(CLIENT_SLUG)=.*/\1='example-client'/; s/^(PUBLIC_HOST)=.*/\1='monitor.example.invalid'/; s/^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|ENCRYPTION_KEY|JWT_SECRET))=.*/\1='dummy-value-for-validation'/; s/^ADMIN_BASIC_HASH=.*/ADMIN_BASIC_HASH='dummy'/; s#^INSTALL_DIR=.*#INSTALL_DIR='$ROOT'#" .env.example > "$ENVFILE"
+  sed -E "s/^(CLIENT_NAME)=.*/\1='Example Client'/; s/^(CLIENT_SLUG)=.*/\1='example-client'/; s/^(PUBLIC_HOST)=.*/\1='monitor.example.invalid'/; s/^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*/\1='dummy-value-for-validation'/; s/^ADMIN_BASIC_HASH=.*/ADMIN_BASIC_HASH='dummy'/; s#^INSTALL_DIR=.*#INSTALL_DIR='$ROOT'#" .env.example > "$ENVFILE"
   echo "note: no .env yet - validating with dummy values (nothing is written to .env)"
 fi
 

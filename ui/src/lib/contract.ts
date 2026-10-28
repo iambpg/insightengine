@@ -196,6 +196,14 @@ export interface ApproveBody {
   platform?: string;
 }
 
+/** GET /api/v1/discovery/catalog — live NetBox names for the approve form. */
+export interface DiscoveryCatalog {
+  ok?: boolean;
+  roles: string[];
+  sites: string[];
+  platforms: string[];
+}
+
 export type ScanTarget = 'prefix' | 'ip';
 export type ScanStatus = 'queued' | 'running' | 'finished' | 'failed';
 

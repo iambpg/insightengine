@@ -11,30 +11,9 @@ import Modal from '@/components/ui/Modal';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
-import type { DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
+import type { DiscoveryCatalog, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
 
-const ROLE_OPTIONS = [
-  'Access switch',
-  'Core switch',
-  'Firewall',
-  'Router',
-  'Access point',
-  'Wireless controller',
-  'Server',
-  'Unknown',
-];
-const SITE_OPTIONS = [
-  'Rotterdam-Havenstraat-214',
-  'Utrecht-Centrum-482',
-  'Eindhoven-Strijp-731',
-  'Amsterdam-Zuidas-105',
-  'Leiden-Bio-566',
-  'Groningen-Noord-317',
-  'Zwolle-Station-209',
-  'Breda-Chasse-640',
-  'Arnhem-Rijn-853',
-];
-const PLATFORM_OPTIONS = ['ios-xe', 'ios', 'nxos', 'junos', 'fortios', 'aoscx'];
+const EMPTY_CATALOG: DiscoveryCatalog = { roles: [], sites: [], platforms: [] };
 
 function stamp(value: string): string {
   const date = new Date(value);
@@ -54,6 +33,7 @@ export default function NotInNetBoxView() {
   const [form, setForm] = useState({ role: '', site: '', name: '', platform: '' });
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
+  const [catalog, setCatalog] = useState<DiscoveryCatalog>(EMPTY_CATALOG);
   const [target, setTarget] = useState<'ip' | 'prefix'>('ip');
   const [scanValue, setScanValue] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -70,6 +50,27 @@ export default function NotInNetBoxView() {
         setError('Failed to load discovered devices. Check your connection and try again.')
       );
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .discoveryCatalog()
+      .then((data) => {
+        if (!cancelled) {
+          setCatalog({
+            roles: data.roles ?? [],
+            sites: data.sites ?? [],
+            platforms: data.platforms ?? [],
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog(EMPTY_CATALOG);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -571,17 +572,17 @@ export default function NotInNetBoxView() {
               />
             </label>
             <datalist id="disc-roles">
-              {ROLE_OPTIONS.map((option) => (
+              {catalog.roles.map((option) => (
                 <option key={option} value={option} />
               ))}
             </datalist>
             <datalist id="disc-sites">
-              {SITE_OPTIONS.map((option) => (
+              {catalog.sites.map((option) => (
                 <option key={option} value={option} />
               ))}
             </datalist>
             <datalist id="disc-platforms">
-              {PLATFORM_OPTIONS.map((option) => (
+              {catalog.platforms.map((option) => (
                 <option key={option} value={option} />
               ))}
             </datalist>

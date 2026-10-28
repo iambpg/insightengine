@@ -371,6 +371,18 @@ def test_discovery_scan_and_ui_shapes(world):
     assert rows[0]["ip"] == "10.1.1.1"
     assert rows[0]["suggested"] == {"role": "access-switch", "site": "rotterdam"}
     assert isinstance(rows[0]["id"], str)
+    # NetBox is not up. Approval must fail without removing the candidate, and the
+    # catalog endpoint must answer even when NetBox cannot be read.
+    failed = client.post(
+        "/api/v1/discovery/%s/approve" % rows[0]["id"],
+        headers={"X-CSRF-Token": csrf},
+        json={"role": "Access switch", "site": "Test Site", "platform": "ios"},
+    )
+    assert failed.status_code == 502
+    assert client.get("/api/v1/discovery/unapproved").json()[0]["ip"] == "10.1.1.1"
+    catalog = client.get("/api/v1/discovery/catalog").json()
+    assert catalog["ok"] is False
+    assert catalog["roles"] == [] and catalog["sites"] == [] and catalog["platforms"] == []
 
     overview = client.get("/api/v1/settings/overview").json()
     assert overview["generatedAt"]

@@ -18,7 +18,7 @@ from sqlalchemy import select
 from .actions import Reloader, container_states
 from .auth import SETTINGS_ROLES, Auth, check_bearer, client_ip, read_setup_token, require_csrf, validate_email, validate_password
 from .db import AuditRow, make_session_factory
-from .discovery import Discovery, NetBoxWriter, guess_device, load_yaml, unapproved_for_ui
+from .discovery import Discovery, NetBoxWriter, guess_device, load_device_aliases, load_yaml, unapproved_for_ui
 from .errors import ApiError, error_body
 from .fleet import mount_fleet
 from .masking import leftover_placeholders, mask_text, restore_secrets
@@ -124,17 +124,25 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                 discovery.render_deployment()
             except Exception as exc:
                 log.warning("initial netdisco render failed: %s", exc.__class__.__name__)
-            last = 0.0
-            while not stop.wait(60):
+            # Prefixes are polled about once a minute. The heavy Netdisco walk stays on
+            # interval_hours. The queue is refreshed after each pass so a device found
+            # by the scheduler shows up on this cycle, not the next one.
+            while not stop.is_set():
+                cfg = {}
                 try:
                     cfg = discovery.read_sync_settings()
-                    hours = int(cfg.get("interval_hours") or 6)
-                    if time.time() - last >= max(1, hours) * 3600:
-                        discovery.sync_prefixes()
-                        discovery.refresh_unapproved()
-                        last = time.time()
+                    discovery.sync_prefixes()
+                    discovery.refresh_unapproved()
+                    discovery.note_scans_finished()
                 except Exception as exc:
                     log.warning("discovery loop: %s", exc.__class__.__name__)
+                try:
+                    poll = int(cfg.get("prefix_poll_seconds") or 60)
+                except (TypeError, ValueError):
+                    poll = 60
+                poll = min(300, max(15, poll))
+                if stop.wait(poll):
+                    break
 
         thread = None
         if settings.scheduler:
@@ -605,9 +613,16 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         if action.kind == "generate":
             return _generate(spec)
         if action.id == "scan-now":
+            # Sync first so a prefix added a moment ago is in scan-prefixes.txt
+            # before the scheduler wakes up.
+            synced = discovery.sync_prefixes()
             discovery.request_scan()
-            result = {"ok": True, "message": "scan requested; the Netdisco scheduler will pick it up within a minute"}
-            _audit(sf, user, "scan-now", client_ip(request), "ok", spec.id)
+            result = {
+                "ok": bool(synced.get("ok", True)),
+                "message": "prefixes synced; scan requested; the Netdisco scheduler will pick it up within a minute",
+                "prefixes": synced.get("prefixes") or [],
+            }
+            _audit(sf, user, "scan-now", client_ip(request), "ok" if result["ok"] else "failed", spec.id, "", "", synced.get("message") or "")
             return result
         if action.id == "sync-prefixes":
             result = discovery.sync_prefixes()
@@ -672,6 +687,12 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         _audit(sf, user, "mib-delete", client_ip(request), "ok", "snmp-generator", "", name)
         return {"ok": True}
 
+    @app.get("/api/v1/discovery/catalog")
+    def discovery_catalog(request: Request):
+        user, _csrf = user_of(request)
+        require_reader(user)
+        return discovery.catalog()
+
     @app.get("/api/v1/discovery/unapproved")
     def unapproved(request: Request):
         user, _csrf = user_of(request)
@@ -692,8 +713,15 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                 raise ApiError(404, "not_found", "unknown discovery candidate")
             if row.status != "pending":
                 raise ApiError(409, "not_pending", "this candidate is already %s" % row.status)
-            candidate = {"ip": row.ip, "name": body.get("name") or row.name, "site": body.get("site") or row.site_slug,
-                         "sysdescr": row.sysdescr, "sysobjectid": row.sysobjectid}
+            candidate = {
+                "ip": row.ip,
+                "name": body.get("name") or row.name,
+                "site": body.get("site") or row.site_slug,
+                "sysdescr": row.sysdescr,
+                "sysobjectid": row.sysobjectid,
+                "vendor": row.vendor,
+                "model": row.model,
+            }
             stored_guess = {}
             try:
                 stored_guess = json.loads(row.detail or "{}")
@@ -704,11 +732,17 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         guess.update({k: v for k, v in stored_guess.items() if v})
         if body.get("role"):
             guess["role"] = body["role"]
+        if body.get("platform"):
+            guess["platform"] = body["platform"]
         headers = discovery.netbox_headers()
         if not headers:
             raise ApiError(503, "netbox_token", "NetBox API token is not configured")
         try:
-            created = NetBoxWriter(settings.netbox_url, headers).approve_device(candidate, guess, discovery.read_sync_settings())
+            # The only NetBox device create on the discovery path. Reject and the
+            # unapproved list never call this.
+            created = NetBoxWriter(settings.netbox_url, headers).approve_device(
+                candidate, guess, discovery.read_sync_settings(), load_device_aliases(discovery.alias_path()),
+            )
         except Exception as exc:
             _audit(sf, user, "discovery-approve", client_ip(request), "failed", "netdisco", "", "", exc.__class__.__name__)
             raise ApiError(502, "netbox_error", "NetBox did not accept the device")
