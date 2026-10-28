@@ -167,6 +167,17 @@ def monitoring_snmp_from_context(config_context: Any) -> Any:
     return None
 
 
+def _invalid_fallback(env, name: str, exc: Exception) -> dict:
+    """A broken monitoring_snmp must not stop the sync: the device keeps the .env scrape path.
+
+    ``invalid`` carries the validation message (it never contains a secret value).
+    """
+    fallback = fallback_from_env(env)
+    out = {"profile": fallback, "auth": env_auth_name(fallback) if fallback else "", "source": "env",
+           "profile_name": name, "invalid": str(exc)}
+    return out
+
+
 def resolve_device(config_context: Any, env: dict[str, str] | None, file_profiles: dict | None) -> dict:
     """Resolve one rendered config context.
 
@@ -179,7 +190,10 @@ def resolve_device(config_context: Any, env: dict[str, str] | None, file_profile
         name = _text(raw.get("profile"))
         stored = file_profiles.get(name)
         if isinstance(stored, dict):
-            profile = validate_profile(stored)
+            try:
+                profile = validate_profile(stored)
+            except SnmpProfileError as exc:
+                return _invalid_fallback(env, name, exc)
             return {"profile": profile, "auth": auth_name(profile), "source": "file", "profile_name": name}
         # Named profile missing from the root file: do not invent secrets.
         fallback = fallback_from_env(env)
@@ -187,7 +201,10 @@ def resolve_device(config_context: Any, env: dict[str, str] | None, file_profile
             return {"profile": None, "auth": "", "source": "env", "profile_name": name}
         return {"profile": fallback, "auth": env_auth_name(fallback), "source": "env", "profile_name": name}
     if isinstance(raw, dict) and raw.get("version"):
-        profile = validate_profile(raw)
+        try:
+            profile = validate_profile(raw)
+        except SnmpProfileError as exc:
+            return _invalid_fallback(env, "", exc)
         return {"profile": profile, "auth": auth_name(profile), "source": "context", "profile_name": ""}
     fallback = fallback_from_env(env)
     if fallback is None:

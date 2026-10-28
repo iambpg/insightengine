@@ -13,8 +13,12 @@ When a device's rendered context has no `monitoring_snmp` object, Prometheus and
 ie-config reads each active device with the service token, hashes the resolved profile, and:
 
 - writes `data/snmp/auth-by-ip.yml` (addresses and auth names only) for the NetBox `prometheus-devices` HTTP SD source, which sets `__meta_netbox_snmp_auth`; Prometheus already copies that label to `__param_auth`
-- writes `data/snmp/snmp.runtime.yml` (mode 0600) with one `auths:` entry per distinct profile and reloads the snmp-exporters via `POST /-/reload`
+- writes `data/snmp/snmp.runtime.yml` (mode 0600) with one `auths:` entry per distinct profile (only the generated auths; the exporters layer it over the committed `snmp.yml`, see `config/snmp/snmp-exporter-run.sh`) and reloads the snmp-exporters via `POST /-/reload`
 - adds Netdisco `device_auth` entries with `only:` set to those addresses, ahead of the `.env` fallback entry
+
+A sync runs every 5 minutes and right after a save through Settings → SNMP. A context edited directly in NetBox is picked up at the next pass. The "test device" action does a v2c GET from ie-config; for v3 it asks an exporter to scrape the device's `system` module with the generated auth, so a v3 profile saved less than a few seconds ago can answer `auth_not_loaded` until the sync has finished.
+
+`snmp_exporter` expands `${VAR}` in `username`, `password` and `priv_password` only (with `--config.expand-environment-variables`). It does not expand `community`, so the exporter start script resolves `community: ${SNMP_V2_COMMUNITY}` from its environment before starting. A `$` in a generated community is not escaped for that reason.
 
 `snmp/out/snmp.yml` stays free of literal communities and passphrases. The runtime file is not in git (`data/` is ignored).
 
@@ -26,6 +30,12 @@ Settings → SNMP can use either storage:
 |---|---|---|
 | Context (default) | The full `monitoring_snmp` object | In NetBox, returned in plain text by the config-context API |
 | File | `{"monitoring_snmp":{"profile":"<name>"}}` only | `data/snmp/profiles.json`, mode 0600, on this host |
+
+In both modes `data/snmp/profiles.json` (mode 0600) keeps a copy of the secrets saved through Settings → SNMP, so that a later save with blank secret fields keeps the stored value. It is never served. Profiles that exist only as a hand-made config context are not copied there.
+
+NetBox deep-merges the config contexts that match a device, so keys from a lower-weight context survive under a higher-weight one (a `{"profile": "x"}` context over a full v3 context still contains `version`, and the full profile wins). Give every `monitoring_snmp` context the same shape and use the weight only to pick the winner.
+
+Generated files that hold secrets, all mode 0600 and root-owned: `data/snmp/profiles.json`, `data/snmp/assignments.json` (the input for the Netdisco `device_auth` rendering), `data/snmp/snmp.runtime.yml`. `data/snmp/auth-by-ip.yml` (0644) holds only IP to auth names. A device whose `monitoring_snmp` fails validation is logged by device id (never by value), skipped in the generated files, and keeps the `.env` fallback; the sync of every other device carries on. Prometheus reads the http_sd list every 5 minutes, so a removed or renamed auth can answer `400` for up to that long.
 
 The Settings API never returns a community or passphrase. Saving a profile sends those fields once. Leaving them blank on a later save keeps the stored value. They are not written to logs.
 

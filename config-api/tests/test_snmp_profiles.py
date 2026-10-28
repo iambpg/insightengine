@@ -20,8 +20,11 @@ from ie_config.snmp_profiles import (  # noqa: E402
 )
 from ie_config.snmp_sync import (  # noqa: E402
     auth_map_from_rows,
+    context_public_rows,
+    exporter_probe,
     grouped_profiles,
     iter_resolved,
+    snmp_test,
     snmp_v2c_get,
     snmp_v2c_get_packet,
     splice_device_auth,
@@ -125,8 +128,10 @@ def test_runtime_file_adds_auths_and_hides_them_from_the_map(tmp_path):
     summary = write_outputs(str(tmp_path), str(base_path), rows)
     assert summary["profiles"] == 1
     runtime = (tmp_path / "snmp.runtime.yml").read_text(encoding="utf-8")
-    assert "modules:" in runtime
-    assert "if_mib" in runtime
+    # Only the generated auths: the exporter layers this over the committed snmp.yml and
+    # rejects a key that is present in both files.
+    assert "modules:" not in runtime
+    assert "ntt_snmpv3_auth" not in runtime
     assert auth_name(profile) in runtime
     assert "auth-secret-value" in runtime
     auth_map = (tmp_path / "auth-by-ip.yml").read_text(encoding="utf-8")
@@ -171,3 +176,84 @@ def test_v2c_packet_contains_the_community_and_the_result_does_not():
     assert response_contains_secret(result, [COMMUNITY]) == ""
     blob = json.dumps(result)
     assert COMMUNITY not in blob
+
+
+def test_runtime_file_holds_only_generated_auths_and_keeps_dollar_in_community(tmp_path):
+    import yaml
+    base_path = tmp_path / "snmp.yml"
+    base_path.write_text("auths:\n  ie_snmp_v2:\n    community: ${SNMP_V2_COMMUNITY}\nmodules:\n  if_mib: {}\n", encoding="utf-8")
+    profile = validate_profile({"version": "2c", "community": "pa$$word"})
+    rows = iter_resolved([{"id": 1, "name": "sw", "primary_ip4": "10.9.9.8", "config_context": {"monitoring_snmp": profile}}], {}, {})
+    write_outputs(str(tmp_path), str(base_path), rows)
+    runtime = yaml.safe_load((tmp_path / "snmp.runtime.yml").read_text(encoding="utf-8"))
+    assert list(runtime) == ["auths"]
+    assert list(runtime["auths"]) == [auth_name(profile)]
+    # snmp_exporter does not expand env vars in ``community``, so it is not escaped.
+    assert runtime["auths"][auth_name(profile)]["community"] == "pa$$word"
+
+
+def test_runtime_file_without_profiles_is_valid_and_empty(tmp_path):
+    import yaml
+    write_outputs(str(tmp_path), str(tmp_path / "missing.yml"), [])
+    runtime = yaml.safe_load((tmp_path / "snmp.runtime.yml").read_text(encoding="utf-8"))
+    assert runtime == {"auths": {}}
+
+
+class _Resp:
+    def __init__(self, status):
+        self.status = status
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_v3_test_goes_through_the_exporter_and_reports_a_status_without_secrets():
+    import urllib.error
+    profile = validate_profile(EXAMPLE)
+    seen = []
+
+    def opener(url, timeout=0):
+        seen.append(url)
+        return _Resp(200)
+
+    ok = snmp_test(profile, "10.0.0.1", exporter_get=lambda host, auth, port: exporter_probe(host, auth, port, ["http://x:9116"], opener))
+    assert ok["ok"] is True and ok["auth"] == auth_name(profile)
+    assert "auth=" + auth_name(profile) in seen[0] and "target=10.0.0.1" in seen[0] and "module=system" in seen[0]
+    assert "auth-secret-value" not in json.dumps(ok) + seen[0]
+
+    def unknown_auth(url, timeout=0):
+        raise urllib.error.HTTPError(url, 400, "bad", {}, None)
+
+    res = snmp_test(profile, "10.0.0.1", exporter_get=lambda h, a, p: exporter_probe(h, a, p, ["http://x:9116"], unknown_auth))
+    assert res == {"ok": False, "version": "3", "auth": auth_name(profile), "error": "auth_not_loaded"}
+
+    def down(url, timeout=0):
+        raise urllib.error.URLError("refused")
+
+    res = snmp_test(profile, "10.0.0.1", exporter_get=lambda h, a, p: exporter_probe(h, a, p, ["http://x:9116"], down))
+    assert res["ok"] is False and res["error"] == "exporter_unreachable"
+
+
+def test_settings_list_reports_the_devices_each_profile_applies_to():
+    profile = validate_profile(EXAMPLE)
+    contexts = [{"id": 1, "name": "a", "weight": 10, "data": {"monitoring_snmp": profile}}]
+    rows = context_public_rows(contexts, {}, {"groups": [{"auth": auth_name(profile), "ips": ["10.1.1.1"]}]})
+    assert rows[0]["applies_to"] == ["10.1.1.1"]
+    assert context_public_rows(contexts, {})[0]["applies_to"] == []
+
+
+def test_invalid_context_falls_back_to_env_and_does_not_stop_the_sync(tmp_path):
+    from ie_config.snmp_profiles import resolve_device
+    env = {"SNMP_V2_COMMUNITY": "envcomm"}
+    for raw in ({"version": "9", "community": "x"}, {"version": "2c"}, {"version": "3"}):
+        out = resolve_device({"monitoring_snmp": raw}, env, {})
+        assert out["source"] == "env" and out["invalid"] and out["auth"] == "ie_snmp_v2"
+        assert "x" not in out["invalid"].split() and "envcomm" not in out["invalid"]
+    stored = {"bad": {"version": "2c"}}
+    out = resolve_device({"monitoring_snmp": {"profile": "bad"}}, env, stored)
+    assert out["source"] == "env" and out["invalid"]
+    out = resolve_device({"monitoring_snmp": {"version": "2c", "community": "ok"}}, env, {})
+    assert out["source"] == "context" and "invalid" not in out

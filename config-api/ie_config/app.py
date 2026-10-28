@@ -700,11 +700,31 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         if user.role != "Administrator":
             raise ApiError(403, "forbidden", "SNMP credentials are restricted to Administrators")
 
+    async def snmp_json_body(request: Request):
+        try:
+            return await request.json()
+        except ValueError:
+            raise ApiError(400, "bad_body", "body must be valid JSON")
+
+    def snmp_sync_soon():
+        """Best effort: apply a saved profile now instead of at the next 5 minute pass."""
+        if not settings.scheduler:
+            return
+
+        def run():
+            try:
+                from .snmp_sync import sync_snmp
+                sync_snmp(settings, discovery)
+            except Exception as exc:
+                log.warning("snmp sync after save: %s", exc.__class__.__name__)
+
+        threading.Thread(target=run, name="snmp-sync-now", daemon=True).start()
+
     @app.get("/api/v1/settings/snmp")
     def snmp_profiles(request: Request):
         user, _csrf = user_of(request)
         require_admin(user)
-        from .snmp_sync import context_public_rows, list_contexts, read_file_profiles, read_mode, snmp_dir
+        from .snmp_sync import ASSIGNMENTS_NAME, context_public_rows, list_contexts, read_file_profiles, read_json, read_mode, snmp_dir
         directory = snmp_dir(settings)
         try:
             contexts = list_contexts(settings)
@@ -713,7 +733,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
             contexts = []
         return {
             "secret_mode": read_mode(directory),
-            "profiles": context_public_rows(contexts, read_file_profiles(directory)),
+            "profiles": context_public_rows(contexts, read_file_profiles(directory), read_json(os.path.join(directory, ASSIGNMENTS_NAME), {})),
             "fallback": "env",
         }
 
@@ -721,7 +741,9 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     async def snmp_mode(request: Request):
         user, _csrf = user_of(request)
         require_admin(user)
-        body = await request.json()
+        body = await snmp_json_body(request)
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
         from .snmp_profiles import SnmpProfileError
         from .snmp_sync import snmp_dir, write_mode
         try:
@@ -729,13 +751,14 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         except SnmpProfileError as exc:
             raise ApiError(400, "bad_profile", str(exc))
         _audit(sf, user, "snmp-mode", client_ip(request), "ok", "snmp", "", "", (body or {}).get("secret_mode") or "")
+        snmp_sync_soon()
         return {"ok": True, "secret_mode": (body or {}).get("secret_mode")}
 
     @app.post("/api/v1/settings/snmp/profiles")
     async def snmp_save(request: Request):
         user, _csrf = user_of(request)
         require_admin(user)
-        body = await request.json()
+        body = await snmp_json_body(request)
         if not isinstance(body, dict):
             raise ApiError(400, "bad_body", "body must be a JSON object")
         from .snmp_profiles import SnmpProfileError
@@ -748,18 +771,23 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
             log.warning("snmp save: %s", exc.__class__.__name__)
             raise ApiError(502, "netbox_error", "NetBox did not store the SNMP profile")
         _audit(sf, user, "snmp-profile", client_ip(request), "ok", "snmp", "", "", saved.get("auth") or saved.get("name") or "")
+        snmp_sync_soon()
         return saved
 
     @app.post("/api/v1/settings/snmp/test")
     async def snmp_test_route(request: Request):
         user, _csrf = user_of(request)
         require_admin(user)
-        body = await request.json()
+        body = await snmp_json_body(request)
         if not isinstance(body, dict) or not body.get("device_id"):
             raise ApiError(400, "bad_body", "device_id is required")
         from .snmp_sync import test_device
         try:
-            result = test_device(settings, int(body["device_id"]))
+            device_id = int(body["device_id"])
+        except (TypeError, ValueError):
+            raise ApiError(400, "bad_body", "device_id must be a number")
+        try:
+            result = test_device(settings, device_id)
         except Exception as exc:
             log.warning("snmp test: %s", exc.__class__.__name__)
             raise ApiError(502, "snmp_test_failed", "the SNMP test did not complete")
