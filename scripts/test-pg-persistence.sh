@@ -19,7 +19,25 @@ if [ "${1:-}" = "--self-test" ]; then
     .env.example > "$tmp/env"
   grep -q "^MONITORING_SUBNET=${SUBNET}$" "$tmp/env"
   grep -q "^INSTALL_DIR='${ROOT}'$" "$tmp/env"
-  echo "PASS  persistence env sed accepts a subnet containing /"
+  printf '%s\n' \
+    "NETBOX_DB_PASSWORD=old|value" \
+    "GRAFANA_SECRET_KEY=old" \
+    "NETBOX_API_TOKEN_PEPPER_1=old" \
+    "NETBOX_SUPERUSER_API_TOKEN=old" \
+    "NETBOX_SUPERUSER_API_KEY=old" \
+    "AP_ENCRYPTION_KEY=old" \
+    "AP_JWT_SECRET=old" \
+    "CLIENT_NAME=keep" \
+    > "$tmp/in"
+  sed -E \
+    "s#^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*#\1='persist-test-secret'#" \
+    "$tmp/in" > "$tmp/secrets"
+  for key in NETBOX_DB_PASSWORD GRAFANA_SECRET_KEY NETBOX_API_TOKEN_PEPPER_1 \
+    NETBOX_SUPERUSER_API_TOKEN NETBOX_SUPERUSER_API_KEY AP_ENCRYPTION_KEY AP_JWT_SECRET; do
+    grep -qx "${key}='persist-test-secret'" "$tmp/secrets"
+  done
+  grep -qx "CLIENT_NAME=keep" "$tmp/secrets"
+  echo "PASS  persistence env sed accepts a subnet containing / and a secrets alternation containing |"
   exit 0
 fi
 
@@ -59,7 +77,7 @@ touch_secret() {
 SUBNET="10.254.$(( ($$ % 200) + 20 )).0/24"
 # compose interpolates the whole file, including services this test does not start.
 sed -E \
-  "s|^(CLIENT_NAME)=.*|\1='PG Persist'|; s|^(CLIENT_SLUG)=.*|\1='${SLUG}'|; s|^(PUBLIC_HOST)=.*|\1='127.0.0.1'|; s|^MONITORING_SUBNET=.*|MONITORING_SUBNET=${SUBNET}|; s|^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*|\1='persist-test-secret'|; s|^ADMIN_BASIC_HASH=.*|ADMIN_BASIC_HASH='x'|; s#^INSTALL_DIR=.*#INSTALL_DIR='${ROOT}'#" \
+  "s|^(CLIENT_NAME)=.*|\1='PG Persist'|; s|^(CLIENT_SLUG)=.*|\1='${SLUG}'|; s|^(PUBLIC_HOST)=.*|\1='127.0.0.1'|; s|^MONITORING_SUBNET=.*|MONITORING_SUBNET=${SUBNET}|; s#^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*#\1='persist-test-secret'#; s|^ADMIN_BASIC_HASH=.*|ADMIN_BASIC_HASH='x'|; s#^INSTALL_DIR=.*#INSTALL_DIR='${ROOT}'#" \
   .env.example > "$TMP/env"
 echo "using subnet ${SUBNET}"
 
