@@ -54,7 +54,10 @@ case "$cmd" in
         log "requesting snapshot from the old Prometheus (admin API)"
         resp="$(curl -fsS -m 300 -X POST "$url/api/v1/admin/tsdb/snapshot")" || { log "snapshot call failed (admin API not enabled? use --from-dir)"; exit 1; }
         name="$(printf '%s' "$resp" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')"
-        [ -n "$name" ] && [ -d "$olddir/snapshots/$name" ] || { log "snapshot not found under $olddir/snapshots"; exit 1; }
+        if [ -z "$name" ] || [ ! -d "$olddir/snapshots/$name" ]; then
+          log "snapshot not found under $olddir/snapshots"
+          exit 1
+        fi
         src="$olddir/snapshots/$name"
         log "snapshot $name ready (left in the old data dir; remove it yourself later)"
         ;;

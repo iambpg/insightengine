@@ -125,6 +125,9 @@ x-netbox: &netbox
     SUPERUSER_NAME: ${NETBOX_SUPERUSER_NAME:-admin}
     SUPERUSER_EMAIL: ${NETBOX_SUPERUSER_EMAIL:-admin@localhost}
     SUPERUSER_PASSWORD: ${NETBOX_SUPERUSER_PASSWORD:?run install.sh}
+    # NetBox 4.6 creates the v2 API token only when both are set (super_user.py).
+    # Clients send Bearer nbt_<SUPERUSER_API_KEY>.<SUPERUSER_API_TOKEN>.
+    SUPERUSER_API_KEY: ${NETBOX_SUPERUSER_API_KEY:?run install.sh}
     SUPERUSER_API_TOKEN: ${NETBOX_SUPERUSER_API_TOKEN:?run install.sh}
     METRICS_ENABLED: "true"
     WEBHOOKS_ENABLED: "true"
@@ -235,6 +238,27 @@ secrets:
   sdwan_credentials:
     file: ./secrets/telegraf/sdwan_credentials
 
+# Stateful data audit (postgres:17.9 vs postgres 18):
+#   netbox-postgres, insightengine-postgres: image VOLUME is /var/lib/postgresql/data
+#     and PGDATA defaults there. Mount the named volume at that path and set
+#     PGDATA to .../data/pgdata so a leftover empty data/ directory (from the old
+#     parent mount) does not make initdb refuse to start. Do not mount the parent
+#     /var/lib/postgresql: Docker still creates an anonymous volume at the image
+#     VOLUME and `compose down` orphans it.
+#   activepieces-postgres: postgres:17, named volume already at /var/lib/postgresql/data
+#     (matches the image VOLUME). Leave PGDATA unset so existing clusters stay
+#     at the volume root.
+#   netdisco-postgres: PostgreSQL 18 image, PGDATA=/var/lib/postgresql/18/docker,
+#     named volume at /var/lib/postgresql. That match is correct; do not move it.
+#   redis (netbox, netbox cache, activepieces): image VOLUME /data, named volumes
+#     at /data. Queue redis uses AOF. The cache instance is disposable.
+#   prometheus /prometheus, alertmanager /alertmanager, grafana /var/lib/grafana,
+#     loki /loki, caddy /data and /config, oxidized config+data, trapd-state,
+#     netbox media/reports/scripts, netdisco-local: named volumes on the path
+#     the process writes. Init scripts under docker-entrypoint-initdb.d run only
+#     when PGDATA is empty, so a migrated cluster is not re-seeded.
+#   ie-config history, setup state, secrets, certificates: bind mounts on the
+#     project directory, so they survive compose down.
 volumes:
   prom-data:
   alertmanager-data:
@@ -849,6 +873,8 @@ services:
       POSTGRES_DB: ${NETBOX_DB_NAME:-netbox}
       POSTGRES_USER: ${NETBOX_DB_USER:-netbox}
       POSTGRES_PASSWORD: ${NETBOX_DB_PASSWORD:?run install.sh}
+      # Inside the named volume. See the volume audit above.
+      PGDATA: /var/lib/postgresql/data/pgdata
     command:
       - postgres
       - -c
@@ -871,7 +897,7 @@ services:
       - wal_compression=on
     shm_size: 1g
     volumes:
-      - netbox-postgres-data:/var/lib/postgresql
+      - netbox-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -q -t 2 -d $$POSTGRES_DB -U $$POSTGRES_USER"]
       interval: 10s
@@ -945,7 +971,9 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 120s
+      # Empty-database migrate on NetBox 4.6 exceeds 5 minutes. start_period
+      # is grace before failed checks count, so dependents wait this long.
+      start_period: 900s
     deploy:
       resources:
         limits: {memory: "${NETBOX_MEM:-4g}", cpus: "${NETBOX_CPUS:-4}"}   # ESTIMATE
@@ -953,6 +981,10 @@ services:
 
   netbox-worker:
     <<: *netbox
+    # Same image as `netbox` (built locally, or pulled via the netbox service).
+    # Without this, `docker compose pull --ignore-buildable` tries to pull
+    # insightengine/netbox-lists:local and aborts install.sh.
+    pull_policy: never
     # no container_name: replicated service
     command:
       - /opt/netbox/venv/bin/python
@@ -971,6 +1003,28 @@ services:
       resources:
         limits: {memory: "${NETBOX_WORKER_MEM:-1g}", cpus: "${NETBOX_WORKER_CPUS:-1}"}
 
+  # One-shot, idempotent load of the vendored Cisco, Fortinet and Palo Alto
+  # Networks device types. Nothing else depends on it: required: false and an
+  # entrypoint that exits 0 keep a failure from stopping the rest of the stack.
+  netbox-device-types:
+    build:
+      context: ./netbox/device-types
+    image: insightengine/netbox-device-types:local
+    pull_policy: never
+    restart: "no"
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      NETBOX_URL: http://netbox:8080
+      NETBOX_TOKEN_FILE: /run/secrets/netbox.token
+      VENDORS: ${NETBOX_DEVICE_TYPE_VENDORS:-Cisco,Fortinet,Palo Alto Networks}
+    volumes:
+      - ./secrets/prometheus/netbox.token:/run/secrets/netbox.token:ro
+    depends_on:
+      netbox:
+        condition: service_healthy
+        required: false
+
   # ===========================================================================
   # ACTIVEPIECES (replaces n8n). Own PostgreSQL + own Redis, as per the
   # official docker-compose (app + worker(s) + postgres + redis).
@@ -986,6 +1040,9 @@ services:
       POSTGRES_USER: ${AP_POSTGRES_USERNAME:-activepieces}
       POSTGRES_PASSWORD: ${AP_POSTGRES_PASSWORD:?run install.sh}
     volumes:
+      # postgres:17 image VOLUME is /var/lib/postgresql/data. This named volume
+      # matches it. Do not set PGDATA to a subdirectory: existing installs keep
+      # the cluster at the volume root.
       - activepieces-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER"]
@@ -1162,6 +1219,8 @@ services:
       PGPASSWORD: ${NETDISCO_DB_PASSWORD:?run install.sh}
       DEPLOY_ADMIN_USER: ${NETDISCO_DEPLOY_ADMIN_USER:-YES}
       NETDISCO_DB_DEPLOY_ARGS: ${NETDISCO_DB_DEPLOY_ARGS:-}
+      # Netdisco reads $DANCER_ENVDIR/deployment.yml (not ~/environments).
+      DANCER_ENVDIR: /home/netdisco/nd-site-local
     depends_on:
       # required: false so a Netdisco failure warns instead of failing
       # `docker compose up` for the rest of the project. The role aligner
@@ -1236,9 +1295,15 @@ services:
     logging: *default-logging
     networks: [monitoring-net]
     entrypoint: ["sh", "/scheduler.sh"]
-    environment: *netdisco-env
+    # ICMP ping in the pre-sweep needs a raw socket. The image user is not root.
+    cap_add:
+      - NET_RAW
+    environment:
+      <<: *netdisco-env
+      SNMP_V2_COMMUNITY: ${SNMP_V2_COMMUNITY:-}
     volumes:
       - ./scripts/netdisco-scheduler.sh:/scheduler.sh:ro
+      - ./scripts/presweep.pl:/presweep.pl:ro
       - netdisco-local:/home/netdisco/nd-site-local
     depends_on:
       ie-config: {condition: service_healthy}
@@ -1266,8 +1331,9 @@ services:
       IE_CONFIG_DB_PASSWORD: ${IE_CONFIG_DB_PASSWORD:?run install.sh}
       TELEGRAF_PG_PASSWORD: ${TELEGRAF_PG_PASSWORD:-}
       AP_DATA_PASSWORD: ${AP_DATA_PASSWORD:-}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - insightengine-postgres-data:/var/lib/postgresql
+      - insightengine-postgres-data:/var/lib/postgresql/data
       - ./config/insightengine-postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER"]

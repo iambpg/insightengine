@@ -383,6 +383,70 @@ def audit(data: dict, root: Path, *, full: bool) -> list[str]:
     if full:
         errors.extend(netdisco_errors(services, root))
         errors.extend(module_map_errors(services, root))
+        errors.extend(postgres17_volume_errors(services, root))
+        errors.extend(stack_fix_errors(services))
+    return errors
+
+
+def postgres17_volume_errors(services: dict, root: Path) -> list[str]:
+    """postgres:17 keeps the cluster in the image VOLUME /var/lib/postgresql/data."""
+    errors = []
+    for name in ("netbox-postgres", "insightengine-postgres"):
+        service = services.get(name)
+        if not isinstance(service, dict):
+            continue
+        env = service.get("environment") or {}
+        if not isinstance(env, dict) or env.get("PGDATA") != "/var/lib/postgresql/data/pgdata":
+            errors.append(f"{name} must set PGDATA=/var/lib/postgresql/data/pgdata")
+        targets = [mount["target"] for mount in volume_mounts(service, root)]
+        if "/var/lib/postgresql/data" not in targets:
+            errors.append(f"{name} must mount its named volume at /var/lib/postgresql/data")
+        if "/var/lib/postgresql" in targets:
+            errors.append(f"{name} must not mount the parent path /var/lib/postgresql")
+    active = services.get("activepieces-postgres")
+    if isinstance(active, dict):
+        targets = [mount["target"] for mount in volume_mounts(active, root)]
+        env = active.get("environment") or {}
+        if "/var/lib/postgresql/data" not in targets:
+            errors.append("activepieces-postgres must keep its volume at /var/lib/postgresql/data")
+        if isinstance(env, dict) and env.get("PGDATA"):
+            errors.append("activepieces-postgres must not set PGDATA; existing data is at the volume root")
+    return errors
+
+
+def stack_fix_errors(services: dict) -> list[str]:
+    errors = []
+    netbox = services.get("netbox") if isinstance(services.get("netbox"), dict) else {}
+    health = netbox.get("healthcheck") or {}
+    if health.get("start_period") != "900s":
+        errors.append("netbox healthcheck start_period must be 900s")
+    env = netbox.get("environment") or {}
+    if isinstance(env, dict) and "SUPERUSER_API_KEY" not in env:
+        errors.append("netbox must pass SUPERUSER_API_KEY")
+    worker = services.get("netbox-worker") if isinstance(services.get("netbox-worker"), dict) else {}
+    if worker.get("pull_policy") != "never":
+        errors.append("netbox-worker pull_policy must be never")
+    types = services.get("netbox-device-types")
+    if not isinstance(types, dict):
+        errors.append("netbox-device-types service is missing")
+    else:
+        if types.get("restart") != "no":
+            errors.append("netbox-device-types must not restart")
+        if types.get("pull_policy") != "never":
+            errors.append("netbox-device-types pull_policy must be never")
+        info = depends(types).get("netbox")
+        if not info or info.get("required"):
+            errors.append("netbox-device-types must depend on netbox with required: false")
+        for name, service in services.items():
+            if name == "netbox-device-types" or not isinstance(service, dict):
+                continue
+            if "netbox-device-types" in depends(service):
+                errors.append(f"{name} must not wait on netbox-device-types")
+    for name in ("netdisco-backend", "netdisco-web", "netdisco-scheduler"):
+        service = services.get(name) or {}
+        service_env = service.get("environment") or {}
+        if isinstance(service_env, dict) and service_env.get("DANCER_ENVDIR") != "/home/netdisco/nd-site-local":
+            errors.append(f"{name} must set DANCER_ENVDIR=/home/netdisco/nd-site-local")
     return errors
 
 
@@ -531,6 +595,17 @@ services:
 """,
         lambda errs: any("caddy depends_on netdisco-postgres" in e for e in errs),
     )
+    bad_pg = postgres17_volume_errors(
+        {
+            "netbox-postgres": {
+                "environment": {},
+                "volumes": ["netbox-postgres-data:/var/lib/postgresql"],
+            }
+        },
+        Path("/tmp/ie-audit-missing"),
+    )
+    if not any("PGDATA" in item or "/var/lib/postgresql/data" in item for item in bad_pg):
+        failures.append(f"self-test postgres volume: {bad_pg}")
     plugin_bad = plugin_errors(Path("/tmp/ie-audit-missing"))
     if not plugin_bad:
         failures.append("self-test plugin: missing tree was accepted")

@@ -55,7 +55,8 @@ scrape_configs:
         url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-switch
         refresh_interval: 5m
         authorization:
-          type: Token
+          # NetBox 4.6 v2 tokens (nbt_<key>.<secret>) require the Bearer scheme.
+          type: Bearer
           credentials_file: /run/secrets/netbox_token
         tls_config:
           ca_file: /etc/ie-certs/ca.crt

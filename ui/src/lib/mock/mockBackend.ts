@@ -174,6 +174,34 @@ export async function listDiscovered() {
   return listUnapproved();
 }
 
+const MOCK_ROLES = [
+  'Access switch',
+  'Core switch',
+  'Firewall',
+  'Router',
+  'Access point',
+  'Wireless controller',
+  'Server',
+  'Unknown',
+];
+const MOCK_SITES = [
+  'Rotterdam-Havenstraat-214',
+  'Utrecht-Centrum-482',
+  'Eindhoven-Strijp-731',
+  'Amsterdam-Zuidas-105',
+  'Leiden-Bio-566',
+  'Groningen-Noord-317',
+  'Zwolle-Station-209',
+  'Breda-Chasse-640',
+  'Arnhem-Rijn-853',
+];
+const MOCK_PLATFORMS = ['ios-xe', 'ios', 'nxos', 'junos', 'fortios', 'aoscx'];
+
+export async function discoveryCatalog() {
+  await delay(120);
+  return { ok: true, roles: MOCK_ROLES, sites: MOCK_SITES, platforms: MOCK_PLATFORMS };
+}
+
 export async function listAlerts(): Promise<AlertItem[]> {
   await delay(300);
   return buildAlerts();

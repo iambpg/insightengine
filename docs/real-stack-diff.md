@@ -40,7 +40,7 @@ Dedicated jobs exist for the roles above. `icmp-other` and `snmp-other` take eve
 
 ## Token used for Prometheus
 
-`install.sh` writes the NetBox **superuser** API token into `secrets/prometheus/netbox.token` and `secrets/oxidized/netbox.token` so a device added after first-run is monitored without a manual step. That token is privileged. Replace it with a read-only token via `scripts/set-secret.sh prometheus/netbox.token` when you can.
+`install.sh` writes the NetBox **superuser** API token (`nbt_<key>.<secret>`, `Authorization: Bearer`) into `secrets/prometheus/netbox.token` and `secrets/oxidized/netbox.token` so a device added after first-run is monitored without a manual step. That token is privileged. Replace it with a read-only token via `scripts/set-secret.sh prometheus/netbox.token` when you can.
 
 ## Not copied
 

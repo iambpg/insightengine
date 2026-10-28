@@ -8,6 +8,7 @@ import type {
   AuditPage,
   AuditQuery,
   DiffResult,
+  DiscoveryCatalog,
   DiscoveryScan,
   FileDocument,
   HistoryDocument,
@@ -108,6 +109,10 @@ export async function listSiteDevices(siteId: string | number): Promise<DeviceRo
 
 export async function listDiscovered(): Promise<UnapprovedDevice[]> {
   return request(`${API}/discovery/unapproved`);
+}
+
+export async function discoveryCatalog(): Promise<DiscoveryCatalog> {
+  return request(`${API}/discovery/catalog`);
 }
 
 export async function listAlerts(): Promise<AlertItem[]> {

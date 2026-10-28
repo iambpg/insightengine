@@ -6,5 +6,16 @@ tag: ie-scan
 custom_field: ie_scan
 scan_all_active_prefixes: false
 interval_hours: 6
+# How often ie-config re-reads NetBox prefixes and refreshes the Not-in-NetBox queue.
+prefix_poll_seconds: 60
+# Netdisco SNMP timing, written into the rendered deployment.yml.
+# snmp_timeout_us is microseconds (1000000 = 1s). Upstream default is 1000000 to 3000000
+# and a second slow pass (snmp_try_slow_connect) which made each dead address cost ~56s.
+snmp_timeout_us: 1000000
+snmp_retries: 1
+snmp_try_slow_connect: false
+# Fast pre-sweep before Netdisco walks a prefix. See scripts/presweep.pl.
+presweep_timeout_seconds: 0.4
+presweep_parallel: 64
 default_site_slug: discovered
 default_role_slug: access-switch

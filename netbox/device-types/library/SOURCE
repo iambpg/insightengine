@@ -1,0 +1,6 @@
+origin: https://github.com/netbox-community/devicetype-library
+commit: 6a2703f
+vendors: Cisco, Fortinet, Palo Alto Networks
+contents: device-types and module-types YAML only
+reason: vendored so an offline server can preload NetBox without cloning the 1 GB upstream tree
+refresh: scripts/refresh-device-types.sh and docs/device-types.md
