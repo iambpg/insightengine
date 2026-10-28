@@ -59,6 +59,17 @@ class ReloadState(Base):
     message: Mapped[str] = mapped_column(Text, default="")
 
 
+class DiscoveryScan(Base):
+    __tablename__ = "discovery_scans"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target: Mapped[str] = mapped_column(String(16))
+    value: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    message: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DiscoveryCandidate(Base):
     __tablename__ = "discovery_candidates"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -5,7 +5,9 @@ import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import EmptyState from '@/components/ui/EmptyState';
 import { HealthBadge } from '@/components/ui/Badge';
+import { devicePath } from '@/lib/apiMode';
 import { TableSkeleton } from '@/components/ui/Skeleton';
+import { devicePath } from '@/lib/apiMode';
 import type { DeviceRow } from '@/lib/types';
 import type { ColumnKey } from './ColumnMenu';
 import PortBar from './PortBar';
@@ -119,7 +121,7 @@ export default function DeviceTable({ rows, error, onRetry, visible, selected, o
                 {show('health') && <td className="px-3 py-2.5"><HealthBadge health={r.health} /></td>}
                 {show('hostname') && (
                   <td className="relative px-3 py-2.5" onMouseEnter={() => setHoverId(r.id)} onMouseLeave={() => setHoverId(null)}>
-                    <Link href={`/device-detail?form=${r.formFactor}`} className="font-mono-data font-semibold text-foreground underline-offset-2 hover:text-primary hover:underline">
+                    <Link href={devicePath(r.id, r.formFactor)} className="font-mono-data font-semibold text-foreground underline-offset-2 hover:text-primary hover:underline">
                       {r.hostname}
                     </Link>
                     {hoverId === r.id && <HoverPreview row={r} />}
@@ -153,7 +155,7 @@ export default function DeviceTable({ rows, error, onRetry, visible, selected, o
                 )}
                 <td className="px-3 py-2.5">
                   <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                    <RowAction href={`/device-detail?form=${r.formFactor}`} icon="EyeIcon" label="Open device" />
+                    <RowAction href={devicePath(r.id, r.formFactor)} icon="EyeIcon" label="Open device" />
                     <RowAction href="/site-view" icon="BuildingOffice2Icon" label="Open site" />
                   </div>
                 </td>

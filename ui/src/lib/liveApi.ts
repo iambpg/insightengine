@@ -56,30 +56,39 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
 
 export async function getThroughput(
   range: RangeKey,
-  seed: number,
+  deviceId: string | number,
   customMin?: number
 ): Promise<SeriesPoint[]> {
-  const params = new URLSearchParams({ range, seed: String(seed) });
+  const params = new URLSearchParams({ range });
   if (customMin !== undefined) params.set('custom_min', String(customMin));
-  return request(`${API}/devices/${seed}/metrics/throughput?${params}`);
+  return request(`${API}/devices/${encodeURIComponent(String(deviceId))}/metrics/throughput?${params}`);
 }
 
-export async function getResources(range: RangeKey, seed: number) {
-  return request(`${API}/devices/${seed}/metrics/resources?range=${encodeURIComponent(range)}`);
+export async function getResources(range: RangeKey, deviceId: string | number) {
+  return request(
+    `${API}/devices/${encodeURIComponent(String(deviceId))}/metrics/resources?range=${encodeURIComponent(range)}`
+  );
 }
 
-export async function getTopPorts(seed: number) {
-  return request(`${API}/devices/${seed}/ports/top?metric=util`);
+export async function getTopPorts(deviceId: string | number, range: RangeKey = '24h', customMin?: number) {
+  const params = new URLSearchParams({ metric: 'util', range });
+  if (customMin !== undefined) params.set('custom_min', String(customMin));
+  return request(`${API}/devices/${encodeURIComponent(String(deviceId))}/ports/top?${params}`);
 }
 
 export async function getPortSeries(
   portId: string,
   range: RangeKey,
-  customMin?: number
+  customMin?: number,
+  deviceId?: string
 ): Promise<SeriesPoint[]> {
   const params = new URLSearchParams({ range });
   if (customMin !== undefined) params.set('custom_min', String(customMin));
-  return request(`${API}/devices/ports/${encodeURIComponent(portId)}/metrics?${params}`);
+  const port = encodeURIComponent(portId);
+  const path = deviceId
+    ? `${API}/devices/${encodeURIComponent(deviceId)}/ports/${port}/metrics?${params}`
+    : `${API}/devices/ports/${port}/metrics?${params}`;
+  return request(path);
 }
 
 export async function listSites(query: SiteQuery): Promise<Paged<SiteRow>> {
@@ -93,8 +102,8 @@ export async function listSites(query: SiteQuery): Promise<Paged<SiteRow>> {
   return withExample(await request<Paged<SiteRow>>(`${API}/sites?${params}`));
 }
 
-export async function listSiteDevices(siteIndex: number): Promise<DeviceRow[]> {
-  return request(`${API}/sites/${siteIndex}/devices`);
+export async function listSiteDevices(siteId: string | number): Promise<DeviceRow[]> {
+  return request(`${API}/sites/${encodeURIComponent(String(siteId))}/devices`);
 }
 
 export async function listDiscovered(): Promise<UnapprovedDevice[]> {

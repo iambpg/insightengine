@@ -5,6 +5,7 @@ import Icon from '@/components/ui/AppIcon';
 import { PortStateBadge } from '@/components/ui/Badge';
 import GraphPanel from '@/components/charts/GraphPanel';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import type { PortInfo } from '@/lib/types';
 
 const STATE_TEXT: Record<string, string> = {
@@ -126,7 +127,7 @@ export default function PortSidePanel({ port, onClose }: { port: PortInfo; onClo
   );
 }
 
-export function PortThroughputGraph({ port }: { port: PortInfo }) {
+export function PortThroughputGraph({ port, deviceId }: { port: PortInfo; deviceId?: string }) {
   return (
     <GraphPanel
       id={`port-${port.id}`}
@@ -140,7 +141,12 @@ export function PortThroughputGraph({ port }: { port: PortInfo }) {
         { key: 'outBps', label: 'Out', color: 'var(--cyan)' },
       ]}
       deps={port.id}
-      fetcher={async (range, customMin) => (await api.getPortSeries(port.id, range, customMin)) as unknown as Record<string, number | string | null>[]}
+      fetcher={async (range, customMin) =>
+        (await api.getPortSeries(port.id, range, customMin, isMockMode() ? undefined : deviceId)) as unknown as Record<
+          string,
+          number | string | null
+        >[]
+      }
     />
   );
 }

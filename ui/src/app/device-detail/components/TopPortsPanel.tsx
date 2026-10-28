@@ -5,6 +5,7 @@ import RangeSelector from '@/components/charts/RangeSelector';
 import TopPortsChart from '@/components/charts/TopPortsChart';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import type { RangeKey } from '@/lib/mockData';
 
 // Top ports by utilisation. Bars do not support time zoom, but the panel still owns its own range selector.
@@ -15,8 +16,10 @@ export default function TopPortsPanel({ deviceId }: { deviceId: string }) {
 
   useEffect(() => {
     setData(null);
-    const seed = { '1h': 1, '6h': 2, '24h': 3, '7d': 4, custom: 5 }[range] + customMin;
-    api.getTopPorts(seed).then(setData);
+    const seed = isMockMode()
+      ? { '1h': 1, '6h': 2, '24h': 3, '7d': 4, custom: 5 }[range] + customMin
+      : deviceId;
+    api.getTopPorts(seed, range, customMin).then(setData);
   }, [range, customMin, deviceId]);
 
   return (

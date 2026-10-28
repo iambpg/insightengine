@@ -431,6 +431,9 @@ services:
       DOCKER_PROXY_URL: http://ie-config-docker-proxy:2375
       NETBOX_URL: http://netbox:8080
       NETBOX_TOKEN_FILE: /opt/insightengine/secrets/prometheus/netbox.token
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
+      ALERTMANAGER_URL: ${ALERTMANAGER_URL:-http://alertmanager:9093}
+      IE_CA_FILE: /etc/ie-certs/ca.crt
       # App role password is NETDISCO_DB_PASS (see netdisco-initdb.sh), not the
       # random Postgres superuser password the entrypoint generates.
       NETDISCO_DATABASE_URL: postgresql://${NETDISCO_DB_USER:-netdisco}:${NETDISCO_DB_PASSWORD:?run install.sh}@netdisco-postgres:5432/${NETDISCO_DB_NAME:-netdisco}
@@ -470,6 +473,7 @@ services:
       - ./trapd:/opt/insightengine/trapd
       - ./data:/opt/insightengine/data
       - ./secrets/prometheus/netbox.token:/opt/insightengine/secrets/prometheus/netbox.token:ro
+      - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - ./config-api/apps.yml:/app/apps.yml:ro
       - netdisco-local:/var/lib/ie/netdisco-local
     secrets:

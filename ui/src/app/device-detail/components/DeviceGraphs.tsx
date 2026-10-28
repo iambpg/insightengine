@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import GraphPanel from '@/components/charts/GraphPanel';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 
 const TopPortsPanel = dynamic(() => import('./TopPortsPanel'), {
   ssr: false,
@@ -14,6 +15,8 @@ const TopPortsPanel = dynamic(() => import('./TopPortsPanel'), {
 type Rec = Record<string, number | string | null>[];
 
 export default function DeviceGraphs({ deviceId }: { deviceId: string }) {
+  const throughputId = (seed: number) => (isMockMode() ? seed : deviceId);
+  const resourceId = isMockMode() ? 5 : deviceId;
   return (
     <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
       <GraphPanel
@@ -27,7 +30,7 @@ export default function DeviceGraphs({ deviceId }: { deviceId: string }) {
           { key: 'outBps', label: 'Outbound', color: 'var(--cyan)' },
         ]}
         deps={deviceId}
-        fetcher={async (r, c) => (await api.getThroughput(r, 11, c)) as unknown as Rec}
+        fetcher={async (r, c) => (await api.getThroughput(r, throughputId(11), c)) as unknown as Rec}
       />
       <GraphPanel
         id="err-rate"
@@ -37,7 +40,7 @@ export default function DeviceGraphs({ deviceId }: { deviceId: string }) {
         kind="line"
         series={[{ key: 'errors', label: 'Errors', color: 'var(--destructive)' }]}
         deps={deviceId}
-        fetcher={async (r, c) => (await api.getThroughput(r, 29, c)) as unknown as Rec}
+        fetcher={async (r, c) => (await api.getThroughput(r, throughputId(29), c)) as unknown as Rec}
       />
       <TopPortsPanel deviceId={deviceId} />
       <GraphPanel
@@ -53,7 +56,7 @@ export default function DeviceGraphs({ deviceId }: { deviceId: string }) {
         ]}
         yMax={100}
         deps={deviceId}
-        fetcher={async (r) => (await api.getResources(r, 5)) as unknown as Rec}
+        fetcher={async (r) => (await api.getResources(r, resourceId)) as unknown as Rec}
       />
     </div>
   );

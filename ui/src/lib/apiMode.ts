@@ -10,3 +10,10 @@ export function isMockMode(): boolean {
   if (process.env.NEXT_PUBLIC_IE_API_MODE === 'mock') return true;
   return process.env.NODE_ENV !== 'production';
 }
+
+/** Device detail URL. Live mode passes the NetBox id; mock mode keeps the faceplate form key. */
+export function devicePath(id: string, formFactor: string): string {
+  const form = encodeURIComponent(formFactor);
+  if (isMockMode()) return `/device-detail?form=${form}`;
+  return `/device-detail?id=${encodeURIComponent(id)}&form=${form}`;
+}

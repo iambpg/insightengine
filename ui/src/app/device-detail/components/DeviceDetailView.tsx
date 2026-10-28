@@ -8,6 +8,7 @@ import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
 import { api } from '@/lib/apiClient';
+import { isMockMode } from '@/lib/apiMode';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData, PortInfo } from '@/lib/types';
 import IssuesPanel from './IssuesPanel';
@@ -33,14 +34,19 @@ const DEVICE_ICON: Record<string, string> = {
 
 export default function DeviceDetailView() {
   const [form, setForm] = useState<string>('switch-stack');
+  const [deviceKey, setDeviceKey] = useState<string>('switch-stack');
   const [device, setDevice] = useState<DeviceDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PortInfo | null>(null);
   const [rerun, setRerun] = useState(false);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get('form');
-    if (q && FORMS.includes(q)) setForm(q);
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('form');
+    const id = params.get('id');
+    if (q && (FORMS.includes(q) || q.startsWith('fg-') || q.startsWith('pa-'))) setForm(q);
+    if (!isMockMode() && id) setDeviceKey(id);
+    else if (q) setDeviceKey(q);
   }, []);
 
   useEffect(() => {
@@ -49,13 +55,18 @@ export default function DeviceDetailView() {
     setSelected(null);
     setError(null);
     api
-      .getDevice(form)
-      .then((d) => !cancelled && setDevice(d))
+      .getDevice(deviceKey)
+      .then((d) => {
+        if (cancelled) return;
+        setDevice(d);
+        const face = d.faceplate?.form_factor;
+        if (face && FORMS.includes(face)) setForm(face);
+      })
       .catch(() => !cancelled && setError('Failed to load this device. Check your connection and try again.'));
     return () => {
       cancelled = true;
     };
-  }, [form]);
+  }, [deviceKey]);
 
   const allPorts = useMemo<PortInfo[]>(() => {
     if (!device) return [];
@@ -69,7 +80,7 @@ export default function DeviceDetailView() {
     return (
       <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
         <span className="flex items-center gap-2"><Icon name="ExclamationCircleIcon" size={18} />{error}</span>
-        <button type="button" onClick={() => setForm((f) => f)} className="rounded-md border border-destructive/40 px-3 py-1 text-xs font-semibold">Retry</button>
+        <button type="button" onClick={() => setDeviceKey((key) => key)} className="rounded-md border border-destructive/40 px-3 py-1 text-xs font-semibold">Retry</button>
       </div>
     );
   }
@@ -124,14 +135,22 @@ export default function DeviceDetailView() {
                 {rerun ? 'Running checks…' : 'Re-run health check'}
               </button>
               <Link
-                href={`/device-cli?form=${form}`}
+                href={
+                  isMockMode()
+                    ? `/device-cli?form=${encodeURIComponent(form)}`
+                    : `/device-cli?id=${encodeURIComponent(device?.id || deviceKey)}&form=${encodeURIComponent(form)}`
+                }
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="CommandLineIcon" size={16} />
                 Open device
               </Link>
               <Link
-                href={`/topology?form=${form}`}
+                href={
+                  isMockMode()
+                    ? `/topology?form=${encodeURIComponent(form)}`
+                    : `/topology?id=${encodeURIComponent(device?.id || deviceKey)}&form=${encodeURIComponent(form)}`
+                }
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="ShareIcon" size={16} />
@@ -180,7 +199,10 @@ export default function DeviceDetailView() {
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setForm(f)}
+                onClick={() => {
+                  setForm(f);
+                  setDeviceKey(f);
+                }}
                 className={`inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
                   active ? 'border-primary bg-primary/10 text-foreground shadow-card' : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
@@ -212,7 +234,7 @@ export default function DeviceDetailView() {
             </div>
             {selected && (
               <div className="slide-in-right mt-3">
-                <PortThroughputGraph port={selected} />
+                <PortThroughputGraph port={selected} deviceId={device?.id} />
               </div>
             )}
           </div>
@@ -224,7 +246,9 @@ export default function DeviceDetailView() {
         </div>
       </section>
 
-      <ExampleDataBanner text="Device, port and graph values below come from mock JSON in the API client." />
+      {isMockMode() ? (
+        <ExampleDataBanner text="Device, port and graph values below come from mock JSON in the API client." />
+      ) : null}
 
       {device && <DeviceGraphs deviceId={device.id} />}
 

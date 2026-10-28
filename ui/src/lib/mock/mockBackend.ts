@@ -48,6 +48,23 @@ import type { Session } from '@/lib/session';
 const delay = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, process.env.VITEST ? 0 : ms));
 
+function asSeed(value: string | number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  let hash = 0;
+  const text = String(value);
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) % 100000;
+  return hash + 1;
+}
+
+function mockSiteIndex(siteId: string | number): number {
+  if (typeof siteId === 'number' && Number.isFinite(siteId)) return siteId;
+  const text = String(siteId);
+  const tagged = /^site-0*(\d+)$/i.exec(text);
+  if (tagged) return Math.max(0, Number(tagged[1]) - 1);
+  const numeric = Number(text);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
 export function resetMockBackend(): void {
   resetSettingsStore();
   resetDiscoveryStore();
@@ -98,27 +115,28 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
 
 export async function getThroughput(
   range: RangeKey,
-  seed: number,
+  seed: string | number,
   customMin?: number
 ): Promise<SeriesPoint[]> {
   await delay(220);
-  return buildSeries(range, seed, 1, customMin);
+  return buildSeries(range, asSeed(seed), 1, customMin);
 }
 
-export async function getResources(range: RangeKey, seed: number) {
+export async function getResources(range: RangeKey, seed: string | number) {
   await delay(220);
-  return buildResourceSeries(range, seed);
+  return buildResourceSeries(range, asSeed(seed));
 }
 
-export async function getTopPorts(seed: number) {
+export async function getTopPorts(seed: string | number, _range?: RangeKey, _customMin?: number) {
   await delay(180);
-  return buildTopPorts(seed);
+  return buildTopPorts(asSeed(seed));
 }
 
 export async function getPortSeries(
   portId: string,
   range: RangeKey,
-  customMin?: number
+  customMin?: number,
+  _deviceId?: string
 ): Promise<SeriesPoint[]> {
   await delay(200);
   let hash = 0;
@@ -146,9 +164,9 @@ export async function listSites(query: SiteQuery): Promise<Paged<SiteRow>> {
   return { rows: rows.slice(offset, offset + query.pageSize), total, isExampleData: true };
 }
 
-export async function listSiteDevices(siteIndex: number): Promise<DeviceRow[]> {
+export async function listSiteDevices(siteId: string | number): Promise<DeviceRow[]> {
   await delay(260);
-  return buildSiteDevices(siteIndex);
+  return buildSiteDevices(mockSiteIndex(siteId));
 }
 
 export async function listDiscovered() {

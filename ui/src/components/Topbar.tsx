@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
+import { api } from '@/lib/apiClient';
+import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
 
 interface TopbarProps {
   onOpenMobile: () => void;
@@ -12,6 +14,9 @@ interface TopbarProps {
 export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
   const [now, setNow] = useState('');
   const [menu, setMenu] = useState(false);
+  const [alerts, setAlerts] = useState(0);
+  const [setup, setSetup] = useState('');
+  const [who, setWho] = useState({ name: '', role: '', initials: '' });
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,6 +29,45 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
     const id = setInterval(fmt, 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    const apply = () => {
+      const session = readSession();
+      if (!session) {
+        setWho({ name: '', role: '', initials: '' });
+        return;
+      }
+      setWho({ name: displayName(session.email), role: session.role, initials: displayInitials(session.email) });
+    };
+    apply();
+    return subscribeSession(apply);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getSummary().then((summary) => {
+      if (!cancelled) setAlerts(Number(summary.alerts) || 0);
+    }).catch(() => {
+      if (!cancelled) setAlerts(0);
+    });
+    api.getSetupState().then((state) => {
+      if (!cancelled) setSetup(state.state === 'complete' ? 'Setup complete' : `Setup ${state.state}`);
+    }).catch(() => {
+      if (!cancelled) setSetup('');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const signOut = async () => {
+    try {
+      await api.logout();
+    } catch {
+      /* local session is cleared even if the server is unreachable */
+    }
+    window.location.assign('/login-screen');
+  };
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -55,10 +99,12 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
       </button>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
-        <div className="hidden items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success lg:flex" title="GET /setup/state returned complete">
-          <Icon name="CheckBadgeIcon" size={14} variant="solid" />
-          Setup complete
-        </div>
+        {setup ? (
+          <div className="hidden items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success lg:flex" title="GET /setup/state">
+            <Icon name="CheckBadgeIcon" size={14} variant="solid" />
+            {setup}
+          </div>
+        ) : null}
         <div className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
           <span className="relative flex h-2 w-2">
             <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-teal" />
@@ -70,14 +116,16 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
           </span>
         </div>
         <Link
-          href="/"
-          aria-label="142 alerts firing"
+          href="/alerts"
+          aria-label={alerts ? `${alerts} alerts firing` : 'Alerts'}
           className="relative rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <Icon name="BellAlertIcon"size={20} variant="outline" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold tabular text-destructive-foreground">
-            142
-          </span>
+          <Icon name="BellAlertIcon" size={20} variant="outline" />
+          {alerts > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold tabular text-destructive-foreground">
+              {alerts > 99 ? '99+' : alerts}
+            </span>
+          ) : null}
         </Link>
 
         <div className="relative" ref={menuRef}>
@@ -88,21 +136,21 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
             aria-expanded={menu}
             className="flex items-center gap-2 rounded-md p-1 pr-2 transition-colors hover:bg-muted"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-bold text-cyan">MB</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-bold text-cyan">{who.initials || '—'}</span>
             <Icon name="ChevronDownIcon" size={14} className="text-muted-foreground" />
           </button>
           {menu && (
             <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-56 rounded-lg border border-border bg-card p-1 shadow-pop pop-in">
               <div className="border-b border-border px-3 py-2">
-                <p className="text-sm font-medium">Marit van der Berg</p>
-                <p className="text-xs text-muted-foreground">Administrator</p>
+                <p className="text-sm font-medium">{who.name || 'Signed out'}</p>
+                <p className="text-xs text-muted-foreground">{who.role || 'No session'}</p>
               </div>
               <Link href="/settings" role="menuitem" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
                 <Icon name="Cog6ToothIcon" size={16} /> Settings
               </Link>
-              <Link href="/login-screen" role="menuitem" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+              <button type="button" role="menuitem" onClick={signOut} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
                 <Icon name="ArrowRightOnRectangleIcon" size={16} /> Sign out
-              </Link>
+              </button>
             </div>
           )}
         </div>

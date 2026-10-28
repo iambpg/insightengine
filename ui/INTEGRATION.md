@@ -84,7 +84,7 @@ Discovery:
 - `POST /api/v1/discovery/scan` `{ target: "prefix" \| "ip", value }`
 - `GET /api/v1/discovery/scans`
 
-Existing screens also call `/api/v1/summary`, `/api/v1/devices`, `/api/v1/sites`, and `/api/v1/alerts` with the query shapes noted in `src/lib/apiClient.ts`.
+Existing screens also call `/api/v1/summary`, `/api/v1/devices`, `/api/v1/sites`, and `/api/v1/alerts` with the query shapes noted in `src/lib/apiClient.ts`. ie-config implements those routes; the contract, including metric series and the alert webhook, is `docs/fleet-api.md`. Live mode passes a device id (`?id=`) and a site id. Mock mode still uses faceplate form keys and `site-0001` style ids. `GET /api/v1/health` is for operators; the UI does not call it.
 
 Errors stay `{ "error": { "code", "message", "details" } }`. `422` puts the validate payload in `details` and the editor keeps the draft. `409` means the etag is stale; the editor offers reload or a merge view.
 

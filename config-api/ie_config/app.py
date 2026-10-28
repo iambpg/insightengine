@@ -18,8 +18,9 @@ from sqlalchemy import select
 from .actions import Reloader, container_states
 from .auth import SETTINGS_ROLES, Auth, check_bearer, client_ip, read_setup_token, require_csrf, validate_email, validate_password
 from .db import AuditRow, make_session_factory
-from .discovery import Discovery, NetBoxWriter, guess_device, load_yaml
+from .discovery import Discovery, NetBoxWriter, guess_device, load_yaml, unapproved_for_ui
 from .errors import ApiError, error_body
+from .fleet import mount_fleet
 from .masking import leftover_placeholders, mask_text, restore_secrets
 from .registry import AppSpec, FileSpec, Registry, load_registry
 from .settings import Settings
@@ -105,7 +106,7 @@ def _audit(sf, user, action, ip, result, app="", file_id="", comment="", detail=
         db.commit()
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     settings = settings or Settings.from_env()
     sf, _engine = make_session_factory(settings.database_url)
     registry = load_registry(settings.apps_file, settings.config_root)
@@ -148,6 +149,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.registry = registry
     app.state.auth = auth
     app.state.discovery = discovery
+    app.state.fleet = fleet
 
     @app.exception_handler(ApiError)
     async def _api_error(_request, exc: ApiError):
@@ -331,13 +333,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         for spec in registry.apps:
             st = states.get(spec.container) or {"state": "unknown"}
             last = reloader.last(spec.id)
+            failed = bool(last) and not last.get("ok")
             apps.append({
                 "id": spec.id,
                 "container": {"name": spec.container, "state": st.get("state") or "unknown",
-                              **({"health": st["health"]} if st.get("health") else {})},
+                              **({"health": st["health"]} if st.get("health") else {}),
+                              **({"uptimeSeconds": st["uptimeSeconds"]} if st.get("uptimeSeconds") is not None else {})},
+                "lastReloadAt": (last or {}).get("at"),
+                "lastError": ((last or {}).get("message") or "reload failed") if failed else None,
                 "lastReload": last,
             })
-        return {"apps": apps}
+        return {"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "apps": apps}
 
     @app.get("/api/v1/settings/audit")
     def audit(request: Request):
@@ -651,8 +657,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             save_mib(settings.mib_dir, os.path.basename(upload.filename or ""), data, settings.mib_file_max, settings.mib_total_max)
         except ValueError as exc:
             raise ApiError(400, "bad_mib", str(exc))
-        _audit(sf, user, "mib-upload", client_ip(request), "ok", "snmp-generator", "", os.path.basename(upload.filename or ""))
-        return {"ok": True, "name": os.path.basename(upload.filename or "")}
+        stored = os.path.basename(upload.filename or "")
+        _audit(sf, user, "mib-upload", client_ip(request), "ok", "snmp-generator", "", stored)
+        match = next((item for item in list_mibs(settings.mib_dir) if item["name"] == stored), None)
+        return match or {"name": stored, "sizeBytes": len(data), "uploadedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
     @app.delete("/api/v1/settings/apps/snmp-generator/mibs/{name}")
     def mib_delete(name: str, request: Request):
@@ -668,7 +676,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def unapproved(request: Request):
         user, _csrf = user_of(request)
         require_reader(user)
-        return discovery.list_unapproved()
+        return [unapproved_for_ui(row) for row in discovery.list_unapproved()]
 
     @app.post("/api/v1/discovery/{cid}/approve")
     async def approve(cid: int, request: Request):
@@ -706,7 +714,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(502, "netbox_error", "NetBox did not accept the device")
         discovery.set_status(cid, "approved", str(created.get("device_id") or ""), json.dumps(created))
         _audit(sf, user, "discovery-approve", client_ip(request), "ok", "netdisco", "", "", candidate["ip"])
-        return {"ok": True, "device": created}
+        return {"ok": True, "id": str(cid), "device": created}
 
     @app.post("/api/v1/discovery/{cid}/reject")
     def reject(cid: int, request: Request):
@@ -716,6 +724,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if updated is None:
             raise ApiError(404, "not_found", "unknown discovery candidate")
         _audit(sf, user, "discovery-reject", client_ip(request), "ok", "netdisco", "", "", updated["ip"])
-        return {"ok": True, "id": cid}
+        return {"ok": True, "id": str(cid)}
 
+    @app.get("/api/v1/discovery/scans")
+    def scans(request: Request):
+        user, _csrf = user_of(request)
+        require_reader(user)
+        return discovery.list_scans()
+
+    @app.post("/api/v1/discovery/scan")
+    async def scan(request: Request):
+        user, _csrf = user_of(request)
+        require_reader(user)
+        try:
+            body = await request.json()
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        try:
+            created = discovery.queue_manual_scan(body.get("target"), body.get("value"))
+        except ValueError as exc:
+            raise ApiError(400, "invalid_scan", str(exc))
+        _audit(sf, user, "discovery-scan", client_ip(request), "ok", "netdisco", "", "", body.get("target") or "")
+        return created
+
+    mount_fleet(app, user_of)
     return app

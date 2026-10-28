@@ -15,7 +15,7 @@ import httpx
 import yaml
 from sqlalchemy import select
 
-from .db import DiscoveryCandidate, utcnow
+from .db import DiscoveryCandidate, DiscoveryScan, utcnow
 
 _CIDR = re.compile(r"^[0-9]{1,3}(?:\.[0-9]{1,3}){3}/[0-9]{1,2}$")
 
@@ -355,6 +355,40 @@ class Discovery:
             db.commit()
         return {"ok": True, "message": "recorded %d new unapproved device(s)" % added, "added": added}
 
+    def queue_manual_scan(self, target: str, value: str) -> dict:
+        """Queue one prefix or address for the Netdisco scheduler and remember it."""
+        kind = (target or "").strip()
+        raw = (value or "").strip()
+        if kind == "ip":
+            if "/" in raw or not valid_cidr(raw + "/32"):
+                raise ValueError("Enter an IPv4 address.")
+            cidr = str(ipaddress.ip_network(raw + "/32", strict=False))
+            message = "Queued a probe of that address. If it answers and is not in NetBox, it will show up here after the next discovery refresh."
+        elif kind == "prefix":
+            if not valid_cidr(raw):
+                raise ValueError("Enter an IPv4 prefix, for example 10.22.14.0/24.")
+            cidr = str(ipaddress.ip_network(raw, strict=False))
+            message = "Queued a Netdisco walk of that prefix. Devices that are not in NetBox will show up here after the next discovery refresh."
+        else:
+            raise ValueError("Target must be ip or prefix.")
+        out = self.settings.netdisco_out_dir
+        os.makedirs(out, exist_ok=True)
+        path = os.path.join(out, "scan-once.txt")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(cidr + "\n")
+        self.request_scan()
+        with self.sf() as db:
+            row = DiscoveryScan(target=kind, value=raw, status="queued", message=message, started_at=utcnow())
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return _scan_public(row)
+
+    def list_scans(self) -> list[dict]:
+        with self.sf() as db:
+            rows = db.scalars(select(DiscoveryScan).order_by(DiscoveryScan.id.desc()).limit(20)).all()
+            return [_scan_public(row) for row in rows]
+
     def list_unapproved(self) -> list[dict]:
         with self.sf() as db:
             rows = db.scalars(
@@ -378,6 +412,50 @@ class Discovery:
                 row.detail = detail
             db.commit()
             return _public(row)
+
+
+def _scan_public(row: DiscoveryScan) -> dict:
+    def iso(value):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    body = {
+        "id": str(row.id),
+        "target": row.target,
+        "value": row.value,
+        "status": row.status,
+        "startedAt": iso(row.started_at) or "",
+        "message": row.message or "",
+    }
+    finished = iso(row.finished_at)
+    if finished:
+        body["finishedAt"] = finished
+    return body
+
+
+def unapproved_for_ui(row: dict) -> dict:
+    """Shape GET /api/v1/discovery/unapproved the way the Not in NetBox screen reads it."""
+    name = str(row.get("name") or "")
+    suggested = {}
+    if row.get("role"):
+        suggested["role"] = row["role"]
+    if row.get("site"):
+        suggested["site"] = row["site"]
+    return {
+        "id": str(row.get("id")),
+        "ip": row.get("ip") or "",
+        "hostname": name,
+        "sysName": name,
+        "vendor": row.get("vendor") or "",
+        "model": row.get("model") or "",
+        "sysDescr": row.get("sysDescr") or "",
+        "firstSeen": row.get("firstSeen") or "",
+        "lastSeen": row.get("lastSeen") or "",
+        "suggested": suggested,
+    }
 
 
 def _public(row: DiscoveryCandidate) -> dict:
