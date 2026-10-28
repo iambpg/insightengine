@@ -8,11 +8,14 @@
 # so the volume name is not a safe way to tell NetBox from ie-config.
 #
 # This script:
-#   1. If the postgres containers still exist (docker compose stop, not down),
-#      reads the volume mounted at /var/lib/postgresql/data from docker inspect.
-#   2. Otherwise reads each candidate's system catalogs (read-only) and keeps a
+#   1. Resolves the compose project: --project, COMPOSE_PROJECT_NAME, .env,
+#      `docker compose config` (.name), the file's `name:` key, a container
+#      label com.docker.compose.project, and only then the directory name.
+#   2. If those postgres containers still exist, reads the volume mounted at
+#      /var/lib/postgresql/data. Catalogs must agree or the script aborts.
+#   3. Otherwise reads each candidate's system catalogs (read-only) and keeps a
 #      volume only when it uniquely contains the netbox or ie_config database.
-#   3. Refuses to copy when a volume cannot be identified, when two volumes
+#   4. Refuses to copy when a volume cannot be identified, when two volumes
 #      match the same service, or when catalogs contradict the mapping.
 # Source volumes are mounted read-only and are never deleted or modified.
 #
@@ -21,8 +24,9 @@
 #   ./scripts/migrate-pg-volumes.sh --map netbox=<volume>,insightengine=<volume>
 #   ./scripts/migrate-pg-volumes.sh --self-test
 #
-# Safest path if you have not run `docker compose down` yet:
-#   docker compose stop
+# Safest path while the containers still exist: ./scripts/upgrade.sh
+# (it backfills .env, then stops by project label). Or stop them yourself
+# and run:
 #   ./scripts/migrate-pg-volumes.sh
 #   ./scripts/migrate-pg-volumes.sh --apply
 set -euo pipefail
@@ -30,6 +34,9 @@ umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib-compose-env.sh
+. "$ROOT/scripts/lib-compose-env.sh"
 MATCH="$ROOT/scripts/migrate-pg-match.py"
 
 APPLY=0
@@ -40,7 +47,7 @@ PROJECT="${COMPOSE_PROJECT_NAME:-}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-}"
 
 usage() {
-  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -61,44 +68,162 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-env_file_value() {
-  local key=$1 file=${2:-.env} line
-  [ -f "$file" ] || return 0
-  line="$(grep -E "^${key}=" "$file" | tail -n1 || true)"
-  line="${line#*=}"
-  line="${line#\'}"
-  line="${line%\'}"
-  printf '%s' "$line"
+migrate_container_self_test() {
+  local tmp bin envfile log out err rc wrong mock_path
+  tmp="$(mktemp -d)"
+  bin="$tmp/bin"
+  mkdir -p "$bin"
+  envfile="$tmp/empty.env"
+  printf '%s\n' "POSTGRES_IMAGE=postgres:17.9" > "$envfile"
+  cat > "$bin/docker" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$MOCK_DOCKER_LOG"
+case "$1" in
+  compose)
+    printf '%s\n' '{"name":"insightengine"}'
+    ;;
+  volume)
+    case "$2" in
+      inspect)
+        case "$3" in
+          insightengine_netbox-postgres-data|insightengine_insightengine-postgres-data) exit 0 ;;
+          *) exit 1 ;;
+        esac
+        ;;
+      ls)
+        printf '%s\n' insightengine_netbox-postgres-data
+        printf '%s\n' insightengine_insightengine-postgres-data
+        ;;
+      *) exit 1 ;;
+    esac
+    ;;
+  ps)
+    joined="$*"
+    case "$joined" in
+      *service=netbox-postgres*project=insightengine*)
+        printf '%s\n' cid-nb
+        ;;
+      *service=insightengine-postgres*project=insightengine*)
+        printf '%s\n' cid-ie
+        ;;
+    esac
+    ;;
+  inspect)
+    case "$*" in
+      *cid-nb*) printf '%s\n' '/var/lib/postgresql/data|anon-nb|volume' ;;
+      *cid-ie*) printf '%s\n' '/var/lib/postgresql/data|anon-ie|volume' ;;
+      *) exit 1 ;;
+    esac
+    ;;
+  run)
+    vol=""
+    prev=""
+    for a in "$@"; do
+      if [ "$prev" = "-v" ]; then
+        vol="${a%%:*}"
+      fi
+      prev="$a"
+    done
+    names=""
+    case "$vol" in
+      anon-nb)
+        if [ "${MOCK_DISAGREE:-0}" = 1 ]; then names="ie_config"; else names="netbox"; fi
+        ;;
+      anon-ie)
+        if [ "${MOCK_DISAGREE:-0}" = 1 ]; then names="netbox"; else names="ie_config"; fi
+        ;;
+      *)
+        exit 1
+        ;;
+    esac
+    printf 'pg_version=17\nbytes=128\nmtime=2026-10-28T00:00:00Z\nnames=%s\n' "$names"
+    ;;
+  *)
+    echo "mock docker unhandled: $*" >&2
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$bin/docker"
+  wrong="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
+  log="$tmp/agree.log"
+  out="$tmp/agree.out"
+  err="$tmp/agree.err"
+  : > "$log"
+  # shellcheck disable=SC2031
+  mock_path="$bin:$PATH"
+  env -u COMPOSE_PROJECT_NAME \
+    MIGRATE_ENV_FILE="$envfile" \
+    MOCK_DOCKER_LOG="$log" \
+    "PATH=${mock_path}" \
+    bash "$ROOT/scripts/migrate-pg-volumes.sh" >"$out" 2>"$err"
+  grep -q 'project: insightengine' "$out"
+  if [ "$wrong" != "insightengine" ] && grep -q "project: ${wrong}" "$out"; then
+    echo "migration used the directory name ${wrong} as the compose project" >&2
+    exit 1
+  fi
+  grep -q 'stopped containers still exist; using docker inspect mounts at /var/lib/postgresql/data' "$out"
+  grep -q 'container mount: netbox' "$out"
+  grep -q 'container mount: insightengine' "$out"
+  grep -q 'catalog names: netbox' "$out"
+  grep -q 'catalog names: ie_config' "$out"
+  grep -q 'would copy' "$out"
+  grep -q 'label=com.docker.compose.project=insightengine' "$log"
+  grep -q 'label=com.docker.compose.service=netbox-postgres' "$log"
+  grep -q 'label=com.docker.compose.service=insightengine-postgres' "$log"
+  if grep -q "project=${wrong}" "$log" && [ "$wrong" != "insightengine" ]; then
+    echo "container inspect used project ${wrong}" >&2
+    exit 1
+  fi
+
+  log="$tmp/disagree.log"
+  out="$tmp/disagree.out"
+  err="$tmp/disagree.err"
+  : > "$log"
+  set +e
+  env -u COMPOSE_PROJECT_NAME \
+    MIGRATE_ENV_FILE="$envfile" \
+    MOCK_DOCKER_LOG="$log" \
+    MOCK_DISAGREE=1 \
+    "PATH=${mock_path}" \
+    bash "$ROOT/scripts/migrate-pg-volumes.sh" >"$out" 2>"$err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ]
+  grep -q 'refusing to map' "$err"
+  grep -q 'nothing was copied' "$err"
+  if grep -q 'would copy' "$out"; then
+    echo "disagreement still printed a copy plan" >&2
+    exit 1
+  fi
+  if grep -q 'copying ' "$out"; then
+    echo "disagreement copied a volume" >&2
+    exit 1
+  fi
+  rm -rf "$tmp"
+  echo "PASS  stopped-container mounts follow the compose project label and abort when catalogs disagree"
 }
 
 if [ "$SELF_TEST" -eq 1 ]; then
-  tmp="$(mktemp -d)"
-  printf "%s\n" "COMPOSE_PROJECT_NAME='from-dotenv'" > "$tmp/.env"
-  got="$(env_file_value COMPOSE_PROJECT_NAME "$tmp/.env")"
-  rm -rf "$tmp"
-  [ "$got" = "from-dotenv" ]
   python3 "$MATCH" --self-test
+  compose_env_self_test
+  migrate_container_self_test
   exit 0
 fi
 
+ENV_FILE="${MIGRATE_ENV_FILE:-$ROOT/.env}"
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is not available; nothing was changed" >&2
   exit 1
 fi
 if [ -z "$POSTGRES_IMAGE" ]; then
-  POSTGRES_IMAGE="$(env_file_value POSTGRES_IMAGE)"
+  POSTGRES_IMAGE="$(env_file_value POSTGRES_IMAGE "$ENV_FILE")"
 fi
 if [ -z "$POSTGRES_IMAGE" ]; then
   POSTGRES_IMAGE="postgres:17.9"
 fi
 
-if [ -z "$PROJECT" ]; then
-  PROJECT="$(env_file_value COMPOSE_PROJECT_NAME)"
-fi
-if [ -z "$PROJECT" ]; then
-  PROJECT="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
-  [ -n "$PROJECT" ] || PROJECT="insightengine"
-fi
+PROJECT="$(resolve_compose_project "$PROJECT" "$ENV_FILE" "$ROOT" "$ROOT/docker-compose.yml")"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -209,7 +334,7 @@ if [ "$APPLY" -eq 1 ]; then
   running="$(docker ps --filter "label=com.docker.compose.project=${PROJECT}" --filter "label=com.docker.compose.service=netbox-postgres" --filter "status=running" -q || true)"
   running="${running}$(docker ps --filter "label=com.docker.compose.project=${PROJECT}" --filter "label=com.docker.compose.service=insightengine-postgres" --filter "status=running" -q || true)"
   if [ -n "$running" ]; then
-    die "postgres containers are still running. Use 'docker compose stop' (not down) so inspect can see the data volumes, then re-run."
+    die "postgres containers are still running. Stop them without removing them (./scripts/upgrade.sh stops by project label) so inspect can see the data volumes, then re-run."
   fi
 else
   say "mode:    dry-run (pass --apply to copy)"

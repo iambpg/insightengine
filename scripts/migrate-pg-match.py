@@ -229,7 +229,28 @@ def _self_test() -> None:
     ]))
     if container["netbox"] != "from-inspect-nb" or container["insightengine"] != "from-inspect-ie":
         raise SystemExit("container mapping failed: %s" % container)
-    print("PASS  migrate matches clusters by catalog, not by volume name")
+    try:
+        assign([
+            {
+                "id": "from-inspect-nb",
+                "databases": ["ie_config"],
+                "roles": ["ie_config"],
+                "container": "netbox",
+            },
+            {
+                "id": "from-inspect-ie",
+                "databases": ["netbox"],
+                "roles": ["netbox"],
+                "container": "insightengine",
+            },
+        ])
+    except SystemExit as exc:
+        text = str(exc)
+        if "refusing to map" not in text or "insightengine" not in text:
+            raise
+    else:
+        raise SystemExit("container mount contradicting catalogs was accepted")
+    print("PASS  migrate matches clusters by catalog and refuses a contradicting container mount")
 
 
 if __name__ == "__main__":
