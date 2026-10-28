@@ -342,7 +342,7 @@ export async function listLauncherApps() {
     host: 'monitor.example.com',
     role: 'Administrator',
     apps: [
-      { id: 'netbox', name: 'NetBox', url: 'https://monitor.example.com:8444/', status: 'up' as const },
+      { id: 'netbox', name: 'NetBox', url: 'https://monitor.example.com:8080/', status: 'up' as const },
       { id: 'grafana', name: 'Grafana', url: 'https://monitor.example.com:3000/', status: 'up' as const },
     ],
   };

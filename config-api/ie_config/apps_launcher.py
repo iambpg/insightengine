@@ -12,30 +12,38 @@ import os
 import httpx
 from fastapi import Request
 
-# id, name, port env, default port, internal health URL.
+# id, name, port env, default port, public scheme, internal health URL.
 # InsightEngine itself is the UI published on PORT_HTTPS.
+# NetBox's host port is 8080. SNMP, blackbox, and Telegraf are plain HTTP.
 _APPS = (
-    ("ui", "InsightEngine", "PORT_HTTPS", "443", "http://insightengine-ui:8080/healthz"),
-    ("netbox", "NetBox", "PORT_NETBOX", "8444", "http://netbox:8080/api/status/"),
-    ("grafana", "Grafana", "PORT_GRAFANA", "3000", "http://grafana:3000/api/health"),
-    ("prometheus", "Prometheus", "PORT_PROMETHEUS", "9090", "http://prometheus:9090/-/healthy"),
-    ("alertmanager", "Alertmanager", "PORT_ALERTMANAGER", "9093", "http://alertmanager:9093/-/healthy"),
-    ("activepieces", "Activepieces", "PORT_ACTIVEPIECES", "8081", "http://activepieces-app/"),
-    ("netdisco", "Netdisco", "PORT_NETDISCO", "5000", "http://netdisco-web:5000/"),
-    ("oxidized", "Oxidized", "PORT_OXIDIZED", "8888", "http://oxidized:8888/nodes"),
+    ("ui", "InsightEngine", "PORT_HTTPS", "443", "https", "http://insightengine-ui:8080/healthz"),
+    ("netbox", "NetBox", "PORT_NETBOX", "8080", "https", "http://netbox:8080/api/status/"),
+    ("grafana", "Grafana", "PORT_GRAFANA", "3000", "https", "http://grafana:3000/api/health"),
+    ("prometheus", "Prometheus", "PORT_PROMETHEUS", "9090", "https", "http://prometheus:9090/-/healthy"),
+    ("alertmanager", "Alertmanager", "PORT_ALERTMANAGER", "9093", "https", "http://alertmanager:9093/-/healthy"),
+    ("activepieces", "Activepieces", "PORT_ACTIVEPIECES", "8081", "https", "http://activepieces-app/"),
+    ("netdisco", "Netdisco", "PORT_NETDISCO", "5000", "https", "http://netdisco-web:5000/"),
+    ("oxidized", "Oxidized", "PORT_OXIDIZED", "8888", "https", "http://oxidized:8888/nodes"),
+    ("snmp-exporter", "SNMP exporter", "PORT_SNMP_EXPORTER", "9116", "http", "http://snmp-exporter-1:9116/-/healthy"),
+    ("blackbox", "blackbox exporter", "PORT_BLACKBOX", "9115", "http", "http://blackbox-exporter-1:9115/-/healthy"),
+    ("telegraf", "Telegraf", "PORT_TELEGRAF", "57500", "http", "http://telegraf-host:9273/metrics"),
 )
 
 
-def public_base(host: str, port: str) -> str:
+def public_base(host: str, port: str, scheme: str = "https") -> str:
     host = (host or "").strip()
+    if scheme not in ("http", "https"):
+        scheme = "https"
     if not host or any(char in host for char in " \t/:@\\"):
         return ""
     digits = str(port or "").strip()
     if not digits.isdigit() or not (1 <= int(digits) <= 65535):
         return ""
-    if digits == "443":
+    if scheme == "https" and digits == "443":
         return "https://%s/" % host
-    return "https://%s:%s/" % (host, digits)
+    if scheme == "http" and digits == "80":
+        return "http://%s/" % host
+    return "%s://%s:%s/" % (scheme, host, digits)
 
 
 def _port(name: str, default: str) -> str:
@@ -58,8 +66,8 @@ def build_catalog(host: str, role: str, client: httpx.Client | None = None) -> d
     close = client is None
     apps = []
     try:
-        for app_id, name, env_name, default, health in _APPS:
-            url = public_base(host, _port(env_name, default))
+        for app_id, name, env_name, default, scheme, health in _APPS:
+            url = public_base(host, _port(env_name, default), scheme)
             status = _probe(own, health) if url else "unknown"
             apps.append({"id": app_id, "name": name, "url": url, "status": status})
     finally:
