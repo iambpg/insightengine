@@ -8,6 +8,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData, DeviceHealth, DeviceRow, PortInfo, SiteRow } from '@/lib/types';
@@ -348,9 +349,9 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
         api
           .listSiteDevices(siteKey)
           .then((rows) => !cancelled && setSiteDevices(rows))
-          .catch(() => !cancelled && setError('Failed to load the topology. Check your connection and try again.'));
+          .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the topology')));
       })
-      .catch(() => !cancelled && setError('Failed to load the topology. Check your connection and try again.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the topology')));
     return () => {
       cancelled = true;
     };
@@ -459,7 +460,7 @@ function SiteTopologyPage({ site, onBack }: { site: SiteRow; onBack: () => void 
     api
       .listSiteDevices(site.id)
       .then((d) => !cancelled && setDevices(d))
-      .catch(() => !cancelled && setError('Failed to load the topology for this site. Check your connection and try again.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the topology for this site')));
     return () => {
       cancelled = true;
     };

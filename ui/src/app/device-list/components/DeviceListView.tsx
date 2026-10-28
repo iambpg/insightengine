@@ -6,6 +6,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
 import { api, type DeviceQuery } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
+import { reportLoadError } from '@/lib/loadError';
 import type { DeviceHealth, DeviceRow } from '@/lib/types';
 import HealthStrip from './HealthStrip';
 import DeviceFilters from './DeviceFilters';
@@ -48,7 +49,7 @@ export default function DeviceListView() {
         setTotal(res.total);
         if (res.roles) setRoles(res.roles);
       })
-      .catch(() => !cancelled && setError('Failed to load devices. Check your connection and try again.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'devices')));
     return () => {
       cancelled = true;
     };

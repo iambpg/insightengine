@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import { api } from '@/lib/apiClient';
+import AppsLauncher from '@/components/AppsLauncher';
+import { reportLoadError } from '@/lib/loadError';
 import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
 
 interface TopbarProps {
@@ -14,6 +16,7 @@ interface TopbarProps {
 export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
   const [now, setNow] = useState('');
   const [menu, setMenu] = useState(false);
+  const [appsOpen, setAppsOpen] = useState(false);
   const [alerts, setAlerts] = useState(0);
   const [setup, setSetup] = useState('');
   const [who, setWho] = useState({ name: '', role: '', initials: '' });
@@ -47,12 +50,14 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
     let cancelled = false;
     api.getSummary().then((summary) => {
       if (!cancelled) setAlerts(Number(summary.alerts) || 0);
-    }).catch(() => {
+    }).catch((cause) => {
+      reportLoadError(cause, 'alerts');
       if (!cancelled) setAlerts(0);
     });
     api.getSetupState().then((state) => {
       if (!cancelled) setSetup(state.state === 'complete' ? 'Setup complete' : `Setup ${state.state}`);
-    }).catch(() => {
+    }).catch((cause) => {
+      reportLoadError(cause, 'setup');
       if (!cancelled) setSetup('');
     });
     return () => {
@@ -114,6 +119,23 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
           <span className="font-mono-data text-foreground" suppressHydrationWarning>
             {now || '--:--:-- UTC'}
           </span>
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setAppsOpen((open) => !open)}
+            aria-expanded={appsOpen}
+            aria-haspopup="menu"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-sm font-medium hover:bg-muted"
+          >
+            <Icon name="Squares2X2Icon" size={16} />
+            Apps
+          </button>
+          {appsOpen ? (
+            <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-border bg-card p-1 shadow-pop">
+              <AppsLauncher layout="menu" />
+            </div>
+          ) : null}
         </div>
         <Link
           href="/alerts"

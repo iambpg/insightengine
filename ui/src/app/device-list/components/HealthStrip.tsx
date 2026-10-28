@@ -5,6 +5,7 @@ import Icon from '@/components/ui/AppIcon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
+import { reportLoadError } from '@/lib/loadError';
 import type { DeviceHealth } from '@/lib/types';
 
 interface Summary {
@@ -25,16 +26,16 @@ const fmt = (n: number) => n.toLocaleString('en-US');
 
 export default function HealthStrip({ activeHealth, onPick }: Props) {
   const [s, setS] = useState<Summary | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getSummary().then(setS).catch(() => setFailed(true));
+    api.getSummary().then(setS).catch((cause) => setFailed(reportLoadError(cause, 'the fleet summary')));
   }, []);
 
   if (failed) {
     return (
       <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-        Fleet summary is unavailable.
+        {failed}
       </div>
     );
   }

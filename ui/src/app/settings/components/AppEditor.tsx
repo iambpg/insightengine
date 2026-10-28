@@ -6,6 +6,7 @@ import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { api } from '@/lib/apiClient';
 import { ApiError, isApiError } from '@/lib/apiError';
+import { reportLoadError } from '@/lib/loadError';
 import type {
   ActionResult,
   DiffResult,
@@ -43,8 +44,7 @@ type EditorComponent = React.ForwardRefExoticComponent<
 >;
 
 function messageOf(error: unknown): string {
-  if (isApiError(error)) return error.message;
-  return 'The request failed. Check your connection and try again.';
+  return reportLoadError(error, 'this file');
 }
 
 function validationOf(error: ApiError): ValidateResult | null {

@@ -8,6 +8,7 @@ import Pagination from '@/components/ui/Pagination';
 import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
 import type { SiteRow } from '@/lib/types';
 
@@ -44,7 +45,7 @@ export default function TopologySiteList({ onPick }: Props) {
         setRows(r.rows);
         setTotal(r.total);
       })
-      .catch(() => !cancelled && setError('Failed to load sites. Check your connection and try again.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'sites')));
     return () => {
       cancelled = true;
     };

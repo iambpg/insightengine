@@ -20,6 +20,8 @@ from .auth import SETTINGS_ROLES, Auth, check_bearer, client_ip, read_setup_toke
 from .db import AuditRow, make_session_factory
 from .discovery import Discovery, NetBoxWriter, guess_device, load_device_aliases, load_yaml, unapproved_for_ui
 from .errors import ApiError, error_body
+from .apps_launcher import mount_apps_launcher
+from .device_cli import mount_device_cli
 from .fleet import mount_fleet
 from .masking import leftover_placeholders, mask_text, restore_secrets
 from .registry import AppSpec, FileSpec, Registry, load_registry
@@ -784,4 +786,10 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         return created
 
     mount_fleet(app, user_of)
+
+    def record_cli(user, request, result, detail):
+        _audit(sf, user, "device-cli", client_ip(request), result, "device-cli", "", "", (detail or "")[:500])
+
+    mount_device_cli(app, user_of, record_cli)
+    mount_apps_launcher(app, user_of)
     return app

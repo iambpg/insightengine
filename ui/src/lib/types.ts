@@ -155,6 +155,42 @@ export interface SeriesPoint {
   util: number | null;
 }
 
+export interface DeviceInterfaceRow {
+  name: string;
+  type: string;
+  enabled: boolean;
+  mac: string;
+  description: string;
+}
+
+export interface DeviceAddressRow {
+  address: string;
+  interface: string;
+  status: string;
+}
+
+export interface DeviceNeighbor {
+  localPort: string;
+  remoteName: string;
+  remotePort: string;
+  remoteAddress: string;
+  protocol: string;
+}
+
+export interface DeviceBackup {
+  available: boolean;
+  reason?: string;
+  status?: string;
+  at?: string;
+  config?: string;
+}
+
+export interface DeviceSource {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
 export interface DeviceDetailData {
   id: string;
   hostname: string;
@@ -173,6 +209,42 @@ export interface DeviceDetailData {
   checks: HealthCheck[];
   hardware: HardwareItem[];
   checkRunAt: string;
+  interfaces?: DeviceInterfaceRow[];
+  addresses?: DeviceAddressRow[];
+  neighbors?: DeviceNeighbor[];
+  backup?: DeviceBackup;
+  history?: SeriesPoint[];
+  sources?: DeviceSource[];
+}
+
+export interface LauncherApp {
+  id: string;
+  name: string;
+  url: string;
+  status: 'up' | 'down' | 'unknown';
+}
+
+export interface LauncherCatalog {
+  host: string;
+  role: string;
+  apps: LauncherApp[];
+}
+
+export interface CliCommandSpec {
+  id: string;
+  group: string;
+  label: string;
+  command: string;
+}
+
+export interface CliCatalog {
+  platform: string;
+  platformLabel: string;
+  commands: CliCommandSpec[];
+  credentialsConfigured: boolean;
+  hostname: string;
+  mgmtIp: string;
+  message: string;
 }
 
 export interface WebhookDelivery {

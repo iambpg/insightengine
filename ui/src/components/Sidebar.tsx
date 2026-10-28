@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import Icon from '@/components/ui/AppIcon';
 import AppLogo from '@/components/ui/AppLogo';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
 import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
 
@@ -69,7 +70,8 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
       .then((rows) => {
         if (!cancelled) setPending(rows.length);
       })
-      .catch(() => {
+      .catch((cause) => {
+        reportLoadError(cause, 'discovered devices');
         if (!cancelled) setPending(0);
       });
     return () => {

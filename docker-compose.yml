@@ -488,6 +488,9 @@ services:
       NETDISCO_IMAGE_PREFIX: ${NETDISCO_IMAGE_PREFIX:-}
       OXIDIZED_IMAGE: ${OXIDIZED_IMAGE:-}
       POSTGRES_IMAGE: ${POSTGRES_IMAGE:-}
+      OXIDIZED_URL: http://oxidized:8888
+      DEVICE_CLI_SECRET_DIR: /opt/insightengine/secrets/device-cli
+      PORT_HTTPS: ${PORT_HTTPS:-443}
       PORT_PROMETHEUS: ${PORT_PROMETHEUS:-9090}
       PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-9093}
       PORT_GRAFANA: ${PORT_GRAFANA:-3000}
@@ -501,6 +504,7 @@ services:
       - ./trapd:/opt/insightengine/trapd
       - ./data:/opt/insightengine/data
       - ./secrets/prometheus/netbox.token:/opt/insightengine/secrets/prometheus/netbox.token:ro
+      - ./secrets/device-cli:/opt/insightengine/secrets/device-cli
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - ./config-api/apps.yml:/app/apps.yml:ro
       - netdisco-local:/var/lib/ie/netdisco-local

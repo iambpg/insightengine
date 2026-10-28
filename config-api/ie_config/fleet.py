@@ -22,7 +22,7 @@ import threading
 import time
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 import httpx
 from fastapi import Request
@@ -836,20 +836,141 @@ class FleetService:
                     found = self._representative(rows, key)
                 if found is None:
                     raise ApiError(404, "not_found", "unknown device")
-                detail = self._detail(client, found, rows)
+                try:
+                    detail = self._detail(client, found, rows)
+                except Exception:
+                    log.warning("device detail assembly failed for %s", found.get("hostname"))
+                    detail = _minimal_detail(found, self._now_dt())
+                alerts = self._alerts_raw(client)
+                self._attach_inventory(client, detail, found)
+                if alerts.get("degraded"):
+                    for source in detail.get("sources") or []:
+                        if source.get("name") == "alertmanager":
+                            source["ok"] = False
+                            source["detail"] = "Alertmanager is not reachable"
                 if detail.pop("_port_degraded", False) and "prometheus" not in degraded:
                     degraded.append("prometheus")
-                alerts = self._alerts_raw(client)
         except UpstreamError as exc:
             raise _as_upstream(exc)
         if alerts.get("degraded") and "alertmanager" not in degraded:
             degraded.append("alertmanager")
-        detail["issues"] = [
-            _issue_from_alert(alert, index)
-            for index, alert in enumerate(self._project_alerts(alerts, rows))
-            if alert["status"] == "open" and alert["deviceHostname"].lower() == found["hostname"].lower()
-        ]
+        try:
+            detail["issues"] = [
+                _issue_from_alert(alert, index)
+                for index, alert in enumerate(self._project_alerts(alerts, rows))
+                if alert["status"] == "open" and alert["deviceHostname"].lower() == found["hostname"].lower()
+            ]
+        except Exception:
+            log.warning("device alerts could not be projected for %s", found.get("hostname"))
+            detail["issues"] = []
+            if "alertmanager" not in degraded:
+                degraded.append("alertmanager")
+        detail.setdefault("sources", [])
         return self._with_degraded(detail, degraded)
+
+    def device_access(self, device_id: str) -> dict:
+        """Hostname, management IP and platform. Used by the read-only CLI."""
+        key = unquote(device_id or "").strip()
+        try:
+            with self._session() as client:
+                rows = self._devices_raw(client)
+        except UpstreamError as exc:
+            raise _as_upstream(exc)
+        found = None
+        for row in rows:
+            if row["id"] == key or row["name"].lower() == key.lower():
+                found = row
+                break
+        if found is None:
+            raise ApiError(404, "not_found", "unknown device")
+        return {
+            "id": found["id"],
+            "hostname": found["name"],
+            "ip": found["ip"],
+            "platform": found["platform"],
+            "manufacturer": found["manufacturer"],
+        }
+
+    def _attach_inventory(self, client, detail: dict, found: dict) -> None:
+        """NetBox interfaces and IPs, Prometheus history, Oxidized and Netdisco.
+
+        A missing source is recorded on the device and does not fail the page.
+        """
+        device = found.get("_device") or {}
+        device_id = str(device.get("id") or found.get("id") or "")
+        interfaces, iface_error = self._netbox_rows(
+            client, "/api/dcim/interfaces/?device_id=%s&limit=200" % quote(device_id, safe="")
+        )
+        addresses, addr_error = self._netbox_rows(
+            client, "/api/ipam/ip-addresses/?device_id=%s&limit=200" % quote(device_id, safe="")
+        )
+        detail["interfaces"] = [_public_interface(row) for row in interfaces if isinstance(row, dict)]
+        detail["addresses"] = [_public_address(row) for row in addresses if isinstance(row, dict)]
+        selector = self._selector(device) if device else ""
+        history = []
+        history_error = ""
+        if selector:
+            try:
+                history = self._throughput(client, selector, self._now() - 3600, self._now(), 60, 3600)
+            except UpstreamError:
+                history_error = "Prometheus history is not available"
+            except Exception:
+                history_error = "Prometheus history is not available"
+        detail["history"] = history
+        backup = self._oxidized_backup(client, found.get("hostname") or "")
+        detail["backup"] = backup
+        neighbors = netdisco_neighbors(getattr(self.settings, "netdisco_database_url", "") or "", device.get("ip") or found.get("mgmtIp") or "")
+        detail["neighbors"] = neighbors.get("neighbors") or []
+        detail["sources"] = [
+            {"name": "netbox", "ok": not iface_error and not addr_error, "detail": iface_error or addr_error},
+            {"name": "prometheus", "ok": not detail.get("_port_degraded") and not history_error, "detail": history_error},
+            {"name": "alertmanager", "ok": True, "detail": ""},
+            {"name": "oxidized", "ok": bool(backup.get("available")), "detail": backup.get("reason") or ""},
+            {"name": "netdisco", "ok": bool(neighbors.get("available")), "detail": neighbors.get("reason") or ""},
+        ]
+
+    def _netbox_rows(self, client, path: str):
+        try:
+            return self._walk(client, path), ""
+        except UpstreamError as exc:
+            return [], exc.message
+
+    def _oxidized_backup(self, client, name: str) -> dict:
+        empty = {"available": False, "reason": "", "status": "", "at": "", "config": ""}
+        safe_name = quote(str(name or ""), safe="")
+        if not safe_name:
+            empty["reason"] = "This device has no name for Oxidized"
+            return empty
+        base = (getattr(self.settings, "oxidized_url", "") or "http://oxidized:8888").rstrip("/")
+        try:
+            shown = self._send(client, "GET", "%s/node/show/%s.json" % (base, safe_name), upstream="oxidized")
+        except UpstreamError:
+            empty["reason"] = "Oxidized is not reachable"
+            return empty
+        if shown.status_code == 404:
+            empty["reason"] = "Oxidized has no backup for this device"
+            return empty
+        if shown.status_code >= 400:
+            empty["reason"] = "Oxidized returned HTTP %s" % shown.status_code
+            return empty
+        status = ""
+        at = ""
+        try:
+            body = shown.json()
+        except ValueError:
+            body = {}
+        if isinstance(body, dict):
+            last = body.get("last") if isinstance(body.get("last"), dict) else {}
+            status = str(last.get("status") or "")
+            at = str(last.get("end") or last.get("start") or "")
+        config = ""
+        try:
+            fetched = self._send(client, "GET", "%s/node/fetch/%s" % (base, safe_name), upstream="oxidized")
+            if fetched.status_code < 400:
+                config = redact_config(fetched.text or "")
+        except UpstreamError:
+            pass
+        return {"available": True, "reason": "", "status": status, "at": at, "config": config}
 
     def _detail(self, client, row: dict, rows: list[dict]) -> dict:
         device = row["_device"]
@@ -1413,6 +1534,107 @@ def _join_ports(oper, admin, speed, inbound, outbound, errors) -> list[dict]:
         ports.append(port)
     ports.sort(key=lambda item: item["name"].lower())
     return ports
+
+
+def _minimal_detail(row: dict, now: datetime) -> dict:
+    return {
+        "id": row.get("id") or "",
+        "hostname": row.get("hostname") or "",
+        "role": row.get("role") or "",
+        "site": row.get("site") or "",
+        "siteId": row.get("siteId") or "",
+        "mgmtIp": row.get("mgmtIp") or "—",
+        "modelFamily": row.get("modelFamily") or "—",
+        "health": row.get("health") or "unreachable",
+        "uptime": row.get("uptime") or "—",
+        "lastPoll": row.get("lastPoll") or "—",
+        "firmware": "—",
+        "serialMasked": "—",
+        "faceplate": {
+            "form_factor": row.get("formFactor") or "generic",
+            "role": row.get("role") or "",
+            "hostname": row.get("hostname") or "",
+            "ports": [],
+        },
+        "issues": [],
+        "checks": [],
+        "hardware": [],
+        "checkRunAt": _clock_stamp(now),
+        "_port_degraded": True,
+    }
+
+
+_SECRET_LINE = re.compile(r"(?i)(password|secret|community|passphrase|private-key|\bpsk\b)")
+
+
+def redact_config(text: str) -> str:
+    """Drop secret-looking values from a config backup before it leaves ie-config."""
+    if not text:
+        return ""
+    lines = []
+    for line in text.splitlines():
+        lines.append("***" if _SECRET_LINE.search(line) else line)
+    return "\n".join(lines)[:20000]
+
+
+def _public_interface(raw: dict) -> dict:
+    kind = raw.get("type")
+    if isinstance(kind, dict):
+        kind_text = str(kind.get("label") or kind.get("value") or "")
+    else:
+        kind_text = str(kind or "")
+    return {
+        "name": str(raw.get("name") or ""),
+        "type": kind_text,
+        "enabled": bool(raw.get("enabled", True)),
+        "mac": str(raw.get("mac_address") or ""),
+        "description": str(raw.get("description") or ""),
+    }
+
+
+def _public_address(raw: dict) -> dict:
+    assigned = raw.get("assigned_object") if isinstance(raw.get("assigned_object"), dict) else {}
+    status = raw.get("status") if isinstance(raw.get("status"), dict) else {}
+    return {
+        "address": str(raw.get("address") or ""),
+        "interface": str(assigned.get("name") or assigned.get("display") or ""),
+        "status": str(status.get("label") or status.get("value") or ""),
+    }
+
+
+def netdisco_neighbors(database_url: str, ip: str) -> dict:
+    """LLDP/CDP neighbours from Netdisco device_port, when that database is set."""
+    address = (ip or "").split("/")[0].strip()
+    if not database_url:
+        return {"available": False, "reason": "Netdisco is not configured", "neighbors": []}
+    if not address:
+        return {"available": False, "reason": "This device has no address to look up in Netdisco", "neighbors": []}
+    try:
+        import psycopg
+        with psycopg.connect(database_url, connect_timeout=3) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT port, COALESCE(host(remote_ip)::text, ''), COALESCE(remote_port, ''), "
+                    "COALESCE(remote_id, ''), COALESCE(remote_type, '') "
+                    "FROM device_port WHERE host(ip) = %s "
+                    "AND (remote_ip IS NOT NULL OR COALESCE(remote_id, '') <> '') "
+                    "ORDER BY port LIMIT 200",
+                    (address,),
+                )
+                fetched = cur.fetchall()
+    except Exception:
+        log.warning("netdisco neighbour read failed")
+        return {"available": False, "reason": "Netdisco neighbours could not be read", "neighbors": []}
+    neighbors = []
+    for port, remote_ip, remote_port, remote_id, remote_type in fetched:
+        neighbors.append({
+            "localPort": str(port or ""),
+            "remoteAddress": str(remote_ip or ""),
+            "remotePort": str(remote_port or ""),
+            "remoteName": str(remote_id or ""),
+            "protocol": str(remote_type or ""),
+        })
+    return {"available": True, "reason": "", "neighbors": neighbors}
 
 
 def _faceplate(form: str, role: str, hostname: str, model: str, ports: list[dict]) -> dict:

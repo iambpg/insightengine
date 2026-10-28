@@ -335,3 +335,38 @@ export async function startScan(target: 'prefix' | 'ip', value: string) {
   await delay(60);
   return beginScan(target, value);
 }
+
+export async function listLauncherApps() {
+  await delay(20);
+  return {
+    host: 'monitor.example.com',
+    role: 'Administrator',
+    apps: [
+      { id: 'netbox', name: 'NetBox', url: 'https://monitor.example.com:8444/', status: 'up' as const },
+      { id: 'grafana', name: 'Grafana', url: 'https://monitor.example.com:3000/', status: 'up' as const },
+    ],
+  };
+}
+
+export async function getDeviceCli() {
+  await delay(20);
+  return {
+    platform: 'ios',
+    platformLabel: 'Cisco IOS',
+    commands: [],
+    credentialsConfigured: false,
+    hostname: '',
+    mgmtIp: '',
+    message: 'CLI credentials are not set for this device.',
+  };
+}
+
+export async function runDeviceCli(_deviceId: string, command: string) {
+  await delay(20);
+  return { command, output: '', platform: 'ios' };
+}
+
+export async function saveDeviceCliCredentials() {
+  await delay(20);
+  return { ok: true, configured: true };
+}
