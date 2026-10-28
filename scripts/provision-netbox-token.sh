@@ -6,7 +6,12 @@
 # An install that already has the admin user (for example after copying an old
 # Postgres volume) never receives that token. This script calls
 # POST /api/users/tokens/provision/ and writes the returned nbt_<key>.<secret>
-# into the secret files. It does not print the token or the password.
+# into the secret files the installer has always used
+# (secrets/prometheus/netbox.token, secrets/oxidized/netbox.token,
+# secrets/cust-exporter/netbox.token). There is no secrets/netbox/ directory.
+# An older file holds the raw 40-character token; lib-netbox-auth.sh sends that
+# as Authorization: Token, and this script replaces it when NetBox rejects it.
+# It does not print the token or the password.
 #
 #   ./scripts/provision-netbox-token.sh            # dry-run: report whether the current file works
 #   ./scripts/provision-netbox-token.sh --apply
@@ -19,7 +24,7 @@ SELF_TEST=0
 case "${1:-}" in
   --apply) APPLY=1 ;;
   --self-test) SELF_TEST=1 ;;
-  --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  --help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   "") ;;
   *) echo "unknown argument: $1" >&2; exit 2 ;;
 esac

@@ -7,9 +7,11 @@
 #
 # Fills missing .env secrets before any docker compose command, then stops
 # containers by the compose project label and leaves them in place.
-# --dry-run still runs the read-only steps: it prints the keys it would add
-# without writing them, runs `docker compose config -q`, and runs
-# scripts/migrate-pg-volumes.sh without --apply.
+# A .env written before .install-started existed is passed to
+# install.sh --upgrade-env, which backfills it and writes the marker after.
+# --dry-run still runs the read-only steps: it prints the keys it would add,
+# runs install.sh --upgrade-env --dry-run, runs `docker compose config -q`,
+# and runs scripts/migrate-pg-volumes.sh without --apply.
 # Confirm before the copy and before start unless --yes or --dry-run.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,7 +30,7 @@ migrate_bin="${UPGRADE_MIGRATE_BIN:-$ROOT/scripts/migrate-pg-volumes.sh}"
 provision_bin="${UPGRADE_PROVISION_BIN:-$ROOT/scripts/provision-netbox-token.sh}"
 
 usage() {
-  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -96,6 +98,11 @@ preview_backfill() {
   fi
   if [ "$DRY" -eq 1 ]; then
     say "dry-run: .env was not modified"
+    if [ -f "$ROOT/.install-started" ] && grep -qx 'past-secret-generation' "$ROOT/.install-started"; then
+      say "install marker present; backfill uses the resume path"
+    else
+      say "no past-secret-generation marker; install.sh --upgrade-env accepts a real pre-marker .env and writes the marker after backfill"
+    fi
   fi
 }
 
@@ -178,6 +185,12 @@ EOF
   cat > "$tmp/install.sh" <<'EOF'
 #!/bin/bash
 printf 'called install %s\n' "$*" >> "$UPGRADE_DOCKER_LOG"
+case " $* " in
+  *" --dry-run "*)
+    echo "dry-run: would upgrade a pre-marker .env"
+    exit 0
+    ;;
+esac
 if [ ! -f "$UPGRADE_ENV_FILE" ]; then
   echo "missing env file" >&2
   exit 1
@@ -254,12 +267,10 @@ EOF
     echo "dry-run executed migrate --apply" >&2
     exit 1
   fi
-  if grep -q 'install.sh' "$log"; then
-    echo "dry-run logged install.sh" >&2
-    exit 1
-  fi
-  if grep -q 'called install' "$dlog"; then
-    echo "dry-run executed the env backfill" >&2
+  grep -q "run: $tmp/install.sh --upgrade-env --no-start --dry-run" "$log"
+  grep -q 'called install --upgrade-env --no-start --dry-run' "$dlog"
+  if grep -E "run: $tmp/install.sh --upgrade-env --no-start$" "$log"; then
+    echo "dry-run wrote the env via install.sh" >&2
     exit 1
   fi
   if grep -E -q '(^|[[:space:]])stop([[:space:]]|$)' "$dlog"; then
@@ -297,6 +308,7 @@ PY
   : > "$dlog"
   run_child apply --yes
   grep -q 'NETBOX_SUPERUSER_API_KEY=generated-for-test' "$envfile"
+  grep -q "run: $tmp/install.sh --upgrade-env --no-start" "$log"
   grep -q 'compose project: insightengine' "$out"
   grep -q 'sha256:before -> sha256:after' "$out"
   python3 - "$log" "$tmp/install.sh" "$tmp/migrate.sh" <<'PY'
@@ -342,8 +354,10 @@ fi
 
 say "1. Backfill missing secrets before any docker compose command."
 preview_backfill
-if [ "$DRY" -eq 0 ]; then
-  run_readonly "$install_bin" --no-start
+if [ "$DRY" -eq 1 ]; then
+  run_readonly "$install_bin" --upgrade-env --no-start --dry-run
+else
+  run_readonly "$install_bin" --upgrade-env --no-start
 fi
 
 say "2. Resolve the compose project, then stop by its container label."
