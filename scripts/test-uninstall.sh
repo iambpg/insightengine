@@ -51,7 +51,7 @@ joined="$*"
 case "$1" in
   info)
     if [ "${MOCK_DOCKER_DOWN:-0}" = 1 ]; then
-      echo 'Cannot connect to the Docker daemon' >&2
+      echo "${MOCK_DOCKER_ERR:-Cannot connect to the Docker daemon}" >&2
       exit 1
     fi
     exit 0
@@ -117,6 +117,7 @@ case "$1" in
       exit 0
     fi
     if [[ "$2" == rm ]]; then
+      [ "${MOCK_VOLRM_FAIL:-0}" = 1 ] && exit 1
       exit 0
     fi
     echo "unexpected volume $*" >&2
@@ -141,7 +142,11 @@ case "$1" in
     printf '%s\n' 'insightengine/ie-config:local' 'insightengine-ui:local' 'postgres:17.9' 'rancher/mirrored-pause:latest'
     exit 0
     ;;
-  rm|rmi|start)
+  rmi)
+    [ "${MOCK_RMI_FAIL:-0}" = 1 ] && exit 1
+    exit 0
+    ;;
+  rm|start)
     exit 0
     ;;
   exec)
@@ -330,7 +335,8 @@ grep -q 'rm -f cid-nb cid-ie' "$MOCK_LOG" || grep -q 'rm -f cid-nb' "$MOCK_LOG" 
 grep -q "volume rm" "$MOCK_LOG" || fail "volumes were not removed"
 grep -q "$ANON_NB" "$MOCK_LOG" || fail "anonymous postgres volume was not removed"
 grep -q 'insightengine_monitoring-net' "$MOCK_LOG" || fail "network was not removed"
-grep -q 'rmi insightengine/ie-config:local insightengine-ui:local' "$MOCK_LOG" || fail "local images were not removed"
+grep -q '^rmi insightengine/ie-config:local' "$MOCK_LOG" || fail "ie-config image was not removed"
+grep -q '^rmi insightengine-ui:local' "$MOCK_LOG" || fail "ui image was not removed"
 if grep -q 'k3s' "$MOCK_LOG"; then
   # k3s may appear only if we queried without a filter. Removal lines must not name it.
   if grep -E '^(rm|rmi|volume rm|network rm).*k3s' "$MOCK_LOG"; then
@@ -368,6 +374,8 @@ if grep -R -F -q "$SECRET" "$backups"; then
   fail "secret stored in the backup directory listing or dump"
 fi
 grep -q 'PGDMP' "$backups"/*/netbox.sql || fail "netbox dump missing"
+[ "$(stat -c %a "$backups"/uninstall-*)" = 700 ] || fail "backup directory is not owner-only"
+[ "$(stat -c %a "$backups"/uninstall-*/netbox.sql)" = 600 ] || fail "dump is not owner-only"
 [ ! -e "$fix3/.env" ] || fail "backup apply left .env"
 
 fix4="$tmp/fix4"
@@ -383,25 +391,92 @@ rm -f "$MOCK_STATE/no-ie"
 printf '%s\n' "$bak_fail" | grep -q 'nothing was removed' || fail "failed backup did not abort: $bak_fail"
 [ -f "$fix4/.env" ] || fail "failed backup removed .env"
 
-# Docker daemon down: files can still be removed, with a warning.
+# Docker daemon down: the wipe is refused, because removing only the files would leave
+# volumes that hold the old passwords. The dry-run still works.
 fix5="$tmp/fix5"
 make_fixture "$fix5"
 : > "$MOCK_LOG"
-down_out="$tmp/down.out"
-MOCK_DOCKER_DOWN=1 run_un "$fix5" --apply --yes >"$down_out" 2>"$tmp/down.err"
-unset MOCK_DOCKER_DOWN
-grep -q 'Docker is not running' "$tmp/down.err" || fail "missing docker warning"
-[ ! -e "$fix5/.env" ] || fail "daemon-down apply left .env"
+set +e
+down_msg="$(MOCK_DOCKER_DOWN=1 run_un "$fix5" --apply --yes 2>&1)"
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail "apply with Docker down succeeded"
+printf '%s\n' "$down_msg" | grep -q 'nothing was removed' || fail "docker-down refusal message: $down_msg"
+printf '%s\n' "$down_msg" | grep -q 'daemon is not running' || fail "docker-down reason missing: $down_msg"
+[ -f "$fix5/.env" ] || fail "docker-down refusal removed .env"
+perm_msg="$(MOCK_DOCKER_DOWN=1 MOCK_DOCKER_ERR='permission denied while trying to connect' run_un "$fix5" --apply --yes 2>&1 || true)"
+printf '%s\n' "$perm_msg" | grep -q 'run with sudo' || fail "permission-denied hint missing: $perm_msg"
+MOCK_DOCKER_DOWN=1 run_un "$fix5" >"$tmp/down-dry.out" 2>/dev/null || fail "dry-run with Docker down failed"
+[ -f "$fix5/.env" ] || fail "dry-run removed .env"
+# --files-only removes just the files and never calls docker.
+: > "$MOCK_LOG"
+MOCK_DOCKER_DOWN=1 run_un "$fix5" --apply --yes --files-only >"$tmp/fo.out" 2>"$tmp/fo.err" || fail "--files-only failed"
+[ ! -e "$fix5/.env" ] || fail "--files-only left .env"
 if grep -E -q '^(ps|volume|network|rmi|rm) ' "$MOCK_LOG"; then
-  fail "daemon-down apply still queried or removed docker objects"
+  fail "--files-only queried or removed docker objects"
 fi
 
-# No docker binary at all.
+# A volume that cannot be removed keeps the files, so a fresh install cannot reuse old data.
+fixv="$tmp/fixv"
+make_fixture "$fixv"
+set +e
+vol_msg="$(MOCK_VOLRM_FAIL=1 run_un "$fixv" --apply --yes 2>&1)"
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail "apply succeeded although volumes could not be removed"
+printf '%s\n' "$vol_msg" | grep -q 'files were kept' || fail "volume failure message: $vol_msg"
+[ -f "$fixv/.env" ] || fail "volume failure removed .env"
+# An image that cannot be removed does not stop the wipe, but the exit status says so.
+fixi="$tmp/fixi"
+make_fixture "$fixi"
+set +e
+img_msg="$(MOCK_RMI_FAIL=1 run_un "$fixi" --apply --yes 2>&1)"
+rc=$?
+set -e
+[ "$rc" -eq 1 ] || fail "image failure exit status $rc"
+[ ! -e "$fixi/.env" ] || fail "image failure left .env"
+printf '%s\n' "$img_msg" | grep -q 'could not be removed' || fail "image failure message: $img_msg"
+
+# Files this user cannot remove abort before anything is deleted (skipped when running as root).
+if [ "$(id -u)" -ne 0 ]; then
+  fixp="$tmp/fixp"
+  make_fixture "$fixp"
+  mkdir -p "$fixp/data/locked"
+  printf '%s\n' x > "$fixp/data/locked/file"
+  chmod 500 "$fixp/data/locked"
+  set +e
+  lock_msg="$(run_un "$fixp" --apply --yes 2>&1)"
+  rc=$?
+  set -e
+  chmod 700 "$fixp/data/locked"
+  [ "$rc" -ne 0 ] || fail "apply succeeded with a directory this user cannot clean"
+  printf '%s\n' "$lock_msg" | grep -q 'nothing was removed' || fail "locked directory message: $lock_msg"
+  [ -f "$fixp/.env" ] || fail "locked directory run removed .env"
+  chmod 000 "$fixp/data/locked"
+  hid_msg="$(run_un "$fixp" --apply --yes 2>&1 || true)"
+  chmod 700 "$fixp/data/locked"
+  printf '%s\n' "$hid_msg" | grep -q 'cannot read' || fail "unreadable directory not reported: $hid_msg"
+  [ -f "$fixp/.env" ] || fail "unreadable directory run removed .env"
+fi
+
+# No docker binary at all: --files-only is the only way to wipe. PATH holds every tool the
+# script needs except docker.
 fix6="$tmp/fix6"
 make_fixture "$fix6"
-nodocker="$(PATH="/usr/bin:/bin" bash "$fix6/scripts/uninstall.sh" --apply --yes 2>"$tmp/nodocker.err")" || fail "no-docker apply failed"
-printf '%s\n' "$nodocker" | grep -q 'Docker is not running' || grep -q 'Docker is not running' "$tmp/nodocker.err" || fail "no-docker warning missing"
-[ ! -e "$fix6/.env" ] || fail "no-docker apply left .env"
+nobin="$tmp/nobin"
+mkdir -p "$nobin"
+for tool in bash env git find sed awk grep dirname cat date stat rm rmdir mkdir tr cut head sort ls id printf; do
+  path="$(command -v "$tool" || true)"
+  [ -n "$path" ] && [ -x "$path" ] && ln -sf "$path" "$nobin/$tool"
+done
+set +e
+nodocker_msg="$(PATH="$nobin" "$nobin/bash" "$fix6/scripts/uninstall.sh" --apply --yes 2>&1)"
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail "no-docker apply succeeded"
+printf '%s\n' "$nodocker_msg" | grep -q 'not found' || fail "no-docker reason missing: $nodocker_msg"
+nodocker="$(PATH="$nobin" "$nobin/bash" "$fix6/scripts/uninstall.sh" --apply --yes --files-only 2>&1)" || fail "no-docker --files-only failed"
+[ ! -e "$fix6/.env" ] || fail "no-docker --files-only left .env"
 assert_no_secret <(printf '%s\n' "$nodocker")
 
 # Second apply on an already-clean tree succeeds.
@@ -413,4 +488,4 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
 else
   echo "SKIP  live Docker daemon: uninstall was not run against a real daemon. Containers, volumes, networks, and images were simulated."
 fi
-echo "PASS  uninstall dry-run, confirmation, project filter, keep flags, backup, and no-docker path"
+echo "PASS  uninstall dry-run, confirmation, project filter, keep flags, backup, Docker-down refusal, --files-only, and partial-failure paths"

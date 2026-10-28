@@ -6,6 +6,7 @@
 #   ./scripts/uninstall.sh --apply --yes
 #   ./scripts/uninstall.sh --backup-first --apply --yes
 #   ./scripts/uninstall.sh --keep-images --keep-certs --keep-backups --apply --yes
+#   ./scripts/uninstall.sh --files-only --apply --yes     (Docker unreachable, see docs)
 #
 # The default is a dry-run. It lists containers, networks, named and anonymous
 # volumes for this compose project, local images, and installer files. Nothing
@@ -30,10 +31,11 @@ KEEP_IMAGES=0
 KEEP_CERTS=0
 KEEP_BACKUPS=0
 BACKUP_FIRST=0
+FILES_ONLY=0
 PROJECT_ARG=""
 
 usage() {
-  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -46,7 +48,10 @@ while [ $# -gt 0 ]; do
     --keep-certs) KEEP_CERTS=1; shift ;;
     --keep-backups) KEEP_BACKUPS=1; shift ;;
     --backup-first) BACKUP_FIRST=1; shift ;;
-    --project) PROJECT_ARG="${2:-}"; shift 2 ;;
+    --files-only) FILES_ONLY=1; shift ;;
+    --project)
+      [ $# -ge 2 ] || { echo "--project needs a value" >&2; exit 2; }
+      PROJECT_ARG="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
@@ -56,10 +61,20 @@ warn() { printf 'WARNING: %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 DOCKER_OK=0
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+DOCKER_WHY=""
+if [ "$FILES_ONLY" = 1 ]; then
+  DOCKER_WHY="--files-only"
+elif ! command -v docker >/dev/null 2>&1; then
+  DOCKER_WHY="the docker command was not found"
+elif DOCKER_ERR="$(docker info 2>&1 >/dev/null)"; then
   DOCKER_OK=1
+elif printf '%s' "$DOCKER_ERR" | grep -qi 'permission denied'; then
+  DOCKER_WHY="this user cannot use the Docker socket (run with sudo)"
 else
-  warn "Docker is not running. Containers, networks, volumes, and images will not be changed."
+  DOCKER_WHY="the Docker daemon is not running"
+fi
+if [ "$DOCKER_OK" != 1 ] && [ "$FILES_ONLY" != 1 ]; then
+  warn "Docker is not usable: ${DOCKER_WHY}. Containers, networks, volumes, and images are not listed or changed."
 fi
 
 if [ "$DOCKER_OK" = 1 ]; then
@@ -178,7 +193,16 @@ consider_tree() {
   done < <(find "$ROOT/$rel" -mindepth 1 -print0 2>/dev/null || true)
 }
 
+declare -a UNREADABLE=()
+
 collect_files() {
+  local path dir
+  for dir in certs secrets data migration config/netdisco/nd-site-local; do
+    [ -d "$ROOT/$dir" ] || continue
+    while IFS= read -r -d '' path; do
+      UNREADABLE+=("${path#"$ROOT"/}")
+    done < <(find "$ROOT/$dir" -type d \( ! -readable -o ! -executable \) -print0 2>/dev/null || true)
+  done
   consider_file .env
   consider_file .install-started
   consider_file migration/migrate.conf
@@ -221,6 +245,10 @@ print_plan() {
   fi
   print_list "files:" ${FILES[@]+"${FILES[@]}"}
   print_list "kept:" ${KEPT[@]+"${KEPT[@]}"}
+  if [ "${#UNREADABLE[@]}" -gt 0 ]; then
+    warn "this user cannot read ${#UNREADABLE[@]} director(ies), so the file list is incomplete (run with sudo):"
+    print_list "unreadable:" "${UNREADABLE[@]}" >&2
+  fi
   if [ "$BACKUP_FIRST" = 1 ]; then
     say "backup: NetBox and ie_config dumps would be written outside the repository before removal"
   fi
@@ -261,12 +289,12 @@ backup_one() {
   # The container already has POSTGRES_USER. The password is not put on this command line.
   if [ "$dbname" = "POSTGRES_DB" ]; then
     docker exec "$cid" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "$outfile" \
-      || die "backup failed: pg_dump ${service}; nothing was removed"
+      || { rm -f "$outfile"; die "backup failed: pg_dump ${service}; nothing was removed"; }
   else
     docker exec "$cid" sh -c 'pg_dump -U "$POSTGRES_USER" -d ie_config' > "$outfile" \
-      || die "backup failed: pg_dump ${service} ie_config; nothing was removed"
+      || { rm -f "$outfile"; die "backup failed: pg_dump ${service} ie_config; nothing was removed"; }
   fi
-  [ -s "$outfile" ] || die "backup failed: ${outfile} is empty; nothing was removed"
+  [ -s "$outfile" ] || { rm -f "$outfile"; die "backup failed: ${outfile} is empty; nothing was removed"; }
   say "backed up ${service} to ${outfile}"
 }
 
@@ -279,11 +307,16 @@ run_backup() {
   case "$dest" in
     "$ROOT"|"$ROOT"/*) die "backup directory must be outside the repository" ;;
   esac
-  mkdir -p "$dest"
+  # The dumps hold every credential stored in the databases: owner-only.
+  umask 077
+  mkdir -p "$dest" || die "backup failed: cannot create ${dest}; nothing was removed"
   backup_one netbox-postgres POSTGRES_DB "$dest/netbox.sql"
   backup_one insightengine-postgres ie_config "$dest/ie_config.sql"
-  say "backups are in ${dest}"
+  say "backups are in ${dest} (owner-only; they contain credentials, copy them somewhere safe)"
 }
+
+FAILED_VOLUMES=0
+FAILED_OTHER=0
 
 remove_docker() {
   [ "$DOCKER_OK" = 1 ] || return 0
@@ -293,20 +326,22 @@ remove_docker() {
     for id in "${CONTAINERS[@]}"; do
       ids+=("${id%% *}")
     done
-    docker rm -f "${ids[@]}" >/dev/null
+    docker rm -f "${ids[@]}" >/dev/null || die "could not remove the containers; nothing else was removed"
     say "removed ${#ids[@]} container(s)"
   fi
-  if [ "${#VOLUMES[@]}" -gt 0 ]; then
-    docker volume rm "${VOLUMES[@]}" >/dev/null
-    say "removed ${#VOLUMES[@]} volume(s)"
-  fi
-  if [ "${#NETWORKS[@]}" -gt 0 ]; then
-    docker network rm "${NETWORKS[@]}" >/dev/null
-    say "removed ${#NETWORKS[@]} network(s)"
-  fi
-  if [ "$KEEP_IMAGES" = 0 ] && [ "${#IMAGES[@]}" -gt 0 ]; then
-    docker rmi "${IMAGES[@]}" >/dev/null
-    say "removed ${#IMAGES[@]} image(s)"
+  # One object at a time: a volume or image used by something outside this project must
+  # not stop the rest of the wipe.
+  for name in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
+    docker volume rm "$name" >/dev/null 2>&1 || { warn "could not remove volume ${name} (in use by another container?)"; FAILED_VOLUMES=$((FAILED_VOLUMES + 1)); }
+  done
+  [ "${#VOLUMES[@]}" -eq 0 ] || say "removed $(( ${#VOLUMES[@]} - FAILED_VOLUMES )) of ${#VOLUMES[@]} volume(s)"
+  for name in ${NETWORKS[@]+"${NETWORKS[@]}"}; do
+    docker network rm "$name" >/dev/null 2>&1 || { warn "could not remove network ${name} (still has endpoints?)"; FAILED_OTHER=$((FAILED_OTHER + 1)); }
+  done
+  if [ "$KEEP_IMAGES" = 0 ]; then
+    for name in ${IMAGES[@]+"${IMAGES[@]}"}; do
+      docker rmi "$name" >/dev/null 2>&1 || { warn "could not remove image ${name} (in use?)"; FAILED_OTHER=$((FAILED_OTHER + 1)); }
+    done
   fi
 }
 
@@ -350,11 +385,25 @@ if [ "$APPLY" != 1 ]; then
   exit 0
 fi
 
+if [ "$DOCKER_OK" != 1 ] && [ "$FILES_ONLY" != 1 ]; then
+  die "Docker is not usable (${DOCKER_WHY}). Deleting only the files would leave volumes that still hold the old database passwords, and a fresh install would not start. Fix Docker (or run with sudo) and retry, or pass --files-only to delete just the files; nothing was removed"
+fi
+if [ "${#UNREADABLE[@]}" -gt 0 ]; then
+  die "this user cannot read ${#UNREADABLE[@]} director(ies) of the install (re-run with sudo); nothing was removed"
+fi
+for rel in ${FILES[@]+"${FILES[@]}"}; do
+  if [ ! -w "$(dirname "$ROOT/$rel")" ]; then
+    die "cannot delete ${rel}: its directory is not writable by this user (re-run with sudo); nothing was removed"
+  fi
+done
 confirm_destroy
 if [ "$BACKUP_FIRST" = 1 ]; then
   run_backup
 fi
 remove_docker
+if [ "$FAILED_VOLUMES" -gt 0 ]; then
+  die "${FAILED_VOLUMES} volume(s) could not be removed, so the files were kept: a fresh install would reuse the old database volumes with new passwords. Remove what is using them and run this script again"
+fi
 remove_files
 
 say "=== removed ==="
@@ -372,6 +421,7 @@ print_list "kept files:" ${KEPT[@]+"${KEPT[@]}"}
 say "repository: ${ROOT} (not deleted)"
 say "Docker resources that are not labelled com.docker.compose.project=${PROJECT} were not removed."
 if [ "$DOCKER_OK" != 1 ]; then
-  warn "Docker was not running, so containers, networks, volumes, and images were not changed."
+  warn "Docker was not usable, so containers, networks, volumes, and images were not changed (--files-only)."
 fi
 print_next
+[ "$FAILED_OTHER" -eq 0 ] || { warn "${FAILED_OTHER} network(s) or image(s) could not be removed; see above"; exit 1; }
