@@ -4,34 +4,43 @@
 # postgres:17.9 keeps the cluster in /var/lib/postgresql/data (the image VOLUME).
 # Older compose files mounted the named volume at /var/lib/postgresql, so Docker
 # stored the real cluster in an anonymous volume. `docker compose down` orphans
-# that volume and the next `up` starts empty.
+# that volume. The anonymous volume label is only com.docker.volume.anonymous,
+# so the volume name is not a safe way to tell NetBox from ie-config.
 #
-# The fixed compose file mounts the named volume at /var/lib/postgresql/data and
-# sets PGDATA=/var/lib/postgresql/data/pgdata. Run this AFTER `docker compose down`
-# and BEFORE `docker compose up` on an install that already has data.
+# This script:
+#   1. If the postgres containers still exist (docker compose stop, not down),
+#      reads the volume mounted at /var/lib/postgresql/data from docker inspect.
+#   2. Otherwise reads each candidate's system catalogs (read-only) and keeps a
+#      volume only when it uniquely contains the netbox or ie_config database.
+#   3. Refuses to copy when a volume cannot be identified, when two volumes
+#      match the same service, or when catalogs contradict the mapping.
+# Source volumes are mounted read-only and are never deleted or modified.
 #
-#   ./scripts/migrate-pg-volumes.sh              # dry-run (default)
-#   ./scripts/migrate-pg-volumes.sh --apply      # copy into <named-volume>/pgdata
-#   ./scripts/migrate-pg-volumes.sh --apply --remove-source
+#   ./scripts/migrate-pg-volumes.sh
+#   ./scripts/migrate-pg-volumes.sh --apply
+#   ./scripts/migrate-pg-volumes.sh --map netbox=<volume>,insightengine=<volume>
+#   ./scripts/migrate-pg-volumes.sh --self-test
 #
-# Idempotent: if pgdata/PG_VERSION already exists, the copy is skipped unless
-# --force is given. The source volume is never deleted unless --remove-source.
-# The script does not print passwords.
+# Safest path if you have not run `docker compose down` yet:
+#   docker compose stop
+#   ./scripts/migrate-pg-volumes.sh
+#   ./scripts/migrate-pg-volumes.sh --apply
 set -euo pipefail
 umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+MATCH="$ROOT/scripts/migrate-pg-match.py"
 
 APPLY=0
 FORCE=0
-REMOVE_SOURCE=0
 SELF_TEST=0
+MAP_RAW=""
 PROJECT="${COMPOSE_PROJECT_NAME:-}"
-POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17.9}"
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-}"
 
 usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -40,9 +49,13 @@ while [ $# -gt 0 ]; do
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;
     --force) FORCE=1; shift ;;
-    --remove-source) REMOVE_SOURCE=1; shift ;;
+    --remove-source)
+      echo "refusing --remove-source: source volumes are never deleted or modified" >&2
+      exit 2
+      ;;
     --project) PROJECT="${2:-}"; shift 2 ;;
     --image) POSTGRES_IMAGE="${2:-}"; shift 2 ;;
+    --map) MAP_RAW="${2:-}"; shift 2 ;;
     --self-test) SELF_TEST=1; shift ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -64,7 +77,7 @@ if [ "$SELF_TEST" -eq 1 ]; then
   got="$(env_file_value COMPOSE_PROJECT_NAME "$tmp/.env")"
   rm -rf "$tmp"
   [ "$got" = "from-dotenv" ]
-  echo "PASS  migrate reads COMPOSE_PROJECT_NAME from .env"
+  python3 "$MATCH" --self-test
   exit 0
 fi
 
@@ -72,10 +85,14 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "docker is not available; nothing was changed" >&2
   exit 1
 fi
+if [ -z "$POSTGRES_IMAGE" ]; then
+  POSTGRES_IMAGE="$(env_file_value POSTGRES_IMAGE)"
+fi
+if [ -z "$POSTGRES_IMAGE" ]; then
+  POSTGRES_IMAGE="postgres:17.9"
+fi
 
 if [ -z "$PROJECT" ]; then
-  # --project and a shell COMPOSE_PROJECT_NAME win. Otherwise match compose,
-  # which reads COMPOSE_PROJECT_NAME from .env.
   PROJECT="$(env_file_value COMPOSE_PROJECT_NAME)"
 fi
 if [ -z "$PROJECT" ]; then
@@ -84,162 +101,271 @@ if [ -z "$PROJECT" ]; then
 fi
 
 say() { printf '%s\n' "$*"; }
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 volume_exists() {
   docker volume inspect "$1" >/dev/null 2>&1
 }
 
-# Named compose volume: <project>_<volume>. Also accept an explicit name.
 named_volume() {
-  local volume_key=$1
-  local candidate="${PROJECT}_${volume_key}"
+  local volume_key=$1 candidate found
+  candidate="${PROJECT}_${volume_key}"
   if volume_exists "$candidate"; then
     printf '%s' "$candidate"
     return 0
   fi
-  # Compose may prefix with the directory name rather than COMPOSE_PROJECT_NAME history.
-  local found
   found="$(docker volume ls --format '{{.Name}}' | grep -E "(^|_)${volume_key}$" | head -n1 || true)"
   printf '%s' "$found"
 }
 
-# Anonymous volumes are 64-hex names. Prefer ones labeled for the service.
-# Prints candidate names, one per line, best first.
-anonymous_candidates() {
-  local service=$1
-  docker volume ls -q | while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    printf '%s' "$name" | grep -Eq '^[0-9a-f]{64}$' || continue
-    labels="$(docker volume inspect -f '{{json .Labels}}' "$name" 2>/dev/null || true)"
-    case "$labels" in
-      *"\"com.docker.compose.service\":\"${service}\""*) printf '1 %s\n' "$name" ;;
-      *) printf '2 %s\n' "$name" ;;
+# Print "id<TAB>container-service" for a data volume still attached to a container.
+# container-service is netbox or insightengine. Empty container field if the mount
+# is the named volume (new layout) rather than an anonymous data volume.
+container_sources() {
+  local service=$1 dest name vtype
+  # shellcheck disable=SC2046
+  docker ps -aq --filter "label=com.docker.compose.service=${service}" --filter "label=com.docker.compose.project=${PROJECT}" 2>/dev/null \
+    | while IFS= read -r id; do
+        [ -n "$id" ] || continue
+        docker inspect -f '{{range .Mounts}}{{.Destination}}|{{.Name}}|{{.Type}}{{"\n"}}{{end}}' "$id" 2>/dev/null || true
+      done | while IFS='|' read -r dest name vtype; do
+        [ "$vtype" = "volume" ] || continue
+        [ "$dest" = "/var/lib/postgresql/data" ] || continue
+        case "$service" in
+          netbox-postgres) printf '%s\tnetbox\n' "$name" ;;
+          insightengine-postgres) printf '%s\tinsightengine\n' "$name" ;;
+        esac
+      done
+}
+
+describe_volume() {
+  local vol=$1
+  docker run --rm -v "${vol}:/v:ro" --entrypoint /bin/sh "$POSTGRES_IMAGE" -c '
+    set -eu
+    pv=$(cat /v/PG_VERSION 2>/dev/null || echo missing)
+    bytes=$(du -sb /v 2>/dev/null | awk "{print \$1}")
+    mtime=$(stat -c %y /v/PG_VERSION 2>/dev/null || echo unknown)
+    names=$(grep -a -h -o -w -E "netbox|ie_config|insightengine|netdisco|telegraf_data|activepieces_data|postgres|template0|template1" /v/global/[0-9]* 2>/dev/null | sort -u | tr "\n" " " || true)
+    printf "pg_version=%s\nbytes=%s\nmtime=%s\nnames=%s\n" "$pv" "${bytes:-0}" "$mtime" "$names"
+  '
+}
+
+parse_map() {
+  local raw=$1 piece dest vol
+  [ -n "$raw" ] || return 0
+  printf '%s' "$raw" | tr ',' '\n' | while IFS= read -r piece; do
+    [ -n "$piece" ] || continue
+    dest="${piece%%=*}"
+    vol="${piece#*=}"
+    case "$dest" in
+      netbox|insightengine) ;;
+      *) die "--map destination must be netbox or insightengine (got ${dest})" ;;
     esac
-  done | sort | cut -d' ' -f2-
+    if [ -z "$vol" ] || [ "$vol" = "$piece" ]; then
+      die "--map entry must look like netbox=<volume>"
+    fi
+    printf '%s\t%s\n' "$dest" "$vol"
+  done
 }
 
-volume_has_pg() {
-  local volume=$1 sub=${2:-}
-  local target="/v"
-  [ -n "$sub" ] && target="/v/${sub}"
-  docker run --rm -v "${volume}:/v:ro" --entrypoint /bin/sh "$POSTGRES_IMAGE" \
-    -c "test -f ${target}/PG_VERSION" >/dev/null 2>&1
+dest_has_cluster() {
+  docker run --rm -v "$1":/v:ro --entrypoint /bin/sh "$POSTGRES_IMAGE" -c 'test -f /v/pgdata/PG_VERSION' >/dev/null 2>&1
 }
 
-volume_pg_version() {
-  local volume=$1 sub=${2:-}
-  local target="/v/PG_VERSION"
-  [ -n "$sub" ] && target="/v/${sub}/PG_VERSION"
-  docker run --rm -v "${volume}:/v:ro" --entrypoint /bin/sh "$POSTGRES_IMAGE" \
-    -c "cat ${target} 2>/dev/null || true"
-}
-
-# Copy the cluster at the root of $src into $dest/pgdata. Skip when the
-# destination already has PG_VERSION unless --force.
 copy_cluster() {
   local src=$1 dest=$2
-  if volume_has_pg "$dest" pgdata && [ "$FORCE" -ne 1 ]; then
-    say "  skip: ${dest}/pgdata already has PG_VERSION (use --force to overwrite)"
+  if dest_has_cluster "$dest" && [ "$FORCE" -ne 1 ]; then
+    say "  skip: ${dest}/pgdata already has a cluster (source ${src} not touched; --force keeps a pgdata.bak copy)"
     return 0
   fi
   if [ "$APPLY" -ne 1 ]; then
-    say "  dry-run: would copy ${src} -> ${dest}/pgdata"
+    say "  dry-run: would copy ${src} -> ${dest}/pgdata (source stays read-only)"
     return 0
   fi
-  say "  copying ${src} -> ${dest}/pgdata"
+  say "  copying ${src} -> ${dest}/pgdata (source mounted read-only)"
   docker run --rm \
     -v "${src}:/from:ro" \
     -v "${dest}:/to" \
     --entrypoint /bin/sh "$POSTGRES_IMAGE" \
     -c 'set -eu
       if [ ! -f /from/PG_VERSION ]; then echo "source has no PG_VERSION" >&2; exit 1; fi
+      if [ -d /to/pgdata ] && [ -f /to/pgdata/PG_VERSION ]; then
+        stamp=$(date -u +%Y%m%dT%H%M%SZ)
+        mv /to/pgdata "/to/pgdata.bak.${stamp}"
+      fi
       mkdir -p /to/pgdata
-      if [ -f /to/pgdata/PG_VERSION ]; then rm -rf /to/pgdata; mkdir -p /to/pgdata; fi
       cp -a /from/. /to/pgdata/
       chown -R postgres:postgres /to/pgdata
       test -f /to/pgdata/PG_VERSION
     '
-  say "  copied (PG_VERSION $(volume_pg_version "$dest" pgdata | tr -d "[:space:]"))"
-  if [ "$REMOVE_SOURCE" -eq 1 ]; then
-    say "  removing source volume ${src}"
-    docker volume rm "$src" >/dev/null
-  fi
+  say "  copied. Source volume ${src} was not modified."
 }
-
-migrate_one() {
-  local service=$1 volume_key=$2
-  say "== ${service}"
-  local named
-  named="$(named_volume "$volume_key")"
-  if [ -z "$named" ]; then
-    say "  named volume ${PROJECT}_${volume_key} was not found; nothing to migrate"
-    return 0
-  fi
-  say "  named volume: ${named}"
-  if volume_has_pg "$named" pgdata && [ "$FORCE" -ne 1 ]; then
-    say "  ${named}/pgdata already contains a cluster; leaving it in place"
-    return 0
-  fi
-  # A manual mount fix may have left the cluster at the named volume root.
-  if volume_has_pg "$named" "" && ! volume_has_pg "$named" pgdata; then
-    say "  cluster is at the root of ${named}; moving it to pgdata/"
-    if [ "$APPLY" -eq 1 ]; then
-      docker run --rm -v "${named}:/v" --entrypoint /bin/sh "$POSTGRES_IMAGE" -c '
-        set -eu
-        mkdir -p /tmp/pgmove
-        find /v -mindepth 1 -maxdepth 1 ! -name pgdata ! -name tmp-pgmove -exec cp -a {} /tmp/pgmove/ \;
-        mkdir -p /v/pgdata
-        cp -a /tmp/pgmove/. /v/pgdata/
-        chown -R postgres:postgres /v/pgdata
-      '
-      say "  moved root cluster into pgdata/"
-    else
-      say "  dry-run: would move the root cluster into pgdata/"
-    fi
-    return 0
-  fi
-  local src="" name
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    [ "$name" = "$named" ] && continue
-    case " $USED_SOURCES " in
-      *" $name "*) continue ;;
-    esac
-    if volume_has_pg "$name" ""; then
-      src=$name
-      break
-    fi
-  done < <(anonymous_candidates "$service")
-  if [ -z "$src" ]; then
-    say "  no anonymous volume with PG_VERSION found for ${service}"
-    say "  if the container still exists, inspect it:"
-    say "    docker inspect <container> --format '{{range .Mounts}}{{.Destination}} {{.Name}}{{\"\\n\"}}{{end}}'"
-    return 0
-  fi
-  say "  anonymous source: ${src} (PG_VERSION $(volume_pg_version "$src" | tr -d '[:space:]'))"
-  USED_SOURCES="${USED_SOURCES} ${src} "
-  copy_cluster "$src" "$named"
-}
-
-USED_SOURCES=" "
 
 say "project: ${PROJECT}"
 say "image:   ${POSTGRES_IMAGE}"
+say "Sources are never deleted or modified. Identification is by database/role catalogs, or by a stopped container mount."
 if [ "$APPLY" -eq 1 ]; then
   say "mode:    apply"
-  running="$(docker ps --format '{{.Names}}' | grep -E 'postgres' || true)"
+  running="$(docker ps --filter "label=com.docker.compose.project=${PROJECT}" --filter "label=com.docker.compose.service=netbox-postgres" --filter "status=running" -q || true)"
+  running="${running}$(docker ps --filter "label=com.docker.compose.project=${PROJECT}" --filter "label=com.docker.compose.service=insightengine-postgres" --filter "status=running" -q || true)"
   if [ -n "$running" ]; then
-    say "refusing to copy while postgres containers are running:"
-    printf '%s\n' "$running" | sed 's/^/  /'
-    say "stop them first: docker compose down"
-    exit 1
+    die "postgres containers are still running. Use 'docker compose stop' (not down) so inspect can see the data volumes, then re-run."
   fi
 else
   say "mode:    dry-run (pass --apply to copy)"
 fi
 
-migrate_one netbox-postgres netbox-postgres-data
-migrate_one insightengine-postgres insightengine-postgres-data
-say "activepieces-postgres mounts /var/lib/postgresql/data directly; it is not migrated"
-say "netdisco-postgres is PostgreSQL 18 with the named volume at /var/lib/postgresql; it is not migrated"
+NB_VOL="$(named_volume netbox-postgres-data)"
+IE_VOL="$(named_volume insightengine-postgres-data)"
+[ -n "$NB_VOL" ] || die "named volume for netbox-postgres-data was not found (project ${PROJECT})"
+[ -n "$IE_VOL" ] || die "named volume for insightengine-postgres-data was not found (project ${PROJECT})"
+say "destination netbox:        ${NB_VOL}"
+say "destination insightengine: ${IE_VOL}"
+
+WORKDIR="$(mktemp -d)"
+trap 'rm -rf "$WORKDIR"' EXIT
+
+# Container mounts first.
+: > "$WORKDIR/containers.tsv"
+container_sources netbox-postgres >> "$WORKDIR/containers.tsv" || true
+container_sources insightengine-postgres >> "$WORKDIR/containers.tsv" || true
+
+# Every anonymous volume plus any container-attached data volume.
+: > "$WORKDIR/candidates.txt"
+if [ -s "$WORKDIR/containers.tsv" ]; then
+  say "stopped containers still exist; using docker inspect mounts at /var/lib/postgresql/data"
+  awk -F '\t' 'NF { print $1 }' "$WORKDIR/containers.tsv" | sort -u >> "$WORKDIR/candidates.txt"
+else
+  say "no postgres containers to inspect; identifying orphaned volumes by catalog contents"
+  docker volume ls -q | while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    printf '%s' "$name" | grep -Eq '^[0-9a-f]{64}$' || continue
+    printf '%s\n' "$name"
+  done >> "$WORKDIR/candidates.txt"
+fi
+
+export MIGRATE_ROOT="$ROOT"
+export MIGRATE_IMAGE="$POSTGRES_IMAGE"
+export MIGRATE_NB_VOL="$NB_VOL"
+export MIGRATE_IE_VOL="$IE_VOL"
+MIGRATE_MAP_LINES="$(parse_map "$MAP_RAW")"
+export MIGRATE_MAP_LINES
+
+python3 - "$WORKDIR" <<'PY'
+import json, os, subprocess, sys
+work = sys.argv[1]
+image = os.environ["MIGRATE_IMAGE"]
+nb = os.environ["MIGRATE_NB_VOL"]
+ie = os.environ["MIGRATE_IE_VOL"]
+explicit = {}
+for line in os.environ.get("MIGRATE_MAP_LINES", "").splitlines():
+    if not line.strip():
+        continue
+    dest, vol = line.split("\t", 1)
+    explicit[dest] = vol
+container = {}
+path = os.path.join(work, "containers.tsv")
+if os.path.isfile(path):
+    for line in open(path, encoding="utf-8"):
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) == 2 and parts[0] and parts[1]:
+            container[parts[0]] = parts[1]
+names = []
+seen = set()
+cand = os.path.join(work, "candidates.txt")
+if os.path.isfile(cand):
+    for line in open(cand, encoding="utf-8"):
+        name = line.strip()
+        if name and name not in seen and name not in (nb, ie):
+            seen.add(name)
+            names.append(name)
+for vol in explicit.values():
+    if vol not in seen and vol not in (nb, ie):
+        seen.add(vol)
+        names.append(vol)
+script = r'''set -eu
+pv=$(cat /v/PG_VERSION 2>/dev/null || echo missing)
+bytes=$(du -sb /v 2>/dev/null | awk '{print $1}')
+mtime=$(stat -c %y /v/PG_VERSION 2>/dev/null || echo unknown)
+names=$(grep -a -h -o -w -E 'netbox|ie_config|insightengine|netdisco|telegraf_data|activepieces_data|postgres|template0|template1' /v/global/[0-9]* /v/global/[0-9]*_[0-9]* 2>/dev/null | sort -u | tr '\n' ' ' || true)
+printf 'pg_version=%s\nbytes=%s\nmtime=%s\nnames=%s\n' "$pv" "${bytes:-0}" "$mtime" "$names"
+'''
+volumes = []
+for name in names:
+    proc = subprocess.run(
+        ["docker", "run", "--rm", "-v", "%s:/v:ro" % name, "--entrypoint", "/bin/sh", image, "-c", script],
+        check=False, capture_output=True, text=True,
+    )
+    info = {"pg_version": "missing", "bytes": "0", "mtime": "unknown", "names": ""}
+    if proc.returncode != 0:
+        err = (proc.stderr or "describe failed").strip().splitlines()
+        info["error"] = err[-1] if err else "describe failed"
+    else:
+        for line in proc.stdout.splitlines():
+            if "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            info[key] = val.strip()
+    if info.get("pg_version") in ("", "missing"):
+        continue
+    tokens = [part for part in info.get("names", "").split() if part]
+    volumes.append({
+        "id": name,
+        "databases": tokens,
+        "roles": tokens,
+        "bytes": int(info.get("bytes") or 0),
+        "mtime": info.get("mtime") or "unknown",
+        "pg_version": info.get("pg_version") or "",
+        "container": container.get(name, ""),
+    })
+with open(os.path.join(work, "volumes.json"), "w", encoding="utf-8") as fh:
+    json.dump({"volumes": volumes, "map": explicit}, fh)
+PY
+
+say "catalog scan (read-only):"
+python3 - "$WORKDIR/volumes.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+rows = data.get("volumes") or []
+if not rows:
+    print("  (no postgres clusters found outside the named destination volumes)")
+for row in rows:
+    names = ", ".join(row.get("databases") or []) or "(none)"
+    via = row.get("container") or "content"
+    print("  volume %s" % row["id"])
+    print("    pg_version=%s bytes=%s mtime=%s" % (row.get("pg_version"), row.get("bytes"), row.get("mtime")))
+    print("    catalog names: %s" % names)
+    print("    container mount: %s" % (row.get("container") or "(containers gone)"))
+    print("    via: %s" % via)
+PY
+
+set +e
+pairs="$(python3 "$MATCH" < "$WORKDIR/volumes.json" 2>"$WORKDIR/match.err")"
+match_rc=$?
+set -e
+if [ "$match_rc" -ne 0 ]; then
+  cat "$WORKDIR/match.err" >&2
+  die "nothing was copied"
+fi
+if [ -z "$pairs" ]; then
+  say "no netbox or ie-config cluster needs copying"
+  exit 0
+fi
+
+say "mapping:"
+while IFS="$(printf '\t')" read -r dest src; do
+  [ -n "$dest" ] || continue
+  case "$dest" in
+    netbox) target="$NB_VOL" ;;
+    insightengine) target="$IE_VOL" ;;
+    *) die "matcher returned unknown destination ${dest}" ;;
+  esac
+  say "  ${dest}: ${src} -> ${target}/pgdata"
+  copy_cluster "$src" "$target"
+done <<EOF
+$pairs
+EOF
+
+say "activepieces-postgres is already mounted at /var/lib/postgresql/data; it is not migrated"
+say "netdisco-postgres is PostgreSQL 18 at /var/lib/postgresql; a netdisco catalog is ignored"
 say "done"

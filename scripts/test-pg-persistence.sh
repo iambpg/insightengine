@@ -10,6 +10,19 @@ umask 077
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [ "${1:-}" = "--self-test" ]; then
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  SUBNET="10.254.40.0/24"
+  sed -E \
+    "s|^(CLIENT_SLUG)=.*|\1='iepgtest'|; s|^MONITORING_SUBNET=.*|MONITORING_SUBNET=${SUBNET}|; s#^INSTALL_DIR=.*#INSTALL_DIR='${ROOT}'#" \
+    .env.example > "$tmp/env"
+  grep -q "^MONITORING_SUBNET=${SUBNET}$" "$tmp/env"
+  grep -q "^INSTALL_DIR='${ROOT}'$" "$tmp/env"
+  echo "PASS  persistence env sed accepts a subnet containing /"
+  exit 0
+fi
+
 if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
   echo "SKIP  postgres persistence (docker compose is not available)"
   exit 0
@@ -46,7 +59,7 @@ touch_secret() {
 SUBNET="10.254.$(( ($$ % 200) + 20 )).0/24"
 # compose interpolates the whole file, including services this test does not start.
 sed -E \
-  "s/^(CLIENT_NAME)=.*/\1='PG Persist'/; s/^(CLIENT_SLUG)=.*/\1='${SLUG}'/; s/^(PUBLIC_HOST)=.*/\1='127.0.0.1'/; s/^MONITORING_SUBNET=.*/MONITORING_SUBNET=${SUBNET}/; s/^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*/\1='persist-test-secret'/; s/^ADMIN_BASIC_HASH=.*/ADMIN_BASIC_HASH='x'/; s#^INSTALL_DIR=.*#INSTALL_DIR='${ROOT}'#" \
+  "s|^(CLIENT_NAME)=.*|\1='PG Persist'|; s|^(CLIENT_SLUG)=.*|\1='${SLUG}'|; s|^(PUBLIC_HOST)=.*|\1='127.0.0.1'|; s|^MONITORING_SUBNET=.*|MONITORING_SUBNET=${SUBNET}|; s|^([A-Z0-9_]*(PASSWORD|SECRET_KEY|PEPPER_1|API_TOKEN|API_KEY|ENCRYPTION_KEY|JWT_SECRET))=.*|\1='persist-test-secret'|; s|^ADMIN_BASIC_HASH=.*|ADMIN_BASIC_HASH='x'|; s#^INSTALL_DIR=.*#INSTALL_DIR='${ROOT}'#" \
   .env.example > "$TMP/env"
 echo "using subnet ${SUBNET}"
 

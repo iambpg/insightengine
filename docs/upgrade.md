@@ -2,18 +2,34 @@
 
 This covers a server that was installed before the Postgres volume fix and the NetBox 4.6 token change. New installs do not need the volume copy.
 
-Do this with the stack stopped, and do not start it until the volume copy has finished. `./install.sh` without `--no-start` would start the containers first.
+Prefer `./scripts/upgrade.sh` (add `--dry-run` to print the plan, or `--yes` to skip prompts). It stops the stack with `docker compose stop` rather than `down`, so the Postgres containers can still be inspected, backfills `.env`, copies clusters only after they are identified, **rebuilds local images**, then starts and provisions the token.
+
+`docker compose up -d` alone reuses the old `insightengine/*:local` images (`pull_policy: never`). Those images do not contain this upgrade until `docker compose build` has run. The script prints the ie-config image id before and after the build.
+
+If you have not run `docker compose down` yet, stop instead of down:
 
 ```bash
-docker compose down
+git pull
+docker compose stop
+./scripts/upgrade.sh --dry-run
+./scripts/upgrade.sh
+```
+
+If the containers are already gone, `./scripts/upgrade.sh` still works: the migration identifies each anonymous volume by the database names in its catalog (`netbox` versus `ie_config`), not by volume name. When it cannot tell them apart it copies nothing.
+
+Manual equivalent:
+
+```bash
+docker compose stop
 git pull
 ./install.sh --no-start
-./scripts/migrate-pg-volumes.sh            # dry-run
+./scripts/migrate-pg-volumes.sh            # prints catalog names, sizes, mtimes
 ./scripts/migrate-pg-volumes.sh --apply
+docker compose build
+docker compose pull --ignore-buildable || true
 docker compose up -d
-# wait until `docker compose ps` shows netbox healthy
-./scripts/provision-netbox-token.sh            # dry-run
-./scripts/provision-netbox-token.sh --apply    # does not print the token
+# wait until netbox is healthy
+./scripts/provision-netbox-token.sh --apply
 docker compose restart ie-config prometheus
 docker compose up -d --force-recreate --no-deps oxidized netbox-device-types
 ```
@@ -28,7 +44,11 @@ docker compose up -d --force-recreate --no-deps oxidized netbox-device-types
 
 The compose file now mounts `netbox-postgres-data` and `insightengine-postgres-data` at `/var/lib/postgresql/data` and sets `PGDATA=/var/lib/postgresql/data/pgdata`.
 
-`scripts/migrate-pg-volumes.sh` reads `COMPOSE_PROJECT_NAME` from `.env` when you do not pass `--project` (a shell `COMPOSE_PROJECT_NAME` or `--project` still wins). It refuses to copy while a postgres container is running. It skips a destination that already has `pgdata/PG_VERSION` unless you pass `--force`. It does not delete the anonymous volume unless you pass `--remove-source` after you have logged in and confirmed the data is there. A second `--apply` is a no-op.
+`scripts/migrate-pg-volumes.sh` reads `COMPOSE_PROJECT_NAME` from `.env` when you do not pass `--project` (a shell `COMPOSE_PROJECT_NAME` or `--project` still wins). It refuses to copy while a postgres container is running. It skips a destination that already has `pgdata/PG_VERSION` unless you pass `--force` (the previous `pgdata` is renamed to `pgdata.bak.<time>` inside the named volume). Source volumes are mounted read-only and are never deleted.
+
+Anonymous volumes from this bug only carry the label `com.docker.volume.anonymous`. The script does not pair them by name. With the containers stopped but not removed, it reads the volume mounted at `/var/lib/postgresql/data` from `docker inspect` and checks that the catalog agrees. After `down`, it reads `global/` in each volume for the database and role names (`netbox` versus `ie_config` / `insightengine`). A netdisco catalog is ignored. If a volume cannot be identified, or two volumes match the same service, it exits and copies nothing. Override with `--map netbox=<volume>,insightengine=<volume>` only when the dry-run catalog lines match what you expect; a map that contradicts the catalogs is refused.
+
+The dry-run prints, for every candidate, the volume id, PostgreSQL version, size, `PG_VERSION` mtime, catalog names, and whether a stopped container mount selected it.
 
 Activepieces already mounted its volume at `/var/lib/postgresql/data`. Do not point `PGDATA` at a subdirectory for that service or you will hide the existing cluster. Netdisco's PostgreSQL 18 mount is already correct. `netdisco-db-role` mounts a tmpfs on `/var/lib/postgresql` so that one-shot does not leave a new anonymous volume on every recreate.
 
