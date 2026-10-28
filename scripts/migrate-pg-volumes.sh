@@ -12,7 +12,9 @@
 #      `docker compose config` (.name), the file's `name:` key, a container
 #      label com.docker.compose.project, and only then the directory name.
 #   2. If those postgres containers still exist, reads the volume mounted at
-#      /var/lib/postgresql/data. Catalogs must agree or the script aborts.
+#      /var/lib/postgresql/data. That is the image VOLUME on installs from before
+#      PR #8, whose named volume was mounted at /var/lib/postgresql. Catalogs
+#      must agree or the script aborts.
 #   3. Otherwise reads each candidate's system catalogs (read-only) and keeps a
 #      volume only when it uniquely contains the netbox or ie_config database.
 #   4. Refuses to copy when a volume cannot be identified, when two volumes
@@ -47,7 +49,7 @@ PROJECT="${COMPOSE_PROJECT_NAME:-}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-}"
 
 usage() {
-  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do

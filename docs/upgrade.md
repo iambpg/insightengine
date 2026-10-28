@@ -22,7 +22,7 @@ Manual equivalent:
 
 ```bash
 git pull
-./install.sh --no-start
+./install.sh --upgrade-env --no-start
 docker ps -q --filter label=com.docker.compose.project=insightengine | xargs -r docker stop
 ./scripts/migrate-pg-volumes.sh            # prints catalog names, sizes, mtimes
 ./scripts/migrate-pg-volumes.sh --apply
@@ -35,9 +35,28 @@ docker compose restart ie-config prometheus
 docker compose up -d --force-recreate --no-deps oxidized netbox-device-types
 ```
 
-`./install.sh --no-start` fills **missing or empty** required secrets and leaves every non-empty secret as it is. The one an older `.env` does not have is `NETBOX_SUPERUSER_API_KEY` (12 characters). The same pass fills any other required secret that is blank (`NETBOX_SUPERUSER_API_TOKEN`, the database passwords, Grafana, Activepieces, Netdisco). It also replaces the old Oxidized filter `status=active&tag=oxidized` with `status=active`, because that tag did not exist and NetBox answered 400. To limit backups to the tag after `scripts/seed-netbox.sh` has created it, set `OXIDIZED_NETBOX_FILTER='tag=oxidized&status=active'` (that text is left alone on later runs).
+`./install.sh --upgrade-env --no-start` is what `scripts/upgrade.sh` runs. `--upgrade-env` (also `--backfill-env`) accepts an existing `.env` that has no `.install-started` marker, which is every install made before that file existed. It accepts the file only when `PUBLIC_HOST`, `CLIENT_NAME`, `CLIENT_SLUG`, `INSTALL_DIR`, `NETBOX_DB_PASSWORD`, and `NETBOX_SECRET_KEY` are present and non-empty. It fills **missing or empty** required secrets and leaves every non-empty secret as it is. The one an older `.env` does not have is `NETBOX_SUPERUSER_API_KEY` (12 characters). The same pass fills any other required secret that is blank (`NETBOX_SUPERUSER_API_TOKEN`, the database passwords, Grafana, Activepieces, Netdisco). It writes `.install-started` only after that backfill. It does not change the host, client, ports, or certificates that already exist. A partial or corrupt `.env` is refused and left untouched. A plain `./install.sh` still refuses a `.env` that has no marker.
+
+It also replaces the old Oxidized filter `status=active&tag=oxidized` with `status=active`, because that tag did not exist and NetBox answered 400. Any other non-empty filter is left alone. To limit backups to the tag after `scripts/seed-netbox.sh` has created it, set `OXIDIZED_NETBOX_FILTER='tag=oxidized&status=active'` (that text is left alone on later runs). `--dry-run` with `--upgrade-env` prints this plan and writes nothing.
 
 `install.sh` chowns `.env` back to `SUDO_USER` when run with sudo. The setup service keeps that owner when it rewrites `.env`.
+
+## What an older install already has
+
+These checks were compared with the installer and compose file on `main` from before PR #6 (and with installs that predate `.install-started`). Each one either already matches that layout or is called out here.
+
+| Assumption | Older install | What the upgrade does |
+|---|---|---|
+| `.install-started` contains `past-secret-generation` | Not written by installers before that file existed | `--upgrade-env` accepts a real `.env` without the marker and writes the marker after backfill. Plain `./install.sh` still refuses. |
+| Compose project name `insightengine` | `name: insightengine` has been in `docker-compose.yml` since the first import, so containers are labeled `com.docker.compose.project=insightengine` | `migrate-pg-volumes.sh` reads compose config, then the file's `name:`, then that label. The checkout directory name is only the last fallback. `upgrade.sh` stops by that label. |
+| Postgres service names `netbox-postgres` and `insightengine-postgres` | Same names before PR #6 | Inspect filters use those service labels. |
+| Named volumes `insightengine_netbox-postgres-data` and `insightengine_insightengine-postgres-data` | Same volume keys, prefixed by the project name | The migration looks up that prefix, then any volume whose name ends with the key. |
+| Cluster directory | The named volume was mounted at `/var/lib/postgresql`, so the real cluster is the anonymous volume at the image path `/var/lib/postgresql/data` | Inspect uses that mount. The copy lands in `pgdata/` inside the named volume, which is where the new `PGDATA` points. |
+| Secret files | `secrets/prometheus/netbox.token`, `secrets/oxidized/netbox.token`, and `secrets/cust-exporter/netbox.token`. There is no `secrets/netbox/` directory. The old file is the 40-character `NETBOX_SUPERUSER_API_TOKEN` (v1 `Authorization: Token`), not `nbt_<key>.<secret>` | `provision-netbox-token.sh` reads and writes those three paths. `lib-netbox-auth.sh` sends `Token` when the file does not start with `nbt_`, and provisions a v2 token when that header is rejected. |
+| `NETBOX_SUPERUSER_API_KEY` | Absent | Backfill adds it and does not replace a non-empty `NETBOX_SUPERUSER_API_TOKEN`. |
+| Certificates, host, client, ports | Already set | Left as they are when the files and values exist. |
+| `COMPOSE_PROJECT_NAME` in `.env` | Usually unset | Not required. The compose file's `name:` is enough. |
+| `OXIDIZED_NETBOX_FILTER` | Often `status=active&tag=oxidized` | Replaced with `status=active` only when empty or exactly that old default. Any other value stays. |
 
 ## Postgres data is in an anonymous volume
 

@@ -3,6 +3,7 @@
 # InsightEngine installer. NON-INTERACTIVE: it asks NO questions.
 #
 #   ./install.sh [--public-host HOST] [--alt-ports | --default-ports] [--no-start]
+#   ./install.sh --upgrade-env [--no-start] [--dry-run]
 #   ./install.sh --fix-perms     only (re)apply owner/mode on ./secrets
 #   ./install.sh --help
 #
@@ -27,7 +28,14 @@
 # .env has no NETBOX_SUPERUSER_API_KEY) is filled in. Ports and other values stay.
 # Use --no-start when you still need to copy Postgres data before the stack starts.
 # --public-host and the port flags apply only when .env is first created.
-# If .env exists without that marker, the script stops and leaves .env untouched.
+# A plain ./install.sh stops when .env exists without that marker and leaves the
+# file untouched. --upgrade-env (same as --backfill-env) is the upgrade path for
+# an install written before the marker existed. It accepts that .env only when
+# PUBLIC_HOST, CLIENT_NAME, CLIENT_SLUG, INSTALL_DIR, NETBOX_DB_PASSWORD, and
+# NETBOX_SECRET_KEY are present and non-empty, fills only missing or empty
+# secrets, writes the marker after that backfill, and does not change the host,
+# client, ports, or certificates that already exist. --dry-run with --upgrade-env
+# prints the plan and writes nothing. A partial or corrupt .env is refused.
 #
 # WHICH CLIENT this server is for, and NEW INSTALL vs MOVE FROM THE OLD STACK, are NOT
 # asked here: open the first-run page  https://<PUBLIC_HOST>[:PORT_HTTPS]/setup/
@@ -358,6 +366,8 @@ PUBLIC_HOST_FROM_FLAG=0
 PUBLIC_HOST="${INSTALL_PUBLIC_HOST:-}"
 PORTS="${INSTALL_PORTS:-auto}"      # auto | alt | default
 START=1
+UPGRADE_ENV=0
+DRY_RUN=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -367,9 +377,14 @@ while [ $# -gt 0 ]; do
     --alt-ports) PORTS=alt; shift ;;
     --default-ports) PORTS=default; shift ;;
     --no-start) START=0; shift ;;
+    --upgrade-env|--backfill-env) UPGRADE_ENV=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
     *) usage >&2; exit 2 ;;
   esac
 done
+if [ "$DRY_RUN" = 1 ] && [ "$UPGRADE_ENV" != 1 ]; then
+  die "--dry-run is only valid with --upgrade-env"
+fi
 case "$PORTS" in auto|alt|default) ;; *) die "INSTALL_PORTS must be auto, alt or default" ;; esac
 
 # ---- prerequisites ----------------------------------------------------------
@@ -382,12 +397,18 @@ else
 fi
 
 RESUME=0
+WRITE_MARKER=0
 if [ -e .env ]; then
   if [ -f .install-started ] && grep -qx 'past-secret-generation' .install-started; then
     RESUME=1
+  elif [ "$UPGRADE_ENV" = 1 ]; then
+    RESUME=1
+    WRITE_MARKER=1
   else
     die ".env already exists - not overwriting it (it holds this server's secrets). Move it away first, or edit it by hand."
   fi
+elif [ "$UPGRADE_ENV" = 1 ]; then
+  die "--upgrade-env needs an existing .env; nothing was written"
 fi
 [ -f .env.example ] || die ".env.example is missing"
 
@@ -401,42 +422,110 @@ trap cleanup_env EXIT
 
 # Fill a required secret only when the key is absent or empty. A non-empty
 # value is the one the running databases already use and must not be replaced.
+# dry=1 prints the key name and does not write.
 backfill_empty() {
-  local key=$1 len=$2 cur
+  local key=$1 len=$2 dry=${3:-0} cur
   cur="$(getenv_val "$key")"
   if [ -z "$cur" ]; then
-    setenv "$key" "$(gen "$len")"
-    say "backfilled $key (missing or empty; existing secrets were not changed)"
+    if [ "$dry" = 1 ]; then
+      say "would add $key (missing or empty; value is not printed)"
+    else
+      setenv "$key" "$(gen "$len")"
+      say "backfilled $key (missing or empty; existing secrets were not changed)"
+    fi
   fi
 }
 
-if [ "$RESUME" = 1 ]; then
-  say "resuming install: secret generation already finished (.install-started). Continuing at certificates, image build, and start."
-  # Every compose `:?run install.sh` secret. Only NETBOX_SUPERUSER_API_KEY is new;
-  # the rest are filled solely if an older or partial .env left them blank.
-  backfill_empty NETBOX_SUPERUSER_API_KEY 12
-  backfill_empty NETBOX_SUPERUSER_API_TOKEN 40
-  backfill_empty NETBOX_SUPERUSER_PASSWORD 24
-  backfill_empty NETBOX_DB_PASSWORD 32
-  backfill_empty NETBOX_REDIS_PASSWORD 32
-  backfill_empty NETBOX_REDIS_CACHE_PASSWORD 32
-  backfill_empty NETBOX_SECRET_KEY 64
-  backfill_empty NETBOX_API_TOKEN_PEPPER_1 64
-  backfill_empty GRAFANA_ADMIN_PASSWORD 24
-  backfill_empty GRAFANA_SECRET_KEY 48
-  backfill_empty AP_ENCRYPTION_KEY 32
-  backfill_empty AP_JWT_SECRET 48
-  backfill_empty AP_POSTGRES_PASSWORD 32
-  backfill_empty AP_REDIS_PASSWORD 32
-  backfill_empty NETDISCO_DB_PASSWORD 32
-  backfill_empty IE_DB_PASSWORD 32
-  backfill_empty IE_CONFIG_DB_PASSWORD 32
+backfill_required_secrets() {
+  local dry=$1
+  backfill_empty NETBOX_SUPERUSER_API_KEY 12 "$dry"
+  backfill_empty NETBOX_SUPERUSER_API_TOKEN 40 "$dry"
+  backfill_empty NETBOX_SUPERUSER_PASSWORD 24 "$dry"
+  backfill_empty NETBOX_DB_PASSWORD 32 "$dry"
+  backfill_empty NETBOX_REDIS_PASSWORD 32 "$dry"
+  backfill_empty NETBOX_REDIS_CACHE_PASSWORD 32 "$dry"
+  backfill_empty NETBOX_SECRET_KEY 64 "$dry"
+  backfill_empty NETBOX_API_TOKEN_PEPPER_1 64 "$dry"
+  backfill_empty GRAFANA_ADMIN_PASSWORD 24 "$dry"
+  backfill_empty GRAFANA_SECRET_KEY 48 "$dry"
+  backfill_empty AP_ENCRYPTION_KEY 32 "$dry"
+  backfill_empty AP_JWT_SECRET 48 "$dry"
+  backfill_empty AP_POSTGRES_PASSWORD 32 "$dry"
+  backfill_empty AP_REDIS_PASSWORD 32 "$dry"
+  backfill_empty NETDISCO_DB_PASSWORD 32 "$dry"
+  backfill_empty IE_DB_PASSWORD 32 "$dry"
+  backfill_empty IE_CONFIG_DB_PASSWORD 32 "$dry"
+}
+
+# A pre-marker .env is an install when these keys were written by install.sh.
+# .env.example leaves the secrets and INSTALL_DIR empty, so a copied example
+# does not pass.
+upgrade_env_is_real() {
+  local key val
+  for key in PUBLIC_HOST CLIENT_NAME CLIENT_SLUG INSTALL_DIR NETBOX_DB_PASSWORD NETBOX_SECRET_KEY; do
+    val="$(getenv_val "$key")"
+    [ -n "$val" ] || return 1
+  done
+  val="$(getenv_val PUBLIC_HOST)"
+  printf '%s' "$val" | grep -Eq '^[A-Za-z0-9.:-]+$' || return 1
+  return 0
+}
+
+# The old Oxidized default 400s until the tag exists. Any other non-empty
+# filter, including one an operator set by hand, stays.
+maybe_oxidized_filter() {
+  local dry=$1 oxf
   oxf="$(getenv_val OXIDIZED_NETBOX_FILTER)"
   if [ -z "$oxf" ] || [ "$oxf" = "status=active&tag=oxidized" ]; then
-    setenv OXIDIZED_NETBOX_FILTER "status=active"
-    say "Oxidized backs up every active device (status=active). tag=oxidized is optional and 400s until that tag exists."
+    if [ "$dry" = 1 ]; then
+      say "would set OXIDIZED_NETBOX_FILTER=status=active"
+    else
+      setenv OXIDIZED_NETBOX_FILTER "status=active"
+      say "Oxidized backs up every active device (status=active). tag=oxidized is optional and 400s until that tag exists."
+    fi
   fi
-  unset oxf
+}
+
+record_install_marker() {
+  printf '%s\n' 'past-secret-generation' > .install-started
+  chmod 600 .install-started
+  grep -qx 'past-secret-generation' .install-started || die "could not record .install-started"
+}
+
+if [ "$RESUME" = 1 ] && [ "$WRITE_MARKER" = 1 ]; then
+  if ! upgrade_env_is_real; then
+    die "refusing --upgrade-env: .env must contain non-empty PUBLIC_HOST, CLIENT_NAME, CLIENT_SLUG, INSTALL_DIR, NETBOX_DB_PASSWORD, and NETBOX_SECRET_KEY, and PUBLIC_HOST must be a host name or IP. .env was not modified."
+  fi
+fi
+
+if [ "$DRY_RUN" = 1 ]; then
+  if [ "$WRITE_MARKER" = 1 ]; then
+    say "pre-marker .env accepted for --upgrade-env"
+    say "would write .install-started after backfill"
+  else
+    say "install marker present; would backfill empty secrets only"
+  fi
+  say "would leave PUBLIC_HOST, CLIENT_NAME, CLIENT_SLUG, INSTALL_DIR, ports, and existing certificates unchanged"
+  backfill_required_secrets 1
+  maybe_oxidized_filter 1
+  exit 0
+fi
+
+if [ "$RESUME" = 1 ]; then
+  if [ "$WRITE_MARKER" = 1 ]; then
+    say "upgrading a pre-marker .env: filling missing secrets, then writing .install-started"
+  else
+    say "resuming install: secret generation already finished (.install-started). Continuing at certificates, image build, and start."
+  fi
+  # Every compose `:?run install.sh` secret. Only NETBOX_SUPERUSER_API_KEY is new
+  # on an older .env; the rest are filled solely when they are blank.
+  backfill_required_secrets 0
+  maybe_oxidized_filter 0
+  # The marker is written only after the backfill, so a failed fill can be retried.
+  if [ "$WRITE_MARKER" = 1 ]; then
+    record_install_marker
+    say "wrote .install-started (past-secret-generation)"
+  fi
   if [ "$PUBLIC_HOST_FROM_FLAG" = 1 ] || [ -n "${INSTALL_PUBLIC_HOST:-}" ] || [ "$PORTS" != auto ]; then
     warn "--public-host, INSTALL_PUBLIC_HOST, and port choices apply only when .env is first created; this run keeps the existing .env"
   fi
@@ -532,9 +621,7 @@ else
   write_secret setup/token "$(gen 48)" 0
   [ "$PERM_WARN" = 1 ] && warn "not root: secret files for container users are mode 0644. Run 'sudo ./install.sh --fix-perms' to tighten them."
 
-  printf '%s\n' 'past-secret-generation' > .install-started
-  chmod 600 .install-started
-  grep -qx 'past-secret-generation' .install-started || die "could not record .install-started"
+  record_install_marker
   ENV_CREATED=
 fi
 
