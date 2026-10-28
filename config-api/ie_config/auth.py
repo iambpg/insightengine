@@ -10,9 +10,9 @@ from datetime import datetime, timedelta, timezone
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from .db import SessionRow, User, utcnow
+from .db import AuditRow, SessionRow, User, utcnow
 from .errors import ApiError
 
 ROLES = ("Administrator", "Engineer", "Operator", "Read-only")
@@ -171,6 +171,43 @@ class Auth:
     def user_count(self) -> int:
         with self.sf() as db:
             return len(db.scalars(select(User.id)).all())
+
+    def reset_password(self, email: str | None, password: str, ip: str) -> dict:
+        """Replace one user's password. The password is not stored in the audit row."""
+        password = validate_password(password)
+        email_n = validate_email(email) if email else ""
+        with self.sf() as db:
+            if email_n:
+                user = db.scalar(select(User).where(User.email == email_n))
+                if user is None:
+                    if self._no_users(db):
+                        raise ApiError(409, "no_users", "no users exist yet; open /setup/ to create the first administrator")
+                    raise ApiError(404, "no_user", "no user with that email")
+            else:
+                user = db.scalar(select(User).where(User.role == "Administrator").order_by(User.id))
+                if user is None:
+                    if self._no_users(db):
+                        raise ApiError(409, "no_users", "no users exist yet; open /setup/ to create the first administrator")
+                    raise ApiError(404, "no_admin", "no Administrator exists; pass --email")
+            user.password_hash = hash_password(password)
+            user.failed_attempts = 0
+            user.locked_until = None
+            db.execute(delete(SessionRow).where(SessionRow.user_id == user.id))
+            db.add(AuditRow(
+                user_email=user.email,
+                role=user.role,
+                action="password-reset",
+                app="ie-config",
+                result="ok",
+                source_ip=(ip or "")[:64],
+                detail="sessions cleared",
+            ))
+            db.commit()
+            return {"email": user.email}
+
+    @staticmethod
+    def _no_users(db) -> bool:
+        return db.scalar(select(User.id)) is None
 
 
 def client_ip(request) -> str:
