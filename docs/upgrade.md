@@ -72,6 +72,8 @@ The dry-run prints, for every candidate, the volume id, PostgreSQL version, size
 
 Activepieces already mounted its volume at `/var/lib/postgresql/data`. Do not point `PGDATA` at a subdirectory for that service or you will hide the existing cluster. Netdisco's PostgreSQL 18 mount is already correct. `netdisco-db-role` mounts a tmpfs on `/var/lib/postgresql` so that one-shot does not leave a new anonymous volume on every recreate.
 
+An older Netdisco cluster created with `POSTGRES_USER=netdisco` has superuser role `netdisco` and no `postgres` role. `config/netdisco/align-db-role.sh` connects on the local socket as `postgres`, then as `NETDISCO_DB_USER`, then as any other login role with `rolsuper`. It sets that app role's password to `NETDISCO_DB_PASS`. If the app role is the superuser, it changes only the password and does not remove superuser. `netdisco-db-init`, the web and backend, the scheduler, and ie-config's `NETDISCO_DATABASE_URL` already use `NETDISCO_DB_USER` and `NETDISCO_DB_PASS`, not the `postgres` role. The postgres healthcheck is `pg_isready -U postgres`, which does not log in, so a missing `postgres` role does not fail it.
+
 `scripts/test-pg-persistence.sh` starts only the two Postgres services in a throwaway compose project and a subnet that is not `10.50.0.0/24`, writes a row, runs `down` then `up -d`, and checks the row.
 
 ## NetBox API token

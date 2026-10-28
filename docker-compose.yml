@@ -1139,7 +1139,11 @@ services:
   #   through the local socket as the postgres superuser.
   #   netdisco-db-role re-applies that same app password on every start (local
   #   socket, trust) so a volume created before NETDISCO_DB_PASS was passed in
-  #   still matches the backend, web, db-init, and ie-config URL.
+  #   still matches the backend, web, db-init, and ie-config URL. A volume
+  #   created with POSTGRES_USER=netdisco has no postgres role; the aligner
+  #   connects as whichever login role has rolsuper and does not demote it.
+  #   db-init, backend, web, the scheduler, and ie-config use NETDISCO_DB_USER
+  #   plus NETDISCO_DB_PASS. They do not connect as the postgres role.
   #   App::Netdisco::Configuration overrides deployment.yml database.pass from
   #   NETDISCO_DB_PASS. The image file already has a database: section.
   # ===========================================================================
@@ -1165,6 +1169,7 @@ services:
     healthcheck:
       # The image HEALTHCHECK dials hostname netdisco-postgresql. This service
       # is netdisco-postgres, so probe 127.0.0.1 (not that hostname, not ::1).
+      # pg_isready does not log in, so -U postgres is fine when that role is absent.
       test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
       interval: 10s
       timeout: 5s
