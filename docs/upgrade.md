@@ -1,6 +1,6 @@
 # Upgrading an existing install
 
-This covers a server that was installed before the Postgres volume fix and the NetBox 4.6 token change. New installs do not need the volume copy.
+This covers a server that was installed before the Postgres volume fix and the NetBox 4.6 token change. New installs do not need the volume copy. SNMP credentials in NetBox config contexts are described in [snmp-credentials.md](snmp-credentials.md). Devices with no `monitoring_snmp` context keep the `.env` SNMP values.
 
 Prefer `./scripts/upgrade.sh` (add `--dry-run` to preview, or `--yes` to skip prompts). It fills missing `.env` secrets **before** any `docker compose` command, stops containers with `docker stop` on the `com.docker.compose.project` label (the containers stay so their volumes can be inspected), copies clusters only after they are identified, **rebuilds local images**, then starts and provisions the token.
 
