@@ -21,6 +21,15 @@ class _AdminStub(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
 
+    def do_GET(self):
+        # A finished install has users. Count 0 is covered by TReopen.
+        body = b'{"count":1}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, fmt, *args):
         return
 
@@ -301,6 +310,173 @@ class TFail(unittest.TestCase):
         self.assertEqual(call("GET", "/setup/gate", raw=True)[0], 302)
         self.assertEqual(call("POST", "/setup/mode", {"mode": "new"})[0], 409)
         self.assertEqual(call("POST", "/setup/client", {"client_name": "Delta"})[0], 202)   # retry allowed
+
+
+class _ZeroUsers(BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = b'{"count":0}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        self.rfile.read(n)
+        body = b'{"ok":true}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        return
+
+
+def _completed_config():
+    return {
+        "schema": 1, "state": "complete", "step": "done",
+        "client_name": "Acme", "client_slug": "acme", "mode": "new",
+        "history": "fresh", "migrated": False, "last_preflight": None,
+        "error": None, "updated_at": "t",
+    }
+
+
+def _serve(port, ie_url, config):
+    root = tempfile.mkdtemp(prefix="ie-setup-mismatch-")
+    os.makedirs(os.path.join(root, "data", "setup"))
+    os.makedirs(os.path.join(root, "scripts"))
+    with open(os.path.join(root, ".env"), "w") as f:
+        f.write("PUBLIC_HOST='h'\nCLIENT_NAME='Acme'\nCLIENT_SLUG='acme'\n")
+    with open(os.path.join(root, "docker-compose.yml"), "w") as f:
+        f.write("services: {}\n")
+    tok = os.path.join(root, "token")
+    with open(tok, "w") as f:
+        f.write(TOKEN)
+    with open(os.path.join(root, "data", "setup", "config.json"), "w") as f:
+        json.dump(config, f)
+    err = open(os.path.join(root, "server.err"), "w")
+    env = dict(os.environ, INSTALL_DIR=root, SETUP_TOKEN_FILE=tok, SETUP_PORT=str(port),
+               SETUP_BIND="127.0.0.1", SETUP_STATIC_DIR=STATIC,
+               PATH=os.path.join(HERE, "stubbin") + os.pathsep + os.environ["PATH"],
+               IE_CONFIG_URL=ie_url)
+    proc = subprocess.Popen([sys.executable, SERVER], env=env, stdout=err, stderr=err)
+    return root, proc, err
+
+
+class TReconcile(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("ie_setup_server_reconcile", SERVER)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        cls.mod = mod
+
+    def test_reopen_keeps_client_and_mode(self):
+        cfg = _completed_config()
+        msg = self.mod.reconcile_complete_without_users(cfg, 0)
+        self.assertIn("no users", msg)
+        self.assertEqual(cfg["state"], "unconfigured")
+        self.assertEqual(cfg["step"], "admin")
+        self.assertEqual(cfg["client_name"], "Acme")
+        self.assertEqual(cfg["mode"], "new")
+        self.assertEqual(cfg["history"], "fresh")
+
+    def test_unreadable_count_does_not_flip(self):
+        cfg = _completed_config()
+        msg = self.mod.reconcile_complete_without_users(cfg, None)
+        self.assertIn("left unchanged", msg)
+        self.assertEqual(cfg["state"], "complete")
+        self.assertEqual(cfg["step"], "done")
+
+    def test_users_present_stays_complete(self):
+        cfg = _completed_config()
+        self.assertIsNone(self.mod.reconcile_complete_without_users(cfg, 2))
+        self.assertEqual(cfg["state"], "complete")
+
+    def test_in_progress_setup_is_left_alone(self):
+        cfg = {"state": "unconfigured", "step": "client"}
+        self.assertIsNone(self.mod.reconcile_complete_without_users(cfg, 0))
+        self.assertEqual(cfg["step"], "client")
+
+
+class TReopen(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        global PORT, BASE
+        cls.stub = ThreadingHTTPServer(("127.0.0.1", 18251), _ZeroUsers)
+        threading.Thread(target=cls.stub.serve_forever, daemon=True).start()
+        for _ in range(50):
+            try:
+                urllib.request.urlopen("http://127.0.0.1:18251/internal/user-count", timeout=1).read()
+                break
+            except Exception:
+                time.sleep(0.05)
+        else:
+            raise AssertionError("user-count stub did not start")
+        PORT, BASE = 18102, "http://127.0.0.1:18102"
+        cls.root, cls.p, cls.err = _serve(PORT, "http://127.0.0.1:18251", _completed_config())
+        for _ in range(50):
+            try:
+                call("GET", "/setup/healthz", token=None)
+                return
+            except Exception:
+                time.sleep(0.1)
+        raise AssertionError("reopen setup server did not start")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.p.terminate()
+        cls.p.wait()
+        cls.err.close()
+        cls.stub.shutdown()
+        shutil.rmtree(cls.root, ignore_errors=True)
+
+    def test_30_complete_with_no_users_reopens_admin(self):
+        c, s = call("GET", "/setup/state")
+        self.assertEqual(c, 200)
+        self.assertEqual((s["state"], s["step"], s["client_name"], s["mode"]), ("unconfigured", "admin", "Acme", "new"))
+        self.assertIn("no users", s["error"])
+        self.assertEqual(call("GET", "/setup/gate", raw=True)[0], 302)
+        log = rd(os.path.join(self.root, "data", "setup", "setup.log"))
+        self.assertIn("no users", log)
+        password = "correct-horse-1"
+        c, s = call("POST", "/setup/admin", {"email": "admin@example.com", "password": password})
+        self.assertEqual(c, 200)
+        self.assertEqual(s["step"], "mode")
+        self.assertNotIn(password, rd(os.path.join(self.root, "data", "setup", "setup.log")))
+
+
+class TCountUnreadable(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        global PORT, BASE
+        PORT, BASE = 18103, "http://127.0.0.1:18103"
+        cls.root, cls.p, cls.err = _serve(PORT, "http://127.0.0.1:9", _completed_config())
+        for _ in range(50):
+            try:
+                call("GET", "/setup/healthz", token=None)
+                return
+            except Exception:
+                time.sleep(0.1)
+        raise AssertionError("setup server did not start")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.p.terminate()
+        cls.p.wait()
+        cls.err.close()
+        shutil.rmtree(cls.root, ignore_errors=True)
+
+    def test_31_failed_user_count_leaves_complete(self):
+        c, s = call("GET", "/setup/state")
+        self.assertEqual((c, s["state"], s["step"]), (200, "complete", "done"))
+        self.assertEqual(call("GET", "/setup/gate", raw=True)[0], 200)
+        log = rd(os.path.join(self.root, "data", "setup", "setup.log"))
+        self.assertIn("left unchanged", log)
 
 
 if __name__ == "__main__":

@@ -4,9 +4,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
+import Link from 'next/link';
 import { api, type DeviceQuery } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
-import { reportLoadError } from '@/lib/loadError';
+import { describeLoadError, redirectIfSignedOut } from '@/lib/loadError';
 import type { DeviceHealth, DeviceRow } from '@/lib/types';
 import HealthStrip from './HealthStrip';
 import DeviceFilters from './DeviceFilters';
@@ -26,6 +27,7 @@ export default function DeviceListView() {
   const [rows, setRows] = useState<DeviceRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [visible, setVisible] = useState<ColumnKey[]>(COLUMNS.map((c) => c.key));
   const [reload, setReload] = useState(0);
@@ -41,6 +43,7 @@ export default function DeviceListView() {
     let cancelled = false;
     setRows(null);
     setError(null);
+    setSignedOut(false);
     api
       .listDevices(query)
       .then((res) => {
@@ -49,7 +52,13 @@ export default function DeviceListView() {
         setTotal(res.total);
         if (res.roles) setRoles(res.roles);
       })
-      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'devices')));
+      .catch((cause) => {
+        if (cancelled) return;
+        const failure = describeLoadError(cause, 'devices');
+        redirectIfSignedOut(failure);
+        setSignedOut(failure.signedOut);
+        setError(failure.text);
+      });
     return () => {
       cancelled = true;
     };
@@ -140,6 +149,11 @@ export default function DeviceListView() {
           </div>
         )}
 
+        {signedOut ? (
+          <div role="alert" className="m-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+            You are signed out - <Link href="/login-screen" className="font-semibold underline">sign in</Link>
+          </div>
+        ) : (
         <DeviceTable
           rows={rows}
           error={error}
@@ -152,6 +166,7 @@ export default function DeviceListView() {
           onSort={(k) => patch({ sortKey: k, sortDir: query.sortKey === k && query.sortDir === 'asc' ? 'desc' : 'asc', page: 1 })}
           onClear={() => patch({ search: '', health: 'all', role: 'all' })}
         />
+        )}
 
         <Pagination
           page={query.page}

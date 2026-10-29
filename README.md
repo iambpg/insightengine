@@ -40,6 +40,8 @@ git clone <this-repo> insightengine && cd insightengine
 sudo ./install.sh --public-host monitor.example.com      # or: INSTALL_PUBLIC_HOST=... sudo -E ./install.sh
 ```
 
+A forgotten ie-config password is reset with `sudo ./scripts/reset-admin-password.sh` (see [docs/reset-admin-password.md](docs/reset-admin-password.md)). It does not print the new password. If the users table is empty, the same command asks for an email and creates the Administrator.
+
 To wipe this install and start over, see [docs/uninstall.md](docs/uninstall.md) (`./scripts/uninstall.sh` lists what it would remove; deletion needs `--apply`).
 
 `install.sh` flags: `--public-host HOST` (default: first IP / host name of this machine — the value goes into the TLS certificate and `PUBLIC_HOST`),
