@@ -72,7 +72,8 @@ else skip "compose policy"; fi
 
 # --- setup service: syntax, page script, end-to-end API test against stubs
 if have python3; then
-  if python3 -m py_compile setup/server.py setup/tests/test_setup_api.py netbox/regions/import_regions.py 2>"$TMP/py.err"; then ok "python syntax setup/server.py"; else bad "python syntax"; cat "$TMP/py.err"; fi
+  if python3 -m py_compile setup/server.py setup/tests/test_setup_api.py netbox/regions/import_regions.py netbox/component-backfill/backfill_components.py 2>"$TMP/py.err"; then ok "python syntax setup/server.py"; else bad "python syntax"; cat "$TMP/py.err"; fi
+  if python3 netbox/component-backfill/test_backfill.py >"$TMP/bf.out" 2>&1; then ok "component backfill tests"; else bad "component backfill tests"; tail -n 40 "$TMP/bf.out" | sed 's/^/      /'; fi
   if python3 -c 'import yaml' >/dev/null 2>&1; then
     if python3 netbox/regions/test_regions.py >"$TMP/reg.out" 2>&1; then ok "region catalog tests"; else bad "region catalog tests"; tail -n 40 "$TMP/reg.out" | sed 's/^/      /'; fi
   else

@@ -439,5 +439,27 @@ fi
 say "8. Restart services that read the token or the new image."
 plan docker compose restart ie-config prometheus
 plan docker compose up -d --force-recreate --no-deps oxidized netbox-device-types netbox-regions
+# The component backfill reads the templates the importer just wrote. up -d
+# returns when the importer container has started, so wait until it exits.
+if [ "$DRY" -eq 0 ] && [ -z "${UPGRADE_SELF_TEST_FLOW:-}" ]; then
+  i=0
+  state=""
+  while [ "$i" -lt 90 ]; do
+    cid="$(docker compose ps -aq netbox-device-types 2>/dev/null || true)"
+    cid="${cid%%$'\n'*}"
+    if [ -n "$cid" ]; then
+      state="$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || true)"
+    fi
+    if [ "$state" = "exited" ] || [ "$state" = "dead" ]; then
+      break
+    fi
+    i=$((i + 1))
+    sleep 10
+  done
+  if [ "$state" != "exited" ] && [ "$state" != "dead" ]; then
+    say "netbox-device-types has not exited yet; starting the component backfill anyway"
+  fi
+fi
+plan docker compose up -d --force-recreate --no-deps netbox-component-backfill
 
 say "=== upgrade steps finished ==="

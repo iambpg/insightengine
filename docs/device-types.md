@@ -12,6 +12,8 @@ Compose service `netbox-device-types` builds `insightengine/netbox-device-types:
 
 On an empty NetBox the first run is on the order of three minutes. A repeat is well under a minute. The importer logs a one-line JSON summary (`device_types_created`, `module_types_created`, `templates_created`, `failures`).
 
+NetBox copies those templates onto a device only when the device is created. `netbox-component-backfill` runs after this importer and creates any template component an existing device is missing. See [component-backfill.md](component-backfill.md).
+
 `NETBOX_DEVICE_TYPE_VENDORS` in `.env` selects which library directories to load. The default is `Cisco,Fortinet,Palo Alto Networks`.
 
 ## Refreshing the snapshot
