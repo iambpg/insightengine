@@ -25,7 +25,7 @@ export async function request<T>(path: string, init?: RequestInitJson): Promise<
 
   let response: Response;
   try {
-    response = await fetch(path, { method, headers, body, credentials: 'include' });
+    response = await fetch(path, { method, headers, body, credentials: 'include', cache: 'no-store' });
   } catch {
     throw new ApiError(
       0,

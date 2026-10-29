@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { isMockMode } from '@/lib/apiMode';
-import { canSeeApplications } from '@/lib/settings/access';
+import { canSeeApplications, canSeeVault } from '@/lib/settings/access';
 import { useSession } from '@/lib/useSession';
 import RolesTab from './RolesTab';
 import DatabaseTab from './DatabaseTab';
@@ -12,8 +12,9 @@ import WebhookTab from './WebhookTab';
 import ApplicationsPanel from './ApplicationsPanel';
 import AppsLauncher from '@/components/AppsLauncher';
 import SnmpTab from './SnmpTab';
+import VaultTab from './VaultTab';
 
-type Tab = 'applications' | 'apps' | 'roles' | 'database' | 'webhook' | 'snmp';
+type Tab = 'applications' | 'vault' | 'apps' | 'roles' | 'database' | 'webhook' | 'snmp';
 
 const BASE_TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'apps', label: 'Apps', icon: 'Squares2X2Icon' },
@@ -26,6 +27,7 @@ const BASE_TABS: { key: Tab; label: string; icon: string }[] = [
 export default function SettingsView() {
   const { role, ready } = useSession();
   const showApps = ready && canSeeApplications(role);
+  const showVault = ready && canSeeVault(role);
   const [tab, setTab] = useState<Tab>('roles');
   const [picked, setPicked] = useState(false);
 
@@ -33,12 +35,13 @@ export default function SettingsView() {
     if (showApps && !picked) setTab('applications');
   }, [showApps, picked]);
 
-  const tabs = showApps
-    ? [
-        { key: 'applications' as const, label: 'Applications', icon: 'Squares2X2Icon' },
-        ...BASE_TABS,
-      ]
-    : BASE_TABS;
+  const tabs = [
+    ...(showApps
+      ? [{ key: 'applications' as const, label: 'Applications', icon: 'Squares2X2Icon' }]
+      : []),
+    ...(showVault ? [{ key: 'vault' as const, label: 'Vault', icon: 'LockClosedIcon' }] : []),
+    ...BASE_TABS,
+  ];
 
   return (
     <div className="space-y-5">
@@ -98,6 +101,7 @@ export default function SettingsView() {
           key={tab}
         >
           {tab === 'applications' && showApps && <ApplicationsPanel role={role} />}
+          {tab === 'vault' && showVault && <VaultTab />}
           {tab === 'apps' && <AppsLauncher layout="page" />}
           {tab === 'roles' && <RolesTab />}
           {tab === 'database' && <DatabaseTab />}

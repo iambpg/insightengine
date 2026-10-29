@@ -47,9 +47,10 @@ assert_identity_unchanged() {
   [ "$(env_val "$env" CLIENT_SLUG)" = "acme" ] || fail "CLIENT_SLUG changed"
   [ "$(env_val "$env" INSTALL_DIR)" = "/opt/insightengine" ] || fail "INSTALL_DIR changed"
   [ "$(env_val "$env" PUBLIC_HOST)" = "monitor.example" ] || fail "PUBLIC_HOST changed"
-  [ "$(env_val "$env" PORT_HTTP)" = "8086" ] || fail "PORT_HTTP was not moved off 8080"
+  [ "$(env_val "$env" PORT_HTTP)" = "18086" ] || fail "PORT_HTTP was not moved off 8080"
   [ "$(env_val "$env" PORT_HTTPS)" = "8443" ] || fail "PORT_HTTPS changed"
-  [ "$(env_val "$env" PORT_NETBOX)" = "8080" ] || fail "missing PORT_NETBOX was not set to 8080"
+  [ "$(env_val "$env" PORT_NETBOX)" = "8092" ] || fail "missing PORT_NETBOX was not set to 8092"
+  [ "$(env_val "$env" PORT_ALERTMANAGER)" = "8086" ] || fail "missing PORT_ALERTMANAGER was not set to 8086"
   [ "$(env_val "$env" NETBOX_DB_PASSWORD)" = "keep-db" ] || fail "NETBOX_DB_PASSWORD replaced"
   [ "$(env_val "$env" NETBOX_SECRET_KEY)" = "keep-secret-key" ] || fail "NETBOX_SECRET_KEY replaced"
   [ "$(env_val "$env" NETBOX_SUPERUSER_API_TOKEN)" = "keep-token-value" ] || fail "API token replaced"
@@ -108,9 +109,11 @@ if ! (cd "$dir" && ./install.sh --upgrade-env --no-start >"$dir/out" 2>&1); then
   fail "upgrade-env failed"
 fi
 grep -qx 'past-secret-generation' "$dir/.install-started" || fail "marker missing after upgrade"
-grep -q 'set PORT_HTTP=8086 (was 8080)' "$dir/out" || fail "upgrade did not say HTTP moved off 8080"
+grep -q 'set PORT_HTTP=18086 (was 8080)' "$dir/out" || fail "upgrade did not say HTTP moved off 8080"
 grep -q 'PORT_HTTPS stays 8443' "$dir/out" || fail "upgrade did not leave the non-default HTTPS port"
-grep -q 'Open host port 8086' "$dir/out" || fail "upgrade did not say to open 8086"
+grep -q 'Open host port 18086' "$dir/out" || fail "upgrade did not say to open 18086"
+grep -q 'set PORT_NETBOX=8092 (was missing)' "$dir/out" || fail "upgrade did not say NetBox is 8092"
+grep -q 'set PORT_ALERTMANAGER=8086 (was missing)' "$dir/out" || fail "upgrade did not say Alertmanager is 8086"
 assert_identity_unchanged "$dir/.env"
 assert_certs_unchanged "$dir"
 [ "$(env_val "$dir/.env" OXIDIZED_NETBOX_FILTER)" = "status=active" ] || fail "old oxidized filter was kept"
@@ -142,7 +145,7 @@ printf '%s\n' "$preview" | grep -q 'pre-marker .env accepted' || fail "dry-run d
 printf '%s\n' "$preview" | grep -q 'would write .install-started after backfill' || fail "dry-run did not show the marker write"
 printf '%s\n' "$preview" | grep -q 'would add NETBOX_SUPERUSER_API_KEY' || fail "dry-run did not list the missing API key"
 printf '%s\n' "$preview" | grep -q 'would leave PUBLIC_HOST' || fail "dry-run did not say identity stays"
-printf '%s\n' "$preview" | grep -q 'would set PORT_HTTP=8086' || fail "dry-run did not preview the HTTP port move"
+printf '%s\n' "$preview" | grep -q 'would set PORT_HTTP=18086' || fail "dry-run did not preview the HTTP port move"
 if printf '%s\n' "$preview" | grep -q 'would add NETBOX_DB_PASSWORD'; then
   fail "dry-run listed a secret that already has a value"
 fi
@@ -195,6 +198,7 @@ PORT_HTTP=80
 PORT_HTTPS=57400
 PORT_NETBOX=8444
 PORT_PROMETHEUS=19090
+PORT_ALERTMANAGER=19093
 NETBOX_DB_PASSWORD='keep-db'
 NETBOX_SECRET_KEY='keep-secret-key'
 EOF
@@ -203,17 +207,50 @@ if ! (cd "$dir" && ./install.sh --upgrade-env --no-start >"$dir/out" 2>&1); then
   cat "$dir/out" >&2
   fail "default-port upgrade failed"
 fi
-[ "$(env_val "$dir/.env" PORT_HTTP)" = "8086" ] || fail "old HTTP default 80 was not moved"
-[ "$(env_val "$dir/.env" PORT_NETBOX)" = "8080" ] || fail "old NetBox default 8444 was not moved"
+[ "$(env_val "$dir/.env" PORT_HTTP)" = "18086" ] || fail "old HTTP default 80 was not moved"
+[ "$(env_val "$dir/.env" PORT_NETBOX)" = "8092" ] || fail "old NetBox default 8444 was not moved"
 [ "$(env_val "$dir/.env" PORT_HTTPS)" = "57400" ] || fail "configured HTTPS 57400 was moved"
 [ "$(env_val "$dir/.env" PORT_PROMETHEUS)" = "19090" ] || fail "alternate Prometheus port was rewritten"
+[ "$(env_val "$dir/.env" PORT_ALERTMANAGER)" = "19093" ] || fail "custom Alertmanager port 19093 was rewritten"
 [ "$(env_val "$dir/.env" PORT_HTTP3)" = "443" ] || fail "PORT_HTTP3 was not added"
 [ "$(env_val "$dir/.env" PORT_SNMP_EXPORTER)" = "9116" ] || fail "PORT_SNMP_EXPORTER was not added"
 [ "$(env_val "$dir/.env" PORT_BLACKBOX)" = "9115" ] || fail "PORT_BLACKBOX was not added"
 [ "$(env_val "$dir/.env" PORT_TELEGRAF)" = "57500" ] || fail "PORT_TELEGRAF was not added"
 grep -q 'left PORT_PROMETHEUS=19090' "$dir/out" || fail "did not name the firewall port for Prometheus"
+grep -q 'left PORT_ALERTMANAGER=19093' "$dir/out" || fail "did not leave custom Alertmanager port 19093"
 grep -q 'PORT_HTTPS stays 57400' "$dir/out" || fail "did not say HTTPS stays 57400"
-grep -q 'Open host port 8080' "$dir/out" || fail "did not say to open NetBox 8080"
+grep -q 'Open host port 8092' "$dir/out" || fail "did not say to open NetBox 8092"
+rm -rf "$dir"
+
+# The previous published defaults (HTTP 8086, NetBox 8080, Alertmanager 9093) move.
+# A chosen HTTPS port and an alternate Prometheus port stay.
+dir="$(prepare)"
+cat > "$dir/.env" <<'EOF'
+CLIENT_NAME='Acme'
+CLIENT_SLUG='acme'
+INSTALL_DIR='/opt/insightengine'
+PUBLIC_HOST='monitor.example'
+PORT_HTTP=8086
+PORT_HTTPS=57400
+PORT_NETBOX=8080
+PORT_ALERTMANAGER=9093
+PORT_PROMETHEUS=19090
+NETBOX_DB_PASSWORD='keep-db'
+NETBOX_SECRET_KEY='keep-secret-key'
+EOF
+seed_certs "$dir"
+if ! (cd "$dir" && ./install.sh --upgrade-env --no-start >"$dir/out" 2>&1); then
+  cat "$dir/out" >&2
+  fail "current-default port upgrade failed"
+fi
+[ "$(env_val "$dir/.env" PORT_HTTP)" = "18086" ] || fail "HTTP 8086 was not moved to 18086"
+[ "$(env_val "$dir/.env" PORT_NETBOX)" = "8092" ] || fail "NetBox 8080 was not moved to 8092"
+[ "$(env_val "$dir/.env" PORT_ALERTMANAGER)" = "8086" ] || fail "Alertmanager 9093 was not moved to 8086"
+[ "$(env_val "$dir/.env" PORT_HTTPS)" = "57400" ] || fail "HTTPS 57400 was moved with the other ports"
+[ "$(env_val "$dir/.env" PORT_PROMETHEUS)" = "19090" ] || fail "Prometheus 19090 was moved"
+grep -q 'set PORT_HTTP=18086 (was 8086)' "$dir/out" || fail "did not say HTTP left 8086"
+grep -q 'set PORT_NETBOX=8092 (was 8080)' "$dir/out" || fail "did not say NetBox left 8080"
+grep -q 'set PORT_ALERTMANAGER=8086 (was 9093)' "$dir/out" || fail "did not say Alertmanager left 9093"
 rm -rf "$dir"
 
 echo "PASS  pre-marker .env is upgraded only with --upgrade-env; corrupt .env is refused"

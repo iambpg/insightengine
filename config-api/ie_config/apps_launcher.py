@@ -14,13 +14,14 @@ from fastapi import Request
 
 # id, name, port env, default port, public scheme, internal health URL.
 # InsightEngine itself is the UI published on PORT_HTTPS.
-# NetBox's host port is 8080. SNMP, blackbox, and Telegraf are plain HTTP.
+# Host ports: NetBox 8092, Alertmanager 8086. SNMP, blackbox, and Telegraf are plain HTTP.
+# Health URLs stay on the container ports (NetBox 8080, Alertmanager 9093).
 _APPS = (
     ("ui", "InsightEngine", "PORT_HTTPS", "443", "https", "http://insightengine-ui:8080/healthz"),
-    ("netbox", "NetBox", "PORT_NETBOX", "8080", "https", "http://netbox:8080/api/status/"),
+    ("netbox", "NetBox", "PORT_NETBOX", "8092", "https", "http://netbox:8080/api/status/"),
     ("grafana", "Grafana", "PORT_GRAFANA", "3000", "https", "http://grafana:3000/api/health"),
     ("prometheus", "Prometheus", "PORT_PROMETHEUS", "9090", "https", "http://prometheus:9090/-/healthy"),
-    ("alertmanager", "Alertmanager", "PORT_ALERTMANAGER", "9093", "https", "http://alertmanager:9093/-/healthy"),
+    ("alertmanager", "Alertmanager", "PORT_ALERTMANAGER", "8086", "https", "http://alertmanager:9093/-/healthy"),
     ("activepieces", "Activepieces", "PORT_ACTIVEPIECES", "8081", "https", "http://activepieces-app/"),
     ("netdisco", "Netdisco", "PORT_NETDISCO", "5000", "https", "http://netdisco-web:5000/"),
     ("oxidized", "Oxidized", "PORT_OXIDIZED", "8888", "https", "http://oxidized:8888/nodes"),

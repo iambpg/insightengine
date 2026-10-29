@@ -125,7 +125,7 @@ x-netbox: &netbox
     # 127.0.0.1 is the healthcheck address. Django matches the Host header, and
     # "localhost" does not allow 127.0.0.1. The image only auto-adds localhost.
     ALLOWED_HOSTS: ${PUBLIC_HOST} caddy netbox localhost 127.0.0.1
-    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:${PORT_NETBOX:-8080}
+    CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:${PORT_NETBOX:-8092}
     CORS_ORIGIN_ALLOW_ALL: "false"
     SKIP_SUPERUSER: "false"
     SUPERUSER_NAME: ${NETBOX_SUPERUSER_NAME:-admin}
@@ -190,16 +190,16 @@ x-caddy-env: &caddy-env
   PUBLIC_HOST: ${PUBLIC_HOST:?run install.sh}
   # Empty when PORT_HTTPS is 443; otherwise ":57400" (install.sh). Used by the HTTP->HTTPS redirect.
   HTTPS_PORT_SUFFIX: ${HTTPS_PORT_SUFFIX:-}
-  PORT_HTTP: ${PORT_HTTP:-8086}
+  PORT_HTTP: ${PORT_HTTP:-18086}
   PORT_HTTPS: ${PORT_HTTPS:-443}
   PORT_HTTP3: ${PORT_HTTP3:-443}
   PORT_GRAFANA: ${PORT_GRAFANA:-3000}
   PORT_PROMETHEUS: ${PORT_PROMETHEUS:-9090}
-  PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-9093}
+  PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-8086}
   PORT_ACTIVEPIECES: ${PORT_ACTIVEPIECES:-8081}
   PORT_NETDISCO: ${PORT_NETDISCO:-5000}
   PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
-  PORT_NETBOX: ${PORT_NETBOX:-8080}
+  PORT_NETBOX: ${PORT_NETBOX:-8092}
   ADMIN_BASIC_USER: ${ADMIN_BASIC_USER:-admin}
   ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH:?run install.sh}
   IE_UI_PORT: ${IE_UI_PORT:-8080}
@@ -499,18 +499,19 @@ services:
       OXIDIZED_URL: http://oxidized:8888
       DEVICE_CLI_SECRET_DIR: /opt/insightengine/secrets/device-cli
       PORT_PROMETHEUS: ${PORT_PROMETHEUS:-9090}
-      PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-9093}
+      PORT_ALERTMANAGER: ${PORT_ALERTMANAGER:-8086}
       PORT_GRAFANA: ${PORT_GRAFANA:-3000}
-      PORT_HTTP: ${PORT_HTTP:-8086}
+      PORT_HTTP: ${PORT_HTTP:-18086}
       PORT_HTTPS: ${PORT_HTTPS:-443}
       PORT_HTTP3: ${PORT_HTTP3:-443}
-      PORT_NETBOX: ${PORT_NETBOX:-8080}
+      PORT_NETBOX: ${PORT_NETBOX:-8092}
       PORT_ACTIVEPIECES: ${PORT_ACTIVEPIECES:-8081}
       PORT_NETDISCO: ${PORT_NETDISCO:-5000}
       PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
       PORT_SNMP_EXPORTER: ${PORT_SNMP_EXPORTER:-9116}
       PORT_BLACKBOX: ${PORT_BLACKBOX:-9115}
       PORT_TELEGRAF: ${PORT_TELEGRAF:-57500}
+      ENV_FILE: /opt/insightengine/.env
     volumes:
       - ./config:/opt/insightengine/config
       - ./snmp:/opt/insightengine/snmp
@@ -520,6 +521,8 @@ services:
       - ./secrets/device-cli:/opt/insightengine/secrets/device-cli
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - ./config-api/apps.yml:/app/apps.yml:ro
+      # Read-only. The Vault lists these keys and does not write the file.
+      - ./.env:/opt/insightengine/.env:ro
       - netdisco-local:/var/lib/ie/netdisco-local
     secrets:
       - source: setup_token
@@ -576,18 +579,18 @@ services:
     ports:
       # Host port and container port are the same value. Caddyfile site
       # addresses use these PORT_* variables, as do external-url / root_url.
-      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP:-8086}:${PORT_HTTP:-8086}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP:-18086}:${PORT_HTTP:-18086}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_HTTPS:-443}:${PORT_HTTPS:-443}"
       # HTTP/3 UDP. Host port 443 even when HTTPS tcp is 57400; the packet is
       # delivered to Caddy's HTTPS listen port inside the container.
       - "${HOST_BIND:-0.0.0.0}:${PORT_HTTP3:-443}:${PORT_HTTPS:-443}/udp"
       - "${HOST_BIND:-0.0.0.0}:${PORT_GRAFANA:-3000}:${PORT_GRAFANA:-3000}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_PROMETHEUS:-9090}:${PORT_PROMETHEUS:-9090}"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_ALERTMANAGER:-9093}:${PORT_ALERTMANAGER:-9093}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_ALERTMANAGER:-8086}:${PORT_ALERTMANAGER:-8086}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_ACTIVEPIECES:-8081}:${PORT_ACTIVEPIECES:-8081}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_NETDISCO:-5000}:${PORT_NETDISCO:-5000}"
       - "${HOST_BIND:-0.0.0.0}:${PORT_OXIDIZED:-8888}:${PORT_OXIDIZED:-8888}"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_NETBOX:-8080}:${PORT_NETBOX:-8080}"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_NETBOX:-8092}:${PORT_NETBOX:-8092}"
     environment: *caddy-env
     volumes:
       - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -746,7 +749,7 @@ services:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
       - --data.retention=${ALERTMANAGER_RETENTION:-720h}
-      - --web.external-url=https://${PUBLIC_HOST}:${PORT_ALERTMANAGER:-9093}
+      - --web.external-url=https://${PUBLIC_HOST}:${PORT_ALERTMANAGER:-8086}
       # POST /-/reload is built in. --web.enable-lifecycle is unknown here.
       - --cluster.listen-address=
     healthcheck:

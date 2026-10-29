@@ -7,6 +7,10 @@ export function canSeeApplications(
   return role === 'Administrator' || role === 'Engineer';
 }
 
+export function canSeeVault(role: RoleName | null | undefined): role is 'Administrator' {
+  return role === 'Administrator';
+}
+
 export function canRunAction(role: RoleName | null | undefined, action: SettingsAction): boolean {
   if (!role) return false;
   if (action.dangerous && role !== 'Administrator') return false;

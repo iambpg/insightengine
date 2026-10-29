@@ -16,11 +16,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from .actions import Reloader, container_states
-from .auth import SETTINGS_ROLES, Auth, check_bearer, client_ip, read_setup_token, require_csrf, validate_email, validate_password
+from .auth import SETTINGS_ROLES, Auth, check_bearer, client_ip, read_setup_token, require_csrf, token_hash, validate_email, validate_password
 from .db import AuditRow, make_session_factory
 from .discovery import Discovery, NetBoxWriter, guess_device, load_device_aliases, load_yaml, unapproved_for_ui
 from .errors import ApiError, error_body
 from .apps_launcher import mount_apps_launcher
+from .vault import mount_vault
 from .device_cli import mount_device_cli
 from .fleet import mount_fleet
 from .masking import leftover_placeholders, mask_text, restore_secrets
@@ -178,8 +179,13 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         raw = request.headers.get("content-length")
         if raw and raw.isdigit() and int(raw) > settings.max_body:
             body = error_body(ApiError(413, "too_large", "request body exceeds 6 MB"))
-            return JSONResponse(status_code=413, content=body)
-        return await call_next(request)
+            response = JSONResponse(status_code=413, content=body)
+        else:
+            response = await call_next(request)
+        if request.url.path.startswith("/api/v1/settings/vault"):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+        return response
 
     def user_of(request: Request):
         user, csrf = auth.session_user(request.cookies.get(settings.cookie_name))
@@ -280,7 +286,11 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.post("/api/v1/auth/logout")
     def logout(request: Request):
         user, _csrf = user_of(request)
-        auth.logout(request.cookies.get(settings.cookie_name))
+        raw = request.cookies.get(settings.cookie_name)
+        auth.logout(raw)
+        sessions = getattr(app.state, "vault_sessions", None)
+        if sessions is not None and raw:
+            sessions.pop(token_hash(raw), None)
         _audit(sf, user, "logout", client_ip(request), "ok")
         resp = JSONResponse({"ok": True})
         resp.delete_cookie(settings.cookie_name, path="/")
@@ -906,6 +916,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
 
     mount_device_cli(app, user_of, record_cli)
     mount_apps_launcher(app, user_of)
+    mount_vault(app, user_of, _audit)
     warn_complete_setup_without_users(settings, auth)
     return app
 

@@ -33,9 +33,13 @@
 # an install written before the marker existed. It accepts that .env only when
 # PUBLIC_HOST, CLIENT_NAME, CLIENT_SLUG, INSTALL_DIR, NETBOX_DB_PASSWORD, and
 # NETBOX_SECRET_KEY are present and non-empty, fills only missing or empty
-# secrets, writes the marker after that backfill, and does not change the host,
-# client, ports, or certificates that already exist. --dry-run with --upgrade-env
-# prints the plan and writes nothing. A partial or corrupt .env is refused.
+# secrets, and writes the marker after that backfill. It does not change the
+# host, client, or certificates that already exist. A published port is rewritten
+# only when it is still a previous default (PORT_HTTP 80, 8080, or 8086 becomes
+# 18086; PORT_NETBOX 8444 or 8080 becomes 8092; PORT_ALERTMANAGER 9093 becomes
+# 8086). Any other port, including PORT_HTTPS=57400, is left. --dry-run with
+# --upgrade-env prints the plan and writes nothing. A partial or corrupt .env
+# is refused.
 #
 # WHICH CLIENT this server is for, and NEW INSTALL vs MOVE FROM THE OLD STACK, are NOT
 # asked here: open the first-run page  https://<PUBLIC_HOST>[:PORT_HTTPS]/setup/
@@ -318,16 +322,18 @@ plan_one_port() { # plan_one_port <KEY> <default> <preferred> <proto>
 plan_published_ports() {
   TAKEN_PORTS=" "
   PORT_PLAN=""
-  # Firewall-allowed host ports. NetBox owns 8080, so the UI HTTP front is 8086.
-  # HTTPS stays 443 unless that tcp port is busy. HTTP/3 is UDP 443 even when
-  # HTTPS tcp moves. Alternatives are only used when the firewall port is taken.
-  plan_one_port PORT_NETBOX 8080 18080 tcp
-  plan_one_port PORT_HTTP 8086 18086 tcp
+  # Firewall-allowed host ports. Alertmanager is 8086 (n8n holds 9093).
+  # NetBox is 8092 (8080 is not reachable). The UI HTTP front is 18086.
+  # HTTPS stays 443 unless that tcp port is busy. A configured 57400 is never
+  # rewritten. HTTP/3 is UDP 443 even when HTTPS tcp moves. Alternatives are
+  # only used when the firewall port is taken.
+  plan_one_port PORT_NETBOX 8092 18092 tcp
+  plan_one_port PORT_ALERTMANAGER 8086 19093 tcp
+  plan_one_port PORT_HTTP 18086 28086 tcp
   plan_one_port PORT_HTTPS 443 8443 tcp
   plan_one_port PORT_HTTP3 443 443 udp
   plan_one_port PORT_GRAFANA 3000 13000 tcp
   plan_one_port PORT_PROMETHEUS 9090 19090 tcp
-  plan_one_port PORT_ALERTMANAGER 9093 19093 tcp
   plan_one_port PORT_ACTIVEPIECES 8081 18081 tcp
   plan_one_port PORT_NETDISCO 5000 15000 tcp
   plan_one_port PORT_OXIDIZED 8888 18888 tcp
@@ -353,16 +359,16 @@ EOF
 }
 print_port_table() {
   local http https http3 grafana prom am ap nd ox nb snmp bb tel syslog traps origin
-  http="$(getenv_val PORT_HTTP)"; http="${http:-8086}"
+  http="$(getenv_val PORT_HTTP)"; http="${http:-18086}"
   https="$(getenv_val PORT_HTTPS)"; https="${https:-443}"
   http3="$(getenv_val PORT_HTTP3)"; http3="${http3:-443}"
   grafana="$(getenv_val PORT_GRAFANA)"; grafana="${grafana:-3000}"
   prom="$(getenv_val PORT_PROMETHEUS)"; prom="${prom:-9090}"
-  am="$(getenv_val PORT_ALERTMANAGER)"; am="${am:-9093}"
+  am="$(getenv_val PORT_ALERTMANAGER)"; am="${am:-8086}"
   ap="$(getenv_val PORT_ACTIVEPIECES)"; ap="${ap:-8081}"
   nd="$(getenv_val PORT_NETDISCO)"; nd="${nd:-5000}"
   ox="$(getenv_val PORT_OXIDIZED)"; ox="${ox:-8888}"
-  nb="$(getenv_val PORT_NETBOX)"; nb="${nb:-8080}"
+  nb="$(getenv_val PORT_NETBOX)"; nb="${nb:-8092}"
   snmp="$(getenv_val PORT_SNMP_EXPORTER)"; snmp="${snmp:-9116}"
   bb="$(getenv_val PORT_BLACKBOX)"; bb="${bb:-9115}"
   tel="$(getenv_val PORT_TELEGRAF)"; tel="${tel:-57500}"
@@ -422,13 +428,15 @@ align_published_ports() {
     aligned[$key]=$cur
     say "left ${key}=${cur}. The firewall-allowed port is ${new}. Open ${cur}, or edit .env to use ${new}. A value that is not a previous default is not changed."
   }
-  # 80 was the old HTTP default. 8080 was the old alternate and is now NetBox.
-  align_key PORT_HTTP 8086 80 8080
-  align_key PORT_NETBOX 8080 8444
+  # Previous HTTP defaults: 80, then 8080, then 8086. 8086 is now Alertmanager.
+  align_key PORT_HTTP 18086 80 8080 8086
+  # Previous NetBox defaults: 8444, then 8080. 8080 is not reachable.
+  align_key PORT_NETBOX 8092 8444 8080
   align_key PORT_HTTP3 443
   align_key PORT_GRAFANA 3000
   align_key PORT_PROMETHEUS 9090
-  align_key PORT_ALERTMANAGER 9093
+  # 9093 was the Alertmanager default. n8n holds that port.
+  align_key PORT_ALERTMANAGER 8086 9093
   align_key PORT_ACTIVEPIECES 8081
   align_key PORT_NETDISCO 5000
   align_key PORT_OXIDIZED 8888
@@ -461,6 +469,12 @@ align_published_ports() {
   fi
   if [ "${aligned[PORT_HTTP]}" = "${aligned[PORT_NETBOX]}" ]; then
     say "WARNING: PORT_HTTP and PORT_NETBOX are both ${aligned[PORT_HTTP]}. NetBox and the UI HTTP front cannot share a host port."
+  fi
+  if [ -n "${aligned[PORT_ALERTMANAGER]}" ] && [ "${aligned[PORT_HTTP]}" = "${aligned[PORT_ALERTMANAGER]}" ]; then
+    say "WARNING: PORT_HTTP and PORT_ALERTMANAGER are both ${aligned[PORT_HTTP]}. The UI HTTP front and Alertmanager cannot share a host port."
+  fi
+  if [ -n "${aligned[PORT_ALERTMANAGER]}" ] && [ "${aligned[PORT_NETBOX]}" = "${aligned[PORT_ALERTMANAGER]}" ]; then
+    say "WARNING: PORT_NETBOX and PORT_ALERTMANAGER are both ${aligned[PORT_NETBOX]}."
   fi
   if [ -n "${aligned[PORT_HTTP3]}" ] && [ "${aligned[PORT_HTTP3]}" = "$(getenv_val PORT_TRAPS)" ]; then
     say "WARNING: PORT_HTTP3 and PORT_TRAPS are both UDP ${aligned[PORT_HTTP3]}."

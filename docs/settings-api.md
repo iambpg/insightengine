@@ -87,6 +87,20 @@ Approve creates the device in NetBox (manufacturer, type, role, site, a `/32` on
 
 Netdisco scan settings are the editable file `netdisco` / `sync.yml` (`prefix_selector` `tag` | `custom_field` | `all`, tag `ie-scan`, `interval_hours` default 6). Actions: `sync-prefixes`, `scan-now`, `refresh-unapproved`.
 
+## Vault
+
+Administrator only. An Engineer, Operator, or Read-only caller receives **403** `forbidden`. The list never contains a secret value. Responses send `Cache-Control: no-store`.
+
+`GET /api/v1/settings/vault` — `{readOnly: true, revealSeconds: 300, groups: [{id, name, note, endpoints, entries}]}`.
+
+Each group is one app: NetBox, Grafana, Prometheus / Alertmanager (Caddy basic auth), Activepieces, Netdisco, Oxidized, SNMP, UI / admin, and Other. `endpoints` is `{name, portKey, port, scheme, url}` taken from the `PORT_*` value in `.env` (the compose default when the key is missing). `url` is empty for UDP. Each entry is `{key, secret, set}` and, when `secret` is false, `value`. A secret entry has no `value`.
+
+`POST /api/v1/settings/vault/unlock` `{password}` — checks the current administrator password and opens a reveal session for `expiresIn` seconds (300). **401** `invalid_credentials` when the password is wrong. The password is not logged or stored in the audit row. **429** `rate_limited` after repeated failures.
+
+`POST /api/v1/settings/vault/reveal` `{key, action}` — `action` is `reveal` (default) or `copy`. Returns `{key, value, action}` for that one key. A secret key without a live reveal session is **403** `reauth_required` and the value is not returned. An unknown key is **404**. Each successful reveal or copy appends an audit row (`vault-reveal` or `vault-copy`) with the user, the key, and the time. The value is not written to the audit row or the process log.
+
+There is no write route. `.env` is mounted read-only into ie-config.
+
 ## Health
 
 `GET /healthz` (no `/api/v1` prefix, no cookie) returns `{ok: true}` for the container healthcheck.
