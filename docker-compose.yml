@@ -122,7 +122,9 @@ x-netbox: &netbox
     REDIS_CACHE_PASSWORD: ${NETBOX_REDIS_CACHE_PASSWORD:?run install.sh}
     SECRET_KEY: ${NETBOX_SECRET_KEY:?run install.sh}
     API_TOKEN_PEPPER_1: ${NETBOX_API_TOKEN_PEPPER_1:?run install.sh}
-    ALLOWED_HOSTS: ${PUBLIC_HOST} caddy netbox localhost
+    # 127.0.0.1 is the healthcheck address. Django matches the Host header, and
+    # "localhost" does not allow 127.0.0.1. The image only auto-adds localhost.
+    ALLOWED_HOSTS: ${PUBLIC_HOST} caddy netbox localhost 127.0.0.1
     CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST}:${PORT_NETBOX:-8080}
     CORS_ORIGIN_ALLOW_ALL: "false"
     SKIP_SUPERUSER: "false"
@@ -995,7 +997,10 @@ services:
       netbox-redis: {condition: service_healthy}
       netbox-redis-cache: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/login/ -o /dev/null || exit 1"]
+      # Connect to 127.0.0.1 so curl does not try ::1, and send Host: localhost.
+      # A bare http://127.0.0.1/login/ is Django DisallowedHost (HTTP 400) unless
+      # 127.0.0.1 is also in ALLOWED_HOSTS. The image documents localhost for this probe.
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: localhost' http://127.0.0.1:8080/login/ -o /dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
