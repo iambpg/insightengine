@@ -10,13 +10,15 @@ import RolesTab from './RolesTab';
 import DatabaseTab from './DatabaseTab';
 import WebhookTab from './WebhookTab';
 import ApplicationsPanel from './ApplicationsPanel';
+import SnmpTab from './SnmpTab';
 
-type Tab = 'applications' | 'roles' | 'database' | 'webhook';
+type Tab = 'applications' | 'roles' | 'database' | 'webhook' | 'snmp';
 
 const BASE_TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'roles', label: 'Roles and users', icon: 'UserGroupIcon' },
   { key: 'database', label: 'Database (read-only)', icon: 'CircleStackIcon' },
   { key: 'webhook', label: 'Alertmanager webhook', icon: 'BellAlertIcon' },
+  { key: 'snmp', label: 'SNMP', icon: 'KeyIcon' },
 ];
 
 export default function SettingsView() {
@@ -97,6 +99,7 @@ export default function SettingsView() {
           {tab === 'roles' && <RolesTab />}
           {tab === 'database' && <DatabaseTab />}
           {tab === 'webhook' && <WebhookTab />}
+          {tab === 'snmp' && <SnmpTab />}
         </div>
       </div>
     </div>

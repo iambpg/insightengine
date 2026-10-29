@@ -24,10 +24,11 @@ It is a Docker Compose bundle for **one install per client**, sized (by estimate
 | `docs/setup-api.md` | The setup service HTTP API (endpoints, JSON, token, states) for the UI developer. |
 | `docs/settings-api.md` | Settings and discovery API implemented by `config-api/` (`ie-config`). |
 | `docs/fleet-api.md` | Device, site, alert, summary and health routes the customer UI calls. |
+| `docs/snmp-credentials.md` | SNMP credentials in NetBox config contexts, with the `.env` values as the fallback. |
 | `ui/` | Customer UI (Next.js). `./install.sh` builds `insightengine-ui:local` from `ui/Dockerfile` (port 8080, `GET /healthz`, `NEXT_PUBLIC_IE_API_MODE=live`). Empty `IE_UI_IMAGE` means that build. |
 | `config/` | Prometheus, Alertmanager, Caddy, blackbox, Loki, Grafana provisioning, Telegraf, Oxidized, alert relay, Netdisco. `config/ui-placeholder/` is only a copy of the setup-redirect sample. |
 | `snmp/`, `trapd/` | SNMP generator input / exporter skeleton / MIBs; snmptrapd image (traps → Alertmanager + Loki). |
-| `scripts/` | `validate.sh`, `migrate.sh`, `prom-history.sh`, `set-secret.sh`, `seed-netbox.sh`. |
+| `scripts/` | `validate.sh`, `migrate.sh`, `prom-history.sh`, `set-secret.sh`, `seed-netbox.sh`, `uninstall.sh`. |
 | `migration/` | `migrate.conf.example`; the real `migrate.conf` is written by the setup service (mode 600, git-ignored). |
 
 ## 2. Install and first run
@@ -40,6 +41,8 @@ sudo ./install.sh --public-host monitor.example.com      # or: INSTALL_PUBLIC_HO
 ```
 
 A forgotten ie-config password is reset with `sudo ./scripts/reset-admin-password.sh` (see [docs/reset-admin-password.md](docs/reset-admin-password.md)). It does not print the new password. If the users table is empty, the same command asks for an email and creates the Administrator.
+
+To wipe this install and start over, see [docs/uninstall.md](docs/uninstall.md) (`./scripts/uninstall.sh` lists what it would remove; deletion needs `--apply`).
 
 `install.sh` flags: `--public-host HOST` (default: first IP / host name of this machine — the value goes into the TLS certificate and `PUBLIC_HOST`),
 `--alt-ports` / `--default-ports` (default: **automatic** — every published host port is probed with `ss`, `lsof`, Docker's published ports, and, when `iptables` is readable, NAT rules. A Kubernetes loadbalancer DNAT for this host's :80 or :443, such as k3s Traefik, is invisible to `ss`; that port is treated as taken and the installer says why. A free default is kept. A busy port is replaced on its own: its preferred alternative, then the next free port. One busy port does not move the others. `--default-ports` stops if a default is busy. `--alt-ports` starts from the preferred alternatives), `--no-start` (prepare files only), `--fix-perms`, `--help`.
