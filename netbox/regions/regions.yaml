@@ -1,0 +1,2636 @@
+# NetBox region tree loaded by netbox/regions/import_regions.py.
+# Hierarchy: Africa > sub-region > country > province/region.
+# The slug is the match key. A subdivision slug is the country code plus the name, for example za-gauteng.
+# Choices, counts, and display-name exceptions: docs/regions.md.
+# Source snapshot: ISO 3166-2 codes and names from pycountry 26.2.16 (Debian iso-codes).
+regions:
+  - slug: africa
+    name: Africa
+    parent: null
+    description: Geographic grouping
+  - slug: north-africa
+    name: North Africa
+    parent: africa
+    description: Geographic grouping
+  # EG Egypt — 27 subdivisions
+  - slug: eg
+    name: Egypt
+    parent: north-africa
+    description: 'ISO 3166-1 alpha-2: EG'
+  - slug: eg-alexandria
+    name: Alexandria
+    parent: eg
+    description: 'ISO 3166-2: EG-ALX'
+  - slug: eg-aswan
+    name: Aswan
+    parent: eg
+    description: 'ISO 3166-2: EG-ASN'
+  - slug: eg-asyut
+    name: Asyut
+    parent: eg
+    description: 'ISO 3166-2: EG-AST'
+  - slug: eg-red-sea
+    name: Red Sea
+    parent: eg
+    description: 'ISO 3166-2: EG-BA'
+  - slug: eg-beheira
+    name: Beheira
+    parent: eg
+    description: 'ISO 3166-2: EG-BH'
+  - slug: eg-beni-suef
+    name: Beni Suef
+    parent: eg
+    description: 'ISO 3166-2: EG-BNS'
+  - slug: eg-cairo
+    name: Cairo
+    parent: eg
+    description: 'ISO 3166-2: EG-C'
+  - slug: eg-dakahlia
+    name: Dakahlia
+    parent: eg
+    description: 'ISO 3166-2: EG-DK'
+  - slug: eg-damietta
+    name: Damietta
+    parent: eg
+    description: 'ISO 3166-2: EG-DT'
+  - slug: eg-faiyum
+    name: Faiyum
+    parent: eg
+    description: 'ISO 3166-2: EG-FYM'
+  - slug: eg-gharbia
+    name: Gharbia
+    parent: eg
+    description: 'ISO 3166-2: EG-GH'
+  - slug: eg-giza
+    name: Giza
+    parent: eg
+    description: 'ISO 3166-2: EG-GZ'
+  - slug: eg-ismailia
+    name: Ismailia
+    parent: eg
+    description: 'ISO 3166-2: EG-IS'
+  - slug: eg-south-sinai
+    name: South Sinai
+    parent: eg
+    description: 'ISO 3166-2: EG-JS'
+  - slug: eg-qalyubia
+    name: Qalyubia
+    parent: eg
+    description: 'ISO 3166-2: EG-KB'
+  - slug: eg-kafr-el-sheikh
+    name: Kafr el-Sheikh
+    parent: eg
+    description: 'ISO 3166-2: EG-KFS'
+  - slug: eg-qena
+    name: Qena
+    parent: eg
+    description: 'ISO 3166-2: EG-KN'
+  - slug: eg-luxor
+    name: Luxor
+    parent: eg
+    description: 'ISO 3166-2: EG-LX'
+  - slug: eg-minya
+    name: Minya
+    parent: eg
+    description: 'ISO 3166-2: EG-MN'
+  - slug: eg-monufia
+    name: Monufia
+    parent: eg
+    description: 'ISO 3166-2: EG-MNF'
+  - slug: eg-matrouh
+    name: Matrouh
+    parent: eg
+    description: 'ISO 3166-2: EG-MT'
+  - slug: eg-port-said
+    name: Port Said
+    parent: eg
+    description: 'ISO 3166-2: EG-PTS'
+  - slug: eg-sohag
+    name: Sohag
+    parent: eg
+    description: 'ISO 3166-2: EG-SHG'
+  - slug: eg-sharqia
+    name: Sharqia
+    parent: eg
+    description: 'ISO 3166-2: EG-SHR'
+  - slug: eg-north-sinai
+    name: North Sinai
+    parent: eg
+    description: 'ISO 3166-2: EG-SIN'
+  - slug: eg-suez
+    name: Suez
+    parent: eg
+    description: 'ISO 3166-2: EG-SUZ'
+  - slug: eg-new-valley
+    name: New Valley
+    parent: eg
+    description: 'ISO 3166-2: EG-WAD'
+  # LY Libya — 22 subdivisions
+  - slug: ly
+    name: Libya
+    parent: north-africa
+    description: 'ISO 3166-1 alpha-2: LY'
+  - slug: ly-benghazi
+    name: Benghazi
+    parent: ly
+    description: 'ISO 3166-2: LY-BA'
+  - slug: ly-butnan
+    name: Butnan
+    parent: ly
+    description: 'ISO 3166-2: LY-BU'
+  - slug: ly-derna
+    name: Derna
+    parent: ly
+    description: 'ISO 3166-2: LY-DR'
+  - slug: ly-ghat
+    name: Ghat
+    parent: ly
+    description: 'ISO 3166-2: LY-GT'
+  - slug: ly-jabal-al-akhdar
+    name: Jabal al Akhdar
+    parent: ly
+    description: 'ISO 3166-2: LY-JA'
+  - slug: ly-jabal-al-gharbi
+    name: Jabal al Gharbi
+    parent: ly
+    description: 'ISO 3166-2: LY-JG'
+  - slug: ly-jafara
+    name: Jafara
+    parent: ly
+    description: 'ISO 3166-2: LY-JI'
+  - slug: ly-jufra
+    name: Jufra
+    parent: ly
+    description: 'ISO 3166-2: LY-JU'
+  - slug: ly-kufra
+    name: Kufra
+    parent: ly
+    description: 'ISO 3166-2: LY-KF'
+  - slug: ly-murqub
+    name: Murqub
+    parent: ly
+    description: 'ISO 3166-2: LY-MB'
+  - slug: ly-misrata
+    name: Misrata
+    parent: ly
+    description: 'ISO 3166-2: LY-MI'
+  - slug: ly-marj
+    name: Marj
+    parent: ly
+    description: 'ISO 3166-2: LY-MJ'
+  - slug: ly-murzuq
+    name: Murzuq
+    parent: ly
+    description: 'ISO 3166-2: LY-MQ'
+  - slug: ly-nalut
+    name: Nalut
+    parent: ly
+    description: 'ISO 3166-2: LY-NL'
+  - slug: ly-nuqat-al-khams
+    name: Nuqat al Khams
+    parent: ly
+    description: 'ISO 3166-2: LY-NQ'
+  - slug: ly-sabha
+    name: Sabha
+    parent: ly
+    description: 'ISO 3166-2: LY-SB'
+  - slug: ly-sirte
+    name: Sirte
+    parent: ly
+    description: 'ISO 3166-2: LY-SR'
+  - slug: ly-tripoli
+    name: Tripoli
+    parent: ly
+    description: 'ISO 3166-2: LY-TB'
+  - slug: ly-al-wahat
+    name: Al Wahat
+    parent: ly
+    description: 'ISO 3166-2: LY-WA'
+  - slug: ly-wadi-al-hayaa
+    name: Wadi al Hayaa
+    parent: ly
+    description: 'ISO 3166-2: LY-WD'
+  - slug: ly-wadi-al-shatii
+    name: Wadi al Shatii
+    parent: ly
+    description: 'ISO 3166-2: LY-WS'
+  - slug: ly-zawiya
+    name: Zawiya
+    parent: ly
+    description: 'ISO 3166-2: LY-ZA'
+  # TN Tunisia — 24 subdivisions
+  - slug: tn
+    name: Tunisia
+    parent: north-africa
+    description: 'ISO 3166-1 alpha-2: TN'
+  - slug: tn-tunis
+    name: Tunis
+    parent: tn
+    description: 'ISO 3166-2: TN-11'
+  - slug: tn-ariana
+    name: Ariana
+    parent: tn
+    description: 'ISO 3166-2: TN-12'
+  - slug: tn-ben-arous
+    name: Ben Arous
+    parent: tn
+    description: 'ISO 3166-2: TN-13'
+  - slug: tn-la-manouba
+    name: La Manouba
+    parent: tn
+    description: 'ISO 3166-2: TN-14'
+  - slug: tn-nabeul
+    name: Nabeul
+    parent: tn
+    description: 'ISO 3166-2: TN-21'
+  - slug: tn-zaghouan
+    name: Zaghouan
+    parent: tn
+    description: 'ISO 3166-2: TN-22'
+  - slug: tn-bizerte
+    name: Bizerte
+    parent: tn
+    description: 'ISO 3166-2: TN-23'
+  - slug: tn-beja
+    name: Béja
+    parent: tn
+    description: 'ISO 3166-2: TN-31'
+  - slug: tn-jendouba
+    name: Jendouba
+    parent: tn
+    description: 'ISO 3166-2: TN-32'
+  - slug: tn-le-kef
+    name: Le Kef
+    parent: tn
+    description: 'ISO 3166-2: TN-33'
+  - slug: tn-siliana
+    name: Siliana
+    parent: tn
+    description: 'ISO 3166-2: TN-34'
+  - slug: tn-kairouan
+    name: Kairouan
+    parent: tn
+    description: 'ISO 3166-2: TN-41'
+  - slug: tn-kasserine
+    name: Kasserine
+    parent: tn
+    description: 'ISO 3166-2: TN-42'
+  - slug: tn-sidi-bouzid
+    name: Sidi Bouzid
+    parent: tn
+    description: 'ISO 3166-2: TN-43'
+  - slug: tn-sousse
+    name: Sousse
+    parent: tn
+    description: 'ISO 3166-2: TN-51'
+  - slug: tn-monastir
+    name: Monastir
+    parent: tn
+    description: 'ISO 3166-2: TN-52'
+  - slug: tn-mahdia
+    name: Mahdia
+    parent: tn
+    description: 'ISO 3166-2: TN-53'
+  - slug: tn-sfax
+    name: Sfax
+    parent: tn
+    description: 'ISO 3166-2: TN-61'
+  - slug: tn-gafsa
+    name: Gafsa
+    parent: tn
+    description: 'ISO 3166-2: TN-71'
+  - slug: tn-tozeur
+    name: Tozeur
+    parent: tn
+    description: 'ISO 3166-2: TN-72'
+  - slug: tn-kebili
+    name: Kébili
+    parent: tn
+    description: 'ISO 3166-2: TN-73'
+  - slug: tn-gabes
+    name: Gabès
+    parent: tn
+    description: 'ISO 3166-2: TN-81'
+  - slug: tn-medenine
+    name: Médenine
+    parent: tn
+    description: 'ISO 3166-2: TN-82'
+  - slug: tn-tataouine
+    name: Tataouine
+    parent: tn
+    description: 'ISO 3166-2: TN-83'
+  # DZ Algeria — 58 subdivisions
+  - slug: dz
+    name: Algeria
+    parent: north-africa
+    description: 'ISO 3166-1 alpha-2: DZ'
+  - slug: dz-adrar
+    name: Adrar
+    parent: dz
+    description: 'ISO 3166-2: DZ-01'
+  - slug: dz-chlef
+    name: Chlef
+    parent: dz
+    description: 'ISO 3166-2: DZ-02'
+  - slug: dz-laghouat
+    name: Laghouat
+    parent: dz
+    description: 'ISO 3166-2: DZ-03'
+  - slug: dz-oum-el-bouaghi
+    name: Oum el Bouaghi
+    parent: dz
+    description: 'ISO 3166-2: DZ-04'
+  - slug: dz-batna
+    name: Batna
+    parent: dz
+    description: 'ISO 3166-2: DZ-05'
+  - slug: dz-bejaia
+    name: Béjaïa
+    parent: dz
+    description: 'ISO 3166-2: DZ-06'
+  - slug: dz-biskra
+    name: Biskra
+    parent: dz
+    description: 'ISO 3166-2: DZ-07'
+  - slug: dz-bechar
+    name: Béchar
+    parent: dz
+    description: 'ISO 3166-2: DZ-08'
+  - slug: dz-blida
+    name: Blida
+    parent: dz
+    description: 'ISO 3166-2: DZ-09'
+  - slug: dz-bouira
+    name: Bouira
+    parent: dz
+    description: 'ISO 3166-2: DZ-10'
+  - slug: dz-tamanrasset
+    name: Tamanrasset
+    parent: dz
+    description: 'ISO 3166-2: DZ-11'
+  - slug: dz-tebessa
+    name: Tébessa
+    parent: dz
+    description: 'ISO 3166-2: DZ-12'
+  - slug: dz-tlemcen
+    name: Tlemcen
+    parent: dz
+    description: 'ISO 3166-2: DZ-13'
+  - slug: dz-tiaret
+    name: Tiaret
+    parent: dz
+    description: 'ISO 3166-2: DZ-14'
+  - slug: dz-tizi-ouzou
+    name: Tizi Ouzou
+    parent: dz
+    description: 'ISO 3166-2: DZ-15'
+  - slug: dz-alger
+    name: Alger
+    parent: dz
+    description: 'ISO 3166-2: DZ-16'
+  - slug: dz-djelfa
+    name: Djelfa
+    parent: dz
+    description: 'ISO 3166-2: DZ-17'
+  - slug: dz-jijel
+    name: Jijel
+    parent: dz
+    description: 'ISO 3166-2: DZ-18'
+  - slug: dz-setif
+    name: Sétif
+    parent: dz
+    description: 'ISO 3166-2: DZ-19'
+  - slug: dz-saida
+    name: Saïda
+    parent: dz
+    description: 'ISO 3166-2: DZ-20'
+  - slug: dz-skikda
+    name: Skikda
+    parent: dz
+    description: 'ISO 3166-2: DZ-21'
+  - slug: dz-sidi-bel-abbes
+    name: Sidi Bel Abbès
+    parent: dz
+    description: 'ISO 3166-2: DZ-22'
+  - slug: dz-annaba
+    name: Annaba
+    parent: dz
+    description: 'ISO 3166-2: DZ-23'
+  - slug: dz-guelma
+    name: Guelma
+    parent: dz
+    description: 'ISO 3166-2: DZ-24'
+  - slug: dz-constantine
+    name: Constantine
+    parent: dz
+    description: 'ISO 3166-2: DZ-25'
+  - slug: dz-medea
+    name: Médéa
+    parent: dz
+    description: 'ISO 3166-2: DZ-26'
+  - slug: dz-mostaganem
+    name: Mostaganem
+    parent: dz
+    description: 'ISO 3166-2: DZ-27'
+  - slug: dz-msila
+    name: M'sila
+    parent: dz
+    description: 'ISO 3166-2: DZ-28'
+  - slug: dz-mascara
+    name: Mascara
+    parent: dz
+    description: 'ISO 3166-2: DZ-29'
+  - slug: dz-ouargla
+    name: Ouargla
+    parent: dz
+    description: 'ISO 3166-2: DZ-30'
+  - slug: dz-oran
+    name: Oran
+    parent: dz
+    description: 'ISO 3166-2: DZ-31'
+  - slug: dz-el-bayadh
+    name: El Bayadh
+    parent: dz
+    description: 'ISO 3166-2: DZ-32'
+  - slug: dz-illizi
+    name: Illizi
+    parent: dz
+    description: 'ISO 3166-2: DZ-33'
+  - slug: dz-bordj-bou-arreridj
+    name: Bordj Bou Arréridj
+    parent: dz
+    description: 'ISO 3166-2: DZ-34'
+  - slug: dz-boumerdes
+    name: Boumerdès
+    parent: dz
+    description: 'ISO 3166-2: DZ-35'
+  - slug: dz-el-tarf
+    name: El Tarf
+    parent: dz
+    description: 'ISO 3166-2: DZ-36'
+  - slug: dz-tindouf
+    name: Tindouf
+    parent: dz
+    description: 'ISO 3166-2: DZ-37'
+  - slug: dz-tissemsilt
+    name: Tissemsilt
+    parent: dz
+    description: 'ISO 3166-2: DZ-38'
+  - slug: dz-el-oued
+    name: El Oued
+    parent: dz
+    description: 'ISO 3166-2: DZ-39'
+  - slug: dz-khenchela
+    name: Khenchela
+    parent: dz
+    description: 'ISO 3166-2: DZ-40'
+  - slug: dz-souk-ahras
+    name: Souk Ahras
+    parent: dz
+    description: 'ISO 3166-2: DZ-41'
+  - slug: dz-tipaza
+    name: Tipaza
+    parent: dz
+    description: 'ISO 3166-2: DZ-42'
+  - slug: dz-mila
+    name: Mila
+    parent: dz
+    description: 'ISO 3166-2: DZ-43'
+  - slug: dz-ain-defla
+    name: Aïn Defla
+    parent: dz
+    description: 'ISO 3166-2: DZ-44'
+  - slug: dz-naama
+    name: Naama
+    parent: dz
+    description: 'ISO 3166-2: DZ-45'
+  - slug: dz-ain-temouchent
+    name: Aïn Témouchent
+    parent: dz
+    description: 'ISO 3166-2: DZ-46'
+  - slug: dz-ghardaia
+    name: Ghardaïa
+    parent: dz
+    description: 'ISO 3166-2: DZ-47'
+  - slug: dz-relizane
+    name: Relizane
+    parent: dz
+    description: 'ISO 3166-2: DZ-48'
+  - slug: dz-timimoun
+    name: Timimoun
+    parent: dz
+    description: 'ISO 3166-2: DZ-49'
+  - slug: dz-bordj-badji-mokhtar
+    name: Bordj Badji Mokhtar
+    parent: dz
+    description: 'ISO 3166-2: DZ-50'
+  - slug: dz-ouled-djellal
+    name: Ouled Djellal
+    parent: dz
+    description: 'ISO 3166-2: DZ-51'
+  - slug: dz-beni-abbes
+    name: Béni Abbès
+    parent: dz
+    description: 'ISO 3166-2: DZ-52'
+  - slug: dz-in-salah
+    name: In Salah
+    parent: dz
+    description: 'ISO 3166-2: DZ-53'
+  - slug: dz-in-guezzam
+    name: In Guezzam
+    parent: dz
+    description: 'ISO 3166-2: DZ-54'
+  - slug: dz-touggourt
+    name: Touggourt
+    parent: dz
+    description: 'ISO 3166-2: DZ-55'
+  - slug: dz-djanet
+    name: Djanet
+    parent: dz
+    description: 'ISO 3166-2: DZ-56'
+  - slug: dz-el-meghaier
+    name: El Meghaier
+    parent: dz
+    description: 'ISO 3166-2: DZ-57'
+  - slug: dz-el-meniaa
+    name: El Meniaa
+    parent: dz
+    description: 'ISO 3166-2: DZ-58'
+  # MA Morocco — 12 subdivisions
+  - slug: ma
+    name: Morocco
+    parent: north-africa
+    description: 'ISO 3166-1 alpha-2: MA'
+  - slug: ma-tanger-tetouan-al-hoceima
+    name: Tanger-Tétouan-Al Hoceïma
+    parent: ma
+    description: 'ISO 3166-2: MA-01'
+  - slug: ma-oriental
+    name: Oriental
+    parent: ma
+    description: 'ISO 3166-2: MA-02'
+  - slug: ma-fes-meknes
+    name: Fès-Meknès
+    parent: ma
+    description: 'ISO 3166-2: MA-03'
+  - slug: ma-rabat-sale-kenitra
+    name: Rabat-Salé-Kénitra
+    parent: ma
+    description: 'ISO 3166-2: MA-04'
+  - slug: ma-beni-mellal-khenifra
+    name: Béni Mellal-Khénifra
+    parent: ma
+    description: 'ISO 3166-2: MA-05'
+  - slug: ma-casablanca-settat
+    name: Casablanca-Settat
+    parent: ma
+    description: 'ISO 3166-2: MA-06'
+  - slug: ma-marrakech-safi
+    name: Marrakech-Safi
+    parent: ma
+    description: 'ISO 3166-2: MA-07'
+  - slug: ma-draa-tafilalet
+    name: Drâa-Tafilalet
+    parent: ma
+    description: 'ISO 3166-2: MA-08'
+  - slug: ma-souss-massa
+    name: Souss-Massa
+    parent: ma
+    description: 'ISO 3166-2: MA-09'
+  - slug: ma-guelmim-oued-noun
+    name: Guelmim-Oued Noun
+    parent: ma
+    description: 'ISO 3166-2: MA-10'
+  - slug: ma-laayoune-sakia-el-hamra
+    name: Laâyoune-Sakia El Hamra
+    parent: ma
+    description: 'ISO 3166-2: MA-11'
+  - slug: ma-dakhla-oued-ed-dahab
+    name: Dakhla-Oued Ed-Dahab
+    parent: ma
+    description: 'ISO 3166-2: MA-12'
+  # SD Sudan — 18 subdivisions
+  - slug: sd
+    name: Sudan
+    parent: north-africa
+    description: 'ISO 3166-1 alpha-2: SD'
+  - slug: sd-central-darfur
+    name: Central Darfur
+    parent: sd
+    description: 'ISO 3166-2: SD-DC'
+  - slug: sd-east-darfur
+    name: East Darfur
+    parent: sd
+    description: 'ISO 3166-2: SD-DE'
+  - slug: sd-north-darfur
+    name: North Darfur
+    parent: sd
+    description: 'ISO 3166-2: SD-DN'
+  - slug: sd-south-darfur
+    name: South Darfur
+    parent: sd
+    description: 'ISO 3166-2: SD-DS'
+  - slug: sd-west-darfur
+    name: West Darfur
+    parent: sd
+    description: 'ISO 3166-2: SD-DW'
+  - slug: sd-gedaref
+    name: Gedaref
+    parent: sd
+    description: 'ISO 3166-2: SD-GD'
+  - slug: sd-west-kordofan
+    name: West Kordofan
+    parent: sd
+    description: 'ISO 3166-2: SD-GK'
+  - slug: sd-gezira
+    name: Gezira
+    parent: sd
+    description: 'ISO 3166-2: SD-GZ'
+  - slug: sd-kassala
+    name: Kassala
+    parent: sd
+    description: 'ISO 3166-2: SD-KA'
+  - slug: sd-khartoum
+    name: Khartoum
+    parent: sd
+    description: 'ISO 3166-2: SD-KH'
+  - slug: sd-north-kordofan
+    name: North Kordofan
+    parent: sd
+    description: 'ISO 3166-2: SD-KN'
+  - slug: sd-south-kordofan
+    name: South Kordofan
+    parent: sd
+    description: 'ISO 3166-2: SD-KS'
+  - slug: sd-blue-nile
+    name: Blue Nile
+    parent: sd
+    description: 'ISO 3166-2: SD-NB'
+  - slug: sd-northern
+    name: Northern
+    parent: sd
+    description: 'ISO 3166-2: SD-NO'
+  - slug: sd-river-nile
+    name: River Nile
+    parent: sd
+    description: 'ISO 3166-2: SD-NR'
+  - slug: sd-white-nile
+    name: White Nile
+    parent: sd
+    description: 'ISO 3166-2: SD-NW'
+  - slug: sd-red-sea
+    name: Red Sea
+    parent: sd
+    description: 'ISO 3166-2: SD-RS'
+  - slug: sd-sennar
+    name: Sennar
+    parent: sd
+    description: 'ISO 3166-2: SD-SI'
+  - slug: west-africa
+    name: West Africa
+    parent: africa
+    description: Geographic grouping
+  # NG Nigeria — 0 subdivisions
+  - slug: ng
+    name: Nigeria
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: NG'
+  # GH Ghana — 0 subdivisions
+  - slug: gh
+    name: Ghana
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: GH'
+  # SN Senegal — 0 subdivisions
+  - slug: sn
+    name: Senegal
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: SN'
+  # CI Côte d'Ivoire — 0 subdivisions
+  - slug: ci
+    name: Côte d'Ivoire
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: CI'
+  # ML Mali — 0 subdivisions
+  - slug: ml
+    name: Mali
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: ML'
+  # NE Niger — 0 subdivisions
+  - slug: ne
+    name: Niger
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: NE'
+  # BF Burkina Faso — 0 subdivisions
+  - slug: bf
+    name: Burkina Faso
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: BF'
+  # GN Guinea — 0 subdivisions
+  - slug: gn
+    name: Guinea
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: GN'
+  # BJ Benin — 0 subdivisions
+  - slug: bj
+    name: Benin
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: BJ'
+  # TG Togo — 0 subdivisions
+  - slug: tg
+    name: Togo
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: TG'
+  # SL Sierra Leone — 0 subdivisions
+  - slug: sl
+    name: Sierra Leone
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: SL'
+  # LR Liberia — 0 subdivisions
+  - slug: lr
+    name: Liberia
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: LR'
+  # MR Mauritania — 0 subdivisions
+  - slug: mr
+    name: Mauritania
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: MR'
+  # GM The Gambia — 0 subdivisions
+  - slug: gm
+    name: The Gambia
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: GM'
+  # CV Cabo Verde — 0 subdivisions
+  - slug: cv
+    name: Cabo Verde
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: CV'
+  # GW Guinea-Bissau — 0 subdivisions
+  - slug: gw
+    name: Guinea-Bissau
+    parent: west-africa
+    description: 'ISO 3166-1 alpha-2: GW'
+  - slug: east-africa
+    name: East Africa
+    parent: africa
+    description: Geographic grouping
+  # KE Kenya — 47 subdivisions
+  - slug: ke
+    name: Kenya
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: KE'
+  - slug: ke-baringo
+    name: Baringo
+    parent: ke
+    description: 'ISO 3166-2: KE-01'
+  - slug: ke-bomet
+    name: Bomet
+    parent: ke
+    description: 'ISO 3166-2: KE-02'
+  - slug: ke-bungoma
+    name: Bungoma
+    parent: ke
+    description: 'ISO 3166-2: KE-03'
+  - slug: ke-busia
+    name: Busia
+    parent: ke
+    description: 'ISO 3166-2: KE-04'
+  - slug: ke-elgeyo-marakwet
+    name: Elgeyo/Marakwet
+    parent: ke
+    description: 'ISO 3166-2: KE-05'
+  - slug: ke-embu
+    name: Embu
+    parent: ke
+    description: 'ISO 3166-2: KE-06'
+  - slug: ke-garissa
+    name: Garissa
+    parent: ke
+    description: 'ISO 3166-2: KE-07'
+  - slug: ke-homa-bay
+    name: Homa Bay
+    parent: ke
+    description: 'ISO 3166-2: KE-08'
+  - slug: ke-isiolo
+    name: Isiolo
+    parent: ke
+    description: 'ISO 3166-2: KE-09'
+  - slug: ke-kajiado
+    name: Kajiado
+    parent: ke
+    description: 'ISO 3166-2: KE-10'
+  - slug: ke-kakamega
+    name: Kakamega
+    parent: ke
+    description: 'ISO 3166-2: KE-11'
+  - slug: ke-kericho
+    name: Kericho
+    parent: ke
+    description: 'ISO 3166-2: KE-12'
+  - slug: ke-kiambu
+    name: Kiambu
+    parent: ke
+    description: 'ISO 3166-2: KE-13'
+  - slug: ke-kilifi
+    name: Kilifi
+    parent: ke
+    description: 'ISO 3166-2: KE-14'
+  - slug: ke-kirinyaga
+    name: Kirinyaga
+    parent: ke
+    description: 'ISO 3166-2: KE-15'
+  - slug: ke-kisii
+    name: Kisii
+    parent: ke
+    description: 'ISO 3166-2: KE-16'
+  - slug: ke-kisumu
+    name: Kisumu
+    parent: ke
+    description: 'ISO 3166-2: KE-17'
+  - slug: ke-kitui
+    name: Kitui
+    parent: ke
+    description: 'ISO 3166-2: KE-18'
+  - slug: ke-kwale
+    name: Kwale
+    parent: ke
+    description: 'ISO 3166-2: KE-19'
+  - slug: ke-laikipia
+    name: Laikipia
+    parent: ke
+    description: 'ISO 3166-2: KE-20'
+  - slug: ke-lamu
+    name: Lamu
+    parent: ke
+    description: 'ISO 3166-2: KE-21'
+  - slug: ke-machakos
+    name: Machakos
+    parent: ke
+    description: 'ISO 3166-2: KE-22'
+  - slug: ke-makueni
+    name: Makueni
+    parent: ke
+    description: 'ISO 3166-2: KE-23'
+  - slug: ke-mandera
+    name: Mandera
+    parent: ke
+    description: 'ISO 3166-2: KE-24'
+  - slug: ke-marsabit
+    name: Marsabit
+    parent: ke
+    description: 'ISO 3166-2: KE-25'
+  - slug: ke-meru
+    name: Meru
+    parent: ke
+    description: 'ISO 3166-2: KE-26'
+  - slug: ke-migori
+    name: Migori
+    parent: ke
+    description: 'ISO 3166-2: KE-27'
+  - slug: ke-mombasa
+    name: Mombasa
+    parent: ke
+    description: 'ISO 3166-2: KE-28'
+  - slug: ke-muranga
+    name: Murang'a
+    parent: ke
+    description: 'ISO 3166-2: KE-29'
+  - slug: ke-nairobi-city
+    name: Nairobi City
+    parent: ke
+    description: 'ISO 3166-2: KE-30'
+  - slug: ke-nakuru
+    name: Nakuru
+    parent: ke
+    description: 'ISO 3166-2: KE-31'
+  - slug: ke-nandi
+    name: Nandi
+    parent: ke
+    description: 'ISO 3166-2: KE-32'
+  - slug: ke-narok
+    name: Narok
+    parent: ke
+    description: 'ISO 3166-2: KE-33'
+  - slug: ke-nyamira
+    name: Nyamira
+    parent: ke
+    description: 'ISO 3166-2: KE-34'
+  - slug: ke-nyandarua
+    name: Nyandarua
+    parent: ke
+    description: 'ISO 3166-2: KE-35'
+  - slug: ke-nyeri
+    name: Nyeri
+    parent: ke
+    description: 'ISO 3166-2: KE-36'
+  - slug: ke-samburu
+    name: Samburu
+    parent: ke
+    description: 'ISO 3166-2: KE-37'
+  - slug: ke-siaya
+    name: Siaya
+    parent: ke
+    description: 'ISO 3166-2: KE-38'
+  - slug: ke-taita-taveta
+    name: Taita/Taveta
+    parent: ke
+    description: 'ISO 3166-2: KE-39'
+  - slug: ke-tana-river
+    name: Tana River
+    parent: ke
+    description: 'ISO 3166-2: KE-40'
+  - slug: ke-tharaka-nithi
+    name: Tharaka-Nithi
+    parent: ke
+    description: 'ISO 3166-2: KE-41'
+  - slug: ke-trans-nzoia
+    name: Trans Nzoia
+    parent: ke
+    description: 'ISO 3166-2: KE-42'
+  - slug: ke-turkana
+    name: Turkana
+    parent: ke
+    description: 'ISO 3166-2: KE-43'
+  - slug: ke-uasin-gishu
+    name: Uasin Gishu
+    parent: ke
+    description: 'ISO 3166-2: KE-44'
+  - slug: ke-vihiga
+    name: Vihiga
+    parent: ke
+    description: 'ISO 3166-2: KE-45'
+  - slug: ke-wajir
+    name: Wajir
+    parent: ke
+    description: 'ISO 3166-2: KE-46'
+  - slug: ke-west-pokot
+    name: West Pokot
+    parent: ke
+    description: 'ISO 3166-2: KE-47'
+  # TZ Tanzania — 31 subdivisions
+  - slug: tz
+    name: Tanzania
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: TZ'
+  - slug: tz-arusha
+    name: Arusha
+    parent: tz
+    description: 'ISO 3166-2: TZ-01'
+  - slug: tz-dar-es-salaam
+    name: Dar es Salaam
+    parent: tz
+    description: 'ISO 3166-2: TZ-02'
+  - slug: tz-dodoma
+    name: Dodoma
+    parent: tz
+    description: 'ISO 3166-2: TZ-03'
+  - slug: tz-iringa
+    name: Iringa
+    parent: tz
+    description: 'ISO 3166-2: TZ-04'
+  - slug: tz-kagera
+    name: Kagera
+    parent: tz
+    description: 'ISO 3166-2: TZ-05'
+  - slug: tz-pemba-north
+    name: Pemba North
+    parent: tz
+    description: 'ISO 3166-2: TZ-06'
+  - slug: tz-zanzibar-north
+    name: Zanzibar North
+    parent: tz
+    description: 'ISO 3166-2: TZ-07'
+  - slug: tz-kigoma
+    name: Kigoma
+    parent: tz
+    description: 'ISO 3166-2: TZ-08'
+  - slug: tz-kilimanjaro
+    name: Kilimanjaro
+    parent: tz
+    description: 'ISO 3166-2: TZ-09'
+  - slug: tz-pemba-south
+    name: Pemba South
+    parent: tz
+    description: 'ISO 3166-2: TZ-10'
+  - slug: tz-zanzibar-south
+    name: Zanzibar South
+    parent: tz
+    description: 'ISO 3166-2: TZ-11'
+  - slug: tz-lindi
+    name: Lindi
+    parent: tz
+    description: 'ISO 3166-2: TZ-12'
+  - slug: tz-mara
+    name: Mara
+    parent: tz
+    description: 'ISO 3166-2: TZ-13'
+  - slug: tz-mbeya
+    name: Mbeya
+    parent: tz
+    description: 'ISO 3166-2: TZ-14'
+  - slug: tz-zanzibar-west
+    name: Zanzibar West
+    parent: tz
+    description: 'ISO 3166-2: TZ-15'
+  - slug: tz-morogoro
+    name: Morogoro
+    parent: tz
+    description: 'ISO 3166-2: TZ-16'
+  - slug: tz-mtwara
+    name: Mtwara
+    parent: tz
+    description: 'ISO 3166-2: TZ-17'
+  - slug: tz-mwanza
+    name: Mwanza
+    parent: tz
+    description: 'ISO 3166-2: TZ-18'
+  - slug: tz-coast
+    name: Coast
+    parent: tz
+    description: 'ISO 3166-2: TZ-19'
+  - slug: tz-rukwa
+    name: Rukwa
+    parent: tz
+    description: 'ISO 3166-2: TZ-20'
+  - slug: tz-ruvuma
+    name: Ruvuma
+    parent: tz
+    description: 'ISO 3166-2: TZ-21'
+  - slug: tz-shinyanga
+    name: Shinyanga
+    parent: tz
+    description: 'ISO 3166-2: TZ-22'
+  - slug: tz-singida
+    name: Singida
+    parent: tz
+    description: 'ISO 3166-2: TZ-23'
+  - slug: tz-tabora
+    name: Tabora
+    parent: tz
+    description: 'ISO 3166-2: TZ-24'
+  - slug: tz-tanga
+    name: Tanga
+    parent: tz
+    description: 'ISO 3166-2: TZ-25'
+  - slug: tz-manyara
+    name: Manyara
+    parent: tz
+    description: 'ISO 3166-2: TZ-26'
+  - slug: tz-geita
+    name: Geita
+    parent: tz
+    description: 'ISO 3166-2: TZ-27'
+  - slug: tz-katavi
+    name: Katavi
+    parent: tz
+    description: 'ISO 3166-2: TZ-28'
+  - slug: tz-njombe
+    name: Njombe
+    parent: tz
+    description: 'ISO 3166-2: TZ-29'
+  - slug: tz-simiyu
+    name: Simiyu
+    parent: tz
+    description: 'ISO 3166-2: TZ-30'
+  - slug: tz-songwe
+    name: Songwe
+    parent: tz
+    description: 'ISO 3166-2: TZ-31'
+  # UG Uganda — 4 subdivisions
+  - slug: ug
+    name: Uganda
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: UG'
+  - slug: ug-central
+    name: Central
+    parent: ug
+    description: 'ISO 3166-2: UG-C'
+  - slug: ug-eastern
+    name: Eastern
+    parent: ug
+    description: 'ISO 3166-2: UG-E'
+  - slug: ug-northern
+    name: Northern
+    parent: ug
+    description: 'ISO 3166-2: UG-N'
+  - slug: ug-western
+    name: Western
+    parent: ug
+    description: 'ISO 3166-2: UG-W'
+  # ET Ethiopia — 13 subdivisions
+  - slug: et
+    name: Ethiopia
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: ET'
+  - slug: et-addis-ababa
+    name: Addis Ababa
+    parent: et
+    description: 'ISO 3166-2: ET-AA'
+  - slug: et-afar
+    name: Afar
+    parent: et
+    description: 'ISO 3166-2: ET-AF'
+  - slug: et-amhara
+    name: Amhara
+    parent: et
+    description: 'ISO 3166-2: ET-AM'
+  - slug: et-benishangul-gumuz
+    name: Benishangul-Gumuz
+    parent: et
+    description: 'ISO 3166-2: ET-BE'
+  - slug: et-dire-dawa
+    name: Dire Dawa
+    parent: et
+    description: 'ISO 3166-2: ET-DD'
+  - slug: et-gambela
+    name: Gambela
+    parent: et
+    description: 'ISO 3166-2: ET-GA'
+  - slug: et-harari
+    name: Harari
+    parent: et
+    description: 'ISO 3166-2: ET-HA'
+  - slug: et-oromia
+    name: Oromia
+    parent: et
+    description: 'ISO 3166-2: ET-OR'
+  - slug: et-sidama
+    name: Sidama
+    parent: et
+    description: 'ISO 3166-2: ET-SI'
+  - slug: et-southern-nations-nationalities-and-peoples
+    name: Southern Nations, Nationalities and Peoples
+    parent: et
+    description: 'ISO 3166-2: ET-SN'
+  - slug: et-somali
+    name: Somali
+    parent: et
+    description: 'ISO 3166-2: ET-SO'
+  - slug: et-southwest-ethiopia
+    name: Southwest Ethiopia
+    parent: et
+    description: 'ISO 3166-2: ET-SW'
+  - slug: et-tigray
+    name: Tigray
+    parent: et
+    description: 'ISO 3166-2: ET-TI'
+  # SO Somalia — 18 subdivisions
+  - slug: so
+    name: Somalia
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: SO'
+  - slug: so-awdal
+    name: Awdal
+    parent: so
+    description: 'ISO 3166-2: SO-AW'
+  - slug: so-bakool
+    name: Bakool
+    parent: so
+    description: 'ISO 3166-2: SO-BK'
+  - slug: so-banaadir
+    name: Banaadir
+    parent: so
+    description: 'ISO 3166-2: SO-BN'
+  - slug: so-bari
+    name: Bari
+    parent: so
+    description: 'ISO 3166-2: SO-BR'
+  - slug: so-bay
+    name: Bay
+    parent: so
+    description: 'ISO 3166-2: SO-BY'
+  - slug: so-galguduud
+    name: Galguduud
+    parent: so
+    description: 'ISO 3166-2: SO-GA'
+  - slug: so-gedo
+    name: Gedo
+    parent: so
+    description: 'ISO 3166-2: SO-GE'
+  - slug: so-hiiraan
+    name: Hiiraan
+    parent: so
+    description: 'ISO 3166-2: SO-HI'
+  - slug: so-jubbada-dhexe
+    name: Jubbada Dhexe
+    parent: so
+    description: 'ISO 3166-2: SO-JD'
+  - slug: so-jubbada-hoose
+    name: Jubbada Hoose
+    parent: so
+    description: 'ISO 3166-2: SO-JH'
+  - slug: so-mudug
+    name: Mudug
+    parent: so
+    description: 'ISO 3166-2: SO-MU'
+  - slug: so-nugaal
+    name: Nugaal
+    parent: so
+    description: 'ISO 3166-2: SO-NU'
+  - slug: so-sanaag
+    name: Sanaag
+    parent: so
+    description: 'ISO 3166-2: SO-SA'
+  - slug: so-shabeellaha-dhexe
+    name: Shabeellaha Dhexe
+    parent: so
+    description: 'ISO 3166-2: SO-SD'
+  - slug: so-shabeellaha-hoose
+    name: Shabeellaha Hoose
+    parent: so
+    description: 'ISO 3166-2: SO-SH'
+  - slug: so-sool
+    name: Sool
+    parent: so
+    description: 'ISO 3166-2: SO-SO'
+  - slug: so-togdheer
+    name: Togdheer
+    parent: so
+    description: 'ISO 3166-2: SO-TO'
+  - slug: so-woqooyi-galbeed
+    name: Woqooyi Galbeed
+    parent: so
+    description: 'ISO 3166-2: SO-WO'
+  # RW Rwanda — 5 subdivisions
+  - slug: rw
+    name: Rwanda
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: RW'
+  - slug: rw-city-of-kigali
+    name: City of Kigali
+    parent: rw
+    description: 'ISO 3166-2: RW-01'
+  - slug: rw-eastern
+    name: Eastern
+    parent: rw
+    description: 'ISO 3166-2: RW-02'
+  - slug: rw-northern
+    name: Northern
+    parent: rw
+    description: 'ISO 3166-2: RW-03'
+  - slug: rw-western
+    name: Western
+    parent: rw
+    description: 'ISO 3166-2: RW-04'
+  - slug: rw-southern
+    name: Southern
+    parent: rw
+    description: 'ISO 3166-2: RW-05'
+  # BI Burundi — 18 subdivisions
+  - slug: bi
+    name: Burundi
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: BI'
+  - slug: bi-bubanza
+    name: Bubanza
+    parent: bi
+    description: 'ISO 3166-2: BI-BB'
+  - slug: bi-bujumbura-rural
+    name: Bujumbura Rural
+    parent: bi
+    description: 'ISO 3166-2: BI-BL'
+  - slug: bi-bujumbura-mairie
+    name: Bujumbura Mairie
+    parent: bi
+    description: 'ISO 3166-2: BI-BM'
+  - slug: bi-bururi
+    name: Bururi
+    parent: bi
+    description: 'ISO 3166-2: BI-BR'
+  - slug: bi-cankuzo
+    name: Cankuzo
+    parent: bi
+    description: 'ISO 3166-2: BI-CA'
+  - slug: bi-cibitoke
+    name: Cibitoke
+    parent: bi
+    description: 'ISO 3166-2: BI-CI'
+  - slug: bi-gitega
+    name: Gitega
+    parent: bi
+    description: 'ISO 3166-2: BI-GI'
+  - slug: bi-kirundo
+    name: Kirundo
+    parent: bi
+    description: 'ISO 3166-2: BI-KI'
+  - slug: bi-karuzi
+    name: Karuzi
+    parent: bi
+    description: 'ISO 3166-2: BI-KR'
+  - slug: bi-kayanza
+    name: Kayanza
+    parent: bi
+    description: 'ISO 3166-2: BI-KY'
+  - slug: bi-makamba
+    name: Makamba
+    parent: bi
+    description: 'ISO 3166-2: BI-MA'
+  - slug: bi-muramvya
+    name: Muramvya
+    parent: bi
+    description: 'ISO 3166-2: BI-MU'
+  - slug: bi-mwaro
+    name: Mwaro
+    parent: bi
+    description: 'ISO 3166-2: BI-MW'
+  - slug: bi-muyinga
+    name: Muyinga
+    parent: bi
+    description: 'ISO 3166-2: BI-MY'
+  - slug: bi-ngozi
+    name: Ngozi
+    parent: bi
+    description: 'ISO 3166-2: BI-NG'
+  - slug: bi-rumonge
+    name: Rumonge
+    parent: bi
+    description: 'ISO 3166-2: BI-RM'
+  - slug: bi-rutana
+    name: Rutana
+    parent: bi
+    description: 'ISO 3166-2: BI-RT'
+  - slug: bi-ruyigi
+    name: Ruyigi
+    parent: bi
+    description: 'ISO 3166-2: BI-RY'
+  # SS South Sudan — 10 subdivisions
+  - slug: ss
+    name: South Sudan
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: SS'
+  - slug: ss-northern-bahr-el-ghazal
+    name: Northern Bahr el Ghazal
+    parent: ss
+    description: 'ISO 3166-2: SS-BN'
+  - slug: ss-western-bahr-el-ghazal
+    name: Western Bahr el Ghazal
+    parent: ss
+    description: 'ISO 3166-2: SS-BW'
+  - slug: ss-central-equatoria
+    name: Central Equatoria
+    parent: ss
+    description: 'ISO 3166-2: SS-EC'
+  - slug: ss-eastern-equatoria
+    name: Eastern Equatoria
+    parent: ss
+    description: 'ISO 3166-2: SS-EE'
+  - slug: ss-western-equatoria
+    name: Western Equatoria
+    parent: ss
+    description: 'ISO 3166-2: SS-EW'
+  - slug: ss-jonglei
+    name: Jonglei
+    parent: ss
+    description: 'ISO 3166-2: SS-JG'
+  - slug: ss-lakes
+    name: Lakes
+    parent: ss
+    description: 'ISO 3166-2: SS-LK'
+  - slug: ss-upper-nile
+    name: Upper Nile
+    parent: ss
+    description: 'ISO 3166-2: SS-NU'
+  - slug: ss-unity
+    name: Unity
+    parent: ss
+    description: 'ISO 3166-2: SS-UY'
+  - slug: ss-warrap
+    name: Warrap
+    parent: ss
+    description: 'ISO 3166-2: SS-WR'
+  # DJ Djibouti — 6 subdivisions
+  - slug: dj
+    name: Djibouti
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: DJ'
+  - slug: dj-arta
+    name: Arta
+    parent: dj
+    description: 'ISO 3166-2: DJ-AR'
+  - slug: dj-ali-sabieh
+    name: Ali Sabieh
+    parent: dj
+    description: 'ISO 3166-2: DJ-AS'
+  - slug: dj-dikhil
+    name: Dikhil
+    parent: dj
+    description: 'ISO 3166-2: DJ-DI'
+  - slug: dj-djibouti
+    name: Djibouti
+    parent: dj
+    description: 'ISO 3166-2: DJ-DJ'
+  - slug: dj-obock
+    name: Obock
+    parent: dj
+    description: 'ISO 3166-2: DJ-OB'
+  - slug: dj-tadjourah
+    name: Tadjourah
+    parent: dj
+    description: 'ISO 3166-2: DJ-TA'
+  # ER Eritrea — 6 subdivisions
+  - slug: er
+    name: Eritrea
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: ER'
+  - slug: er-anseba
+    name: Anseba
+    parent: er
+    description: 'ISO 3166-2: ER-AN'
+  - slug: er-southern-red-sea
+    name: Southern Red Sea
+    parent: er
+    description: 'ISO 3166-2: ER-DK'
+  - slug: er-southern
+    name: Southern
+    parent: er
+    description: 'ISO 3166-2: ER-DU'
+  - slug: er-gash-barka
+    name: Gash-Barka
+    parent: er
+    description: 'ISO 3166-2: ER-GB'
+  - slug: er-maekel
+    name: Maekel
+    parent: er
+    description: 'ISO 3166-2: ER-MA'
+  - slug: er-northern-red-sea
+    name: Northern Red Sea
+    parent: er
+    description: 'ISO 3166-2: ER-SK'
+  # MG Madagascar — 6 subdivisions
+  - slug: mg
+    name: Madagascar
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: MG'
+  - slug: mg-toamasina
+    name: Toamasina
+    parent: mg
+    description: 'ISO 3166-2: MG-A'
+  - slug: mg-antsiranana
+    name: Antsiranana
+    parent: mg
+    description: 'ISO 3166-2: MG-D'
+  - slug: mg-fianarantsoa
+    name: Fianarantsoa
+    parent: mg
+    description: 'ISO 3166-2: MG-F'
+  - slug: mg-mahajanga
+    name: Mahajanga
+    parent: mg
+    description: 'ISO 3166-2: MG-M'
+  - slug: mg-antananarivo
+    name: Antananarivo
+    parent: mg
+    description: 'ISO 3166-2: MG-T'
+  - slug: mg-toliara
+    name: Toliara
+    parent: mg
+    description: 'ISO 3166-2: MG-U'
+  # MU Mauritius — 12 subdivisions
+  - slug: mu
+    name: Mauritius
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: MU'
+  - slug: mu-agalega-islands
+    name: Agalega Islands
+    parent: mu
+    description: 'ISO 3166-2: MU-AG'
+  - slug: mu-black-river
+    name: Black River
+    parent: mu
+    description: 'ISO 3166-2: MU-BL'
+  - slug: mu-cargados-carajos-shoals
+    name: Cargados Carajos Shoals
+    parent: mu
+    description: 'ISO 3166-2: MU-CC'
+  - slug: mu-flacq
+    name: Flacq
+    parent: mu
+    description: 'ISO 3166-2: MU-FL'
+  - slug: mu-grand-port
+    name: Grand Port
+    parent: mu
+    description: 'ISO 3166-2: MU-GP'
+  - slug: mu-moka
+    name: Moka
+    parent: mu
+    description: 'ISO 3166-2: MU-MO'
+  - slug: mu-pamplemousses
+    name: Pamplemousses
+    parent: mu
+    description: 'ISO 3166-2: MU-PA'
+  - slug: mu-port-louis
+    name: Port Louis
+    parent: mu
+    description: 'ISO 3166-2: MU-PL'
+  - slug: mu-plaines-wilhems
+    name: Plaines Wilhems
+    parent: mu
+    description: 'ISO 3166-2: MU-PW'
+  - slug: mu-rodrigues-island
+    name: Rodrigues Island
+    parent: mu
+    description: 'ISO 3166-2: MU-RO'
+  - slug: mu-riviere-du-rempart
+    name: Rivière du Rempart
+    parent: mu
+    description: 'ISO 3166-2: MU-RR'
+  - slug: mu-savanne
+    name: Savanne
+    parent: mu
+    description: 'ISO 3166-2: MU-SA'
+  # SC Seychelles — 27 subdivisions
+  - slug: sc
+    name: Seychelles
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: SC'
+  - slug: sc-anse-aux-pins
+    name: Anse aux Pins
+    parent: sc
+    description: 'ISO 3166-2: SC-01'
+  - slug: sc-anse-boileau
+    name: Anse Boileau
+    parent: sc
+    description: 'ISO 3166-2: SC-02'
+  - slug: sc-anse-etoile
+    name: Anse Etoile
+    parent: sc
+    description: 'ISO 3166-2: SC-03'
+  - slug: sc-au-cap
+    name: Au Cap
+    parent: sc
+    description: 'ISO 3166-2: SC-04'
+  - slug: sc-anse-royale
+    name: Anse Royale
+    parent: sc
+    description: 'ISO 3166-2: SC-05'
+  - slug: sc-baie-lazare
+    name: Baie Lazare
+    parent: sc
+    description: 'ISO 3166-2: SC-06'
+  - slug: sc-baie-sainte-anne
+    name: Baie Sainte Anne
+    parent: sc
+    description: 'ISO 3166-2: SC-07'
+  - slug: sc-beau-vallon
+    name: Beau Vallon
+    parent: sc
+    description: 'ISO 3166-2: SC-08'
+  - slug: sc-bel-air
+    name: Bel Air
+    parent: sc
+    description: 'ISO 3166-2: SC-09'
+  - slug: sc-bel-ombre
+    name: Bel Ombre
+    parent: sc
+    description: 'ISO 3166-2: SC-10'
+  - slug: sc-cascade
+    name: Cascade
+    parent: sc
+    description: 'ISO 3166-2: SC-11'
+  - slug: sc-glacis
+    name: Glacis
+    parent: sc
+    description: 'ISO 3166-2: SC-12'
+  - slug: sc-grand-anse-mahe
+    name: Grand Anse Mahe
+    parent: sc
+    description: 'ISO 3166-2: SC-13'
+  - slug: sc-grand-anse-praslin
+    name: Grand Anse Praslin
+    parent: sc
+    description: 'ISO 3166-2: SC-14'
+  - slug: sc-la-digue
+    name: La Digue
+    parent: sc
+    description: 'ISO 3166-2: SC-15'
+  - slug: sc-english-river
+    name: English River
+    parent: sc
+    description: 'ISO 3166-2: SC-16'
+  - slug: sc-mont-buxton
+    name: Mont Buxton
+    parent: sc
+    description: 'ISO 3166-2: SC-17'
+  - slug: sc-mont-fleuri
+    name: Mont Fleuri
+    parent: sc
+    description: 'ISO 3166-2: SC-18'
+  - slug: sc-plaisance
+    name: Plaisance
+    parent: sc
+    description: 'ISO 3166-2: SC-19'
+  - slug: sc-pointe-larue
+    name: Pointe Larue
+    parent: sc
+    description: 'ISO 3166-2: SC-20'
+  - slug: sc-port-glaud
+    name: Port Glaud
+    parent: sc
+    description: 'ISO 3166-2: SC-21'
+  - slug: sc-saint-louis
+    name: Saint Louis
+    parent: sc
+    description: 'ISO 3166-2: SC-22'
+  - slug: sc-takamaka
+    name: Takamaka
+    parent: sc
+    description: 'ISO 3166-2: SC-23'
+  - slug: sc-les-mamelles
+    name: Les Mamelles
+    parent: sc
+    description: 'ISO 3166-2: SC-24'
+  - slug: sc-roche-caiman
+    name: Roche Caiman
+    parent: sc
+    description: 'ISO 3166-2: SC-25'
+  - slug: sc-ile-perseverance-i
+    name: Ile Perseverance I
+    parent: sc
+    description: 'ISO 3166-2: SC-26'
+  - slug: sc-ile-perseverance-ii
+    name: Ile Perseverance II
+    parent: sc
+    description: 'ISO 3166-2: SC-27'
+  # KM Comoros — 3 subdivisions
+  - slug: km
+    name: Comoros
+    parent: east-africa
+    description: 'ISO 3166-1 alpha-2: KM'
+  - slug: km-anjouan
+    name: Anjouan
+    parent: km
+    description: 'ISO 3166-2: KM-A'
+  - slug: km-grande-comore
+    name: Grande Comore
+    parent: km
+    description: 'ISO 3166-2: KM-G'
+  - slug: km-moheli
+    name: Mohéli
+    parent: km
+    description: 'ISO 3166-2: KM-M'
+  - slug: central-africa
+    name: Central Africa
+    parent: africa
+    description: Geographic grouping
+  # CD Democratic Republic of the Congo — 26 subdivisions
+  - slug: cd
+    name: Democratic Republic of the Congo
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: CD'
+  - slug: cd-kongo-central
+    name: Kongo Central
+    parent: cd
+    description: 'ISO 3166-2: CD-BC'
+  - slug: cd-bas-uele
+    name: Bas-Uélé
+    parent: cd
+    description: 'ISO 3166-2: CD-BU'
+  - slug: cd-equateur
+    name: Équateur
+    parent: cd
+    description: 'ISO 3166-2: CD-EQ'
+  - slug: cd-haut-katanga
+    name: Haut-Katanga
+    parent: cd
+    description: 'ISO 3166-2: CD-HK'
+  - slug: cd-haut-lomami
+    name: Haut-Lomami
+    parent: cd
+    description: 'ISO 3166-2: CD-HL'
+  - slug: cd-haut-uele
+    name: Haut-Uélé
+    parent: cd
+    description: 'ISO 3166-2: CD-HU'
+  - slug: cd-ituri
+    name: Ituri
+    parent: cd
+    description: 'ISO 3166-2: CD-IT'
+  - slug: cd-kasai-central
+    name: Kasaï Central
+    parent: cd
+    description: 'ISO 3166-2: CD-KC'
+  - slug: cd-kasai-oriental
+    name: Kasaï Oriental
+    parent: cd
+    description: 'ISO 3166-2: CD-KE'
+  - slug: cd-kwango
+    name: Kwango
+    parent: cd
+    description: 'ISO 3166-2: CD-KG'
+  - slug: cd-kwilu
+    name: Kwilu
+    parent: cd
+    description: 'ISO 3166-2: CD-KL'
+  - slug: cd-kinshasa
+    name: Kinshasa
+    parent: cd
+    description: 'ISO 3166-2: CD-KN'
+  - slug: cd-kasai
+    name: Kasaï
+    parent: cd
+    description: 'ISO 3166-2: CD-KS'
+  - slug: cd-lomami
+    name: Lomami
+    parent: cd
+    description: 'ISO 3166-2: CD-LO'
+  - slug: cd-lualaba
+    name: Lualaba
+    parent: cd
+    description: 'ISO 3166-2: CD-LU'
+  - slug: cd-maniema
+    name: Maniema
+    parent: cd
+    description: 'ISO 3166-2: CD-MA'
+  - slug: cd-mai-ndombe
+    name: Mai-Ndombe
+    parent: cd
+    description: 'ISO 3166-2: CD-MN'
+  - slug: cd-mongala
+    name: Mongala
+    parent: cd
+    description: 'ISO 3166-2: CD-MO'
+  - slug: cd-nord-kivu
+    name: Nord-Kivu
+    parent: cd
+    description: 'ISO 3166-2: CD-NK'
+  - slug: cd-nord-ubangi
+    name: Nord-Ubangi
+    parent: cd
+    description: 'ISO 3166-2: CD-NU'
+  - slug: cd-sankuru
+    name: Sankuru
+    parent: cd
+    description: 'ISO 3166-2: CD-SA'
+  - slug: cd-sud-kivu
+    name: Sud-Kivu
+    parent: cd
+    description: 'ISO 3166-2: CD-SK'
+  - slug: cd-sud-ubangi
+    name: Sud-Ubangi
+    parent: cd
+    description: 'ISO 3166-2: CD-SU'
+  - slug: cd-tanganyika
+    name: Tanganyika
+    parent: cd
+    description: 'ISO 3166-2: CD-TA'
+  - slug: cd-tshopo
+    name: Tshopo
+    parent: cd
+    description: 'ISO 3166-2: CD-TO'
+  - slug: cd-tshuapa
+    name: Tshuapa
+    parent: cd
+    description: 'ISO 3166-2: CD-TU'
+  # CG Republic of the Congo — 12 subdivisions
+  - slug: cg
+    name: Republic of the Congo
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: CG'
+  - slug: cg-bouenza
+    name: Bouenza
+    parent: cg
+    description: 'ISO 3166-2: CG-11'
+  - slug: cg-pool
+    name: Pool
+    parent: cg
+    description: 'ISO 3166-2: CG-12'
+  - slug: cg-sangha
+    name: Sangha
+    parent: cg
+    description: 'ISO 3166-2: CG-13'
+  - slug: cg-plateaux
+    name: Plateaux
+    parent: cg
+    description: 'ISO 3166-2: CG-14'
+  - slug: cg-cuvette-ouest
+    name: Cuvette-Ouest
+    parent: cg
+    description: 'ISO 3166-2: CG-15'
+  - slug: cg-pointe-noire
+    name: Pointe-Noire
+    parent: cg
+    description: 'ISO 3166-2: CG-16'
+  - slug: cg-lekoumou
+    name: Lékoumou
+    parent: cg
+    description: 'ISO 3166-2: CG-2'
+  - slug: cg-kouilou
+    name: Kouilou
+    parent: cg
+    description: 'ISO 3166-2: CG-5'
+  - slug: cg-likouala
+    name: Likouala
+    parent: cg
+    description: 'ISO 3166-2: CG-7'
+  - slug: cg-cuvette
+    name: Cuvette
+    parent: cg
+    description: 'ISO 3166-2: CG-8'
+  - slug: cg-niari
+    name: Niari
+    parent: cg
+    description: 'ISO 3166-2: CG-9'
+  - slug: cg-brazzaville
+    name: Brazzaville
+    parent: cg
+    description: 'ISO 3166-2: CG-BZV'
+  # CM Cameroon — 10 subdivisions
+  - slug: cm
+    name: Cameroon
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: CM'
+  - slug: cm-adamaoua
+    name: Adamaoua
+    parent: cm
+    description: 'ISO 3166-2: CM-AD'
+  - slug: cm-centre
+    name: Centre
+    parent: cm
+    description: 'ISO 3166-2: CM-CE'
+  - slug: cm-far-north
+    name: Far North
+    parent: cm
+    description: 'ISO 3166-2: CM-EN'
+  - slug: cm-east
+    name: East
+    parent: cm
+    description: 'ISO 3166-2: CM-ES'
+  - slug: cm-littoral
+    name: Littoral
+    parent: cm
+    description: 'ISO 3166-2: CM-LT'
+  - slug: cm-north
+    name: North
+    parent: cm
+    description: 'ISO 3166-2: CM-NO'
+  - slug: cm-north-west
+    name: North-West
+    parent: cm
+    description: 'ISO 3166-2: CM-NW'
+  - slug: cm-west
+    name: West
+    parent: cm
+    description: 'ISO 3166-2: CM-OU'
+  - slug: cm-south
+    name: South
+    parent: cm
+    description: 'ISO 3166-2: CM-SU'
+  - slug: cm-south-west
+    name: South-West
+    parent: cm
+    description: 'ISO 3166-2: CM-SW'
+  # AO Angola — 18 subdivisions
+  - slug: ao
+    name: Angola
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: AO'
+  - slug: ao-bengo
+    name: Bengo
+    parent: ao
+    description: 'ISO 3166-2: AO-BGO'
+  - slug: ao-benguela
+    name: Benguela
+    parent: ao
+    description: 'ISO 3166-2: AO-BGU'
+  - slug: ao-bie
+    name: Bié
+    parent: ao
+    description: 'ISO 3166-2: AO-BIE'
+  - slug: ao-cabinda
+    name: Cabinda
+    parent: ao
+    description: 'ISO 3166-2: AO-CAB'
+  - slug: ao-cuando-cubango
+    name: Cuando Cubango
+    parent: ao
+    description: 'ISO 3166-2: AO-CCU'
+  - slug: ao-cunene
+    name: Cunene
+    parent: ao
+    description: 'ISO 3166-2: AO-CNN'
+  - slug: ao-cuanza-norte
+    name: Cuanza-Norte
+    parent: ao
+    description: 'ISO 3166-2: AO-CNO'
+  - slug: ao-cuanza-sul
+    name: Cuanza-Sul
+    parent: ao
+    description: 'ISO 3166-2: AO-CUS'
+  - slug: ao-huambo
+    name: Huambo
+    parent: ao
+    description: 'ISO 3166-2: AO-HUA'
+  - slug: ao-huila
+    name: Huíla
+    parent: ao
+    description: 'ISO 3166-2: AO-HUI'
+  - slug: ao-lunda-norte
+    name: Lunda-Norte
+    parent: ao
+    description: 'ISO 3166-2: AO-LNO'
+  - slug: ao-lunda-sul
+    name: Lunda-Sul
+    parent: ao
+    description: 'ISO 3166-2: AO-LSU'
+  - slug: ao-luanda
+    name: Luanda
+    parent: ao
+    description: 'ISO 3166-2: AO-LUA'
+  - slug: ao-malange
+    name: Malange
+    parent: ao
+    description: 'ISO 3166-2: AO-MAL'
+  - slug: ao-moxico
+    name: Moxico
+    parent: ao
+    description: 'ISO 3166-2: AO-MOX'
+  - slug: ao-namibe
+    name: Namibe
+    parent: ao
+    description: 'ISO 3166-2: AO-NAM'
+  - slug: ao-uige
+    name: Uíge
+    parent: ao
+    description: 'ISO 3166-2: AO-UIG'
+  - slug: ao-zaire
+    name: Zaire
+    parent: ao
+    description: 'ISO 3166-2: AO-ZAI'
+  # CF Central African Republic — 17 subdivisions
+  - slug: cf
+    name: Central African Republic
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: CF'
+  - slug: cf-ouham
+    name: Ouham
+    parent: cf
+    description: 'ISO 3166-2: CF-AC'
+  - slug: cf-bamingui-bangoran
+    name: Bamingui-Bangoran
+    parent: cf
+    description: 'ISO 3166-2: CF-BB'
+  - slug: cf-bangui
+    name: Bangui
+    parent: cf
+    description: 'ISO 3166-2: CF-BGF'
+  - slug: cf-basse-kotto
+    name: Basse-Kotto
+    parent: cf
+    description: 'ISO 3166-2: CF-BK'
+  - slug: cf-haute-kotto
+    name: Haute-Kotto
+    parent: cf
+    description: 'ISO 3166-2: CF-HK'
+  - slug: cf-haut-mbomou
+    name: Haut-Mbomou
+    parent: cf
+    description: 'ISO 3166-2: CF-HM'
+  - slug: cf-haute-sangha-mambere-kadei
+    name: Haute-Sangha / Mambéré-Kadéï
+    parent: cf
+    description: 'ISO 3166-2: CF-HS'
+  - slug: cf-gribingui
+    name: Gribingui
+    parent: cf
+    description: 'ISO 3166-2: CF-KB'
+  - slug: cf-kemo-gribingui
+    name: Kémo-Gribingui
+    parent: cf
+    description: 'ISO 3166-2: CF-KG'
+  - slug: cf-lobaye
+    name: Lobaye
+    parent: cf
+    description: 'ISO 3166-2: CF-LB'
+  - slug: cf-mbomou
+    name: Mbomou
+    parent: cf
+    description: 'ISO 3166-2: CF-MB'
+  - slug: cf-ombella-mpoko
+    name: Ombella-Mpoko
+    parent: cf
+    description: 'ISO 3166-2: CF-MP'
+  - slug: cf-nana-mambere
+    name: Nana-Mambéré
+    parent: cf
+    description: 'ISO 3166-2: CF-NM'
+  - slug: cf-ouham-pende
+    name: Ouham-Pendé
+    parent: cf
+    description: 'ISO 3166-2: CF-OP'
+  - slug: cf-sangha
+    name: Sangha
+    parent: cf
+    description: 'ISO 3166-2: CF-SE'
+  - slug: cf-ouaka
+    name: Ouaka
+    parent: cf
+    description: 'ISO 3166-2: CF-UK'
+  - slug: cf-vakaga
+    name: Vakaga
+    parent: cf
+    description: 'ISO 3166-2: CF-VK'
+  # GA Gabon — 9 subdivisions
+  - slug: ga
+    name: Gabon
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: GA'
+  - slug: ga-estuaire
+    name: Estuaire
+    parent: ga
+    description: 'ISO 3166-2: GA-1'
+  - slug: ga-haut-ogooue
+    name: Haut-Ogooué
+    parent: ga
+    description: 'ISO 3166-2: GA-2'
+  - slug: ga-moyen-ogooue
+    name: Moyen-Ogooué
+    parent: ga
+    description: 'ISO 3166-2: GA-3'
+  - slug: ga-ngounie
+    name: Ngounié
+    parent: ga
+    description: 'ISO 3166-2: GA-4'
+  - slug: ga-nyanga
+    name: Nyanga
+    parent: ga
+    description: 'ISO 3166-2: GA-5'
+  - slug: ga-ogooue-ivindo
+    name: Ogooué-Ivindo
+    parent: ga
+    description: 'ISO 3166-2: GA-6'
+  - slug: ga-ogooue-lolo
+    name: Ogooué-Lolo
+    parent: ga
+    description: 'ISO 3166-2: GA-7'
+  - slug: ga-ogooue-maritime
+    name: Ogooué-Maritime
+    parent: ga
+    description: 'ISO 3166-2: GA-8'
+  - slug: ga-woleu-ntem
+    name: Woleu-Ntem
+    parent: ga
+    description: 'ISO 3166-2: GA-9'
+  # TD Chad — 23 subdivisions
+  - slug: td
+    name: Chad
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: TD'
+  - slug: td-batha
+    name: Batha
+    parent: td
+    description: 'ISO 3166-2: TD-BA'
+  - slug: td-bahr-el-ghazal
+    name: Bahr el Ghazal
+    parent: td
+    description: 'ISO 3166-2: TD-BG'
+  - slug: td-borkou
+    name: Borkou
+    parent: td
+    description: 'ISO 3166-2: TD-BO'
+  - slug: td-chari-baguirmi
+    name: Chari-Baguirmi
+    parent: td
+    description: 'ISO 3166-2: TD-CB'
+  - slug: td-ennedi-est
+    name: Ennedi-Est
+    parent: td
+    description: 'ISO 3166-2: TD-EE'
+  - slug: td-ennedi-ouest
+    name: Ennedi-Ouest
+    parent: td
+    description: 'ISO 3166-2: TD-EO'
+  - slug: td-guera
+    name: Guéra
+    parent: td
+    description: 'ISO 3166-2: TD-GR'
+  - slug: td-hadjer-lamis
+    name: Hadjer Lamis
+    parent: td
+    description: 'ISO 3166-2: TD-HL'
+  - slug: td-kanem
+    name: Kanem
+    parent: td
+    description: 'ISO 3166-2: TD-KA'
+  - slug: td-lac
+    name: Lac
+    parent: td
+    description: 'ISO 3166-2: TD-LC'
+  - slug: td-logone-occidental
+    name: Logone-Occidental
+    parent: td
+    description: 'ISO 3166-2: TD-LO'
+  - slug: td-logone-oriental
+    name: Logone-Oriental
+    parent: td
+    description: 'ISO 3166-2: TD-LR'
+  - slug: td-mandoul
+    name: Mandoul
+    parent: td
+    description: 'ISO 3166-2: TD-MA'
+  - slug: td-moyen-chari
+    name: Moyen-Chari
+    parent: td
+    description: 'ISO 3166-2: TD-MC'
+  - slug: td-mayo-kebbi-est
+    name: Mayo-Kebbi-Est
+    parent: td
+    description: 'ISO 3166-2: TD-ME'
+  - slug: td-mayo-kebbi-ouest
+    name: Mayo-Kebbi-Ouest
+    parent: td
+    description: 'ISO 3166-2: TD-MO'
+  - slug: td-ville-de-ndjamena
+    name: Ville de Ndjamena
+    parent: td
+    description: 'ISO 3166-2: TD-ND'
+  - slug: td-ouaddai
+    name: Ouaddaï
+    parent: td
+    description: 'ISO 3166-2: TD-OD'
+  - slug: td-salamat
+    name: Salamat
+    parent: td
+    description: 'ISO 3166-2: TD-SA'
+  - slug: td-sila
+    name: Sila
+    parent: td
+    description: 'ISO 3166-2: TD-SI'
+  - slug: td-tandjile
+    name: Tandjilé
+    parent: td
+    description: 'ISO 3166-2: TD-TA'
+  - slug: td-tibesti
+    name: Tibesti
+    parent: td
+    description: 'ISO 3166-2: TD-TI'
+  - slug: td-wadi-fira
+    name: Wadi Fira
+    parent: td
+    description: 'ISO 3166-2: TD-WF'
+  # GQ Equatorial Guinea — 8 subdivisions
+  - slug: gq
+    name: Equatorial Guinea
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: GQ'
+  - slug: gq-annobon
+    name: Annobon
+    parent: gq
+    description: 'ISO 3166-2: GQ-AN'
+  - slug: gq-bioko-nord
+    name: Bioko Nord
+    parent: gq
+    description: 'ISO 3166-2: GQ-BN'
+  - slug: gq-bioko-sud
+    name: Bioko Sud
+    parent: gq
+    description: 'ISO 3166-2: GQ-BS'
+  - slug: gq-centro-sud
+    name: Centro Sud
+    parent: gq
+    description: 'ISO 3166-2: GQ-CS'
+  - slug: gq-djibloho
+    name: Djibloho
+    parent: gq
+    description: 'ISO 3166-2: GQ-DJ'
+  - slug: gq-kie-ntem
+    name: Kié-Ntem
+    parent: gq
+    description: 'ISO 3166-2: GQ-KN'
+  - slug: gq-littoral
+    name: Littoral
+    parent: gq
+    description: 'ISO 3166-2: GQ-LI'
+  - slug: gq-wele-nzas
+    name: Wele-Nzas
+    parent: gq
+    description: 'ISO 3166-2: GQ-WN'
+  # ST São Tomé and Príncipe — 7 subdivisions
+  - slug: st
+    name: São Tomé and Príncipe
+    parent: central-africa
+    description: 'ISO 3166-1 alpha-2: ST'
+  - slug: st-agua-grande
+    name: Água Grande
+    parent: st
+    description: 'ISO 3166-2: ST-01'
+  - slug: st-cantagalo
+    name: Cantagalo
+    parent: st
+    description: 'ISO 3166-2: ST-02'
+  - slug: st-caue
+    name: Caué
+    parent: st
+    description: 'ISO 3166-2: ST-03'
+  - slug: st-lemba
+    name: Lembá
+    parent: st
+    description: 'ISO 3166-2: ST-04'
+  - slug: st-lobata
+    name: Lobata
+    parent: st
+    description: 'ISO 3166-2: ST-05'
+  - slug: st-me-zochi
+    name: Mé-Zóchi
+    parent: st
+    description: 'ISO 3166-2: ST-06'
+  - slug: st-principe
+    name: Príncipe
+    parent: st
+    description: 'ISO 3166-2: ST-P'
+  - slug: southern-africa
+    name: Southern Africa
+    parent: africa
+    description: Geographic grouping
+  # ZA South Africa — 9 subdivisions
+  - slug: za
+    name: South Africa
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: ZA'
+  - slug: za-eastern-cape
+    name: Eastern Cape
+    parent: za
+    description: 'ISO 3166-2: ZA-EC'
+  - slug: za-free-state
+    name: Free State
+    parent: za
+    description: 'ISO 3166-2: ZA-FS'
+  - slug: za-gauteng
+    name: Gauteng
+    parent: za
+    description: 'ISO 3166-2: ZA-GP'
+  - slug: za-kwazulu-natal
+    name: KwaZulu-Natal
+    parent: za
+    description: 'ISO 3166-2: ZA-KZN'
+  - slug: za-limpopo
+    name: Limpopo
+    parent: za
+    description: 'ISO 3166-2: ZA-LP'
+  - slug: za-mpumalanga
+    name: Mpumalanga
+    parent: za
+    description: 'ISO 3166-2: ZA-MP'
+  - slug: za-northern-cape
+    name: Northern Cape
+    parent: za
+    description: 'ISO 3166-2: ZA-NC'
+  - slug: za-north-west
+    name: North West
+    parent: za
+    description: 'ISO 3166-2: ZA-NW'
+  - slug: za-western-cape
+    name: Western Cape
+    parent: za
+    description: 'ISO 3166-2: ZA-WC'
+  # ZW Zimbabwe — 10 subdivisions
+  - slug: zw
+    name: Zimbabwe
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: ZW'
+  - slug: zw-bulawayo
+    name: Bulawayo
+    parent: zw
+    description: 'ISO 3166-2: ZW-BU'
+  - slug: zw-harare
+    name: Harare
+    parent: zw
+    description: 'ISO 3166-2: ZW-HA'
+  - slug: zw-manicaland
+    name: Manicaland
+    parent: zw
+    description: 'ISO 3166-2: ZW-MA'
+  - slug: zw-mashonaland-central
+    name: Mashonaland Central
+    parent: zw
+    description: 'ISO 3166-2: ZW-MC'
+  - slug: zw-mashonaland-east
+    name: Mashonaland East
+    parent: zw
+    description: 'ISO 3166-2: ZW-ME'
+  - slug: zw-midlands
+    name: Midlands
+    parent: zw
+    description: 'ISO 3166-2: ZW-MI'
+  - slug: zw-matabeleland-north
+    name: Matabeleland North
+    parent: zw
+    description: 'ISO 3166-2: ZW-MN'
+  - slug: zw-matabeleland-south
+    name: Matabeleland South
+    parent: zw
+    description: 'ISO 3166-2: ZW-MS'
+  - slug: zw-masvingo
+    name: Masvingo
+    parent: zw
+    description: 'ISO 3166-2: ZW-MV'
+  - slug: zw-mashonaland-west
+    name: Mashonaland West
+    parent: zw
+    description: 'ISO 3166-2: ZW-MW'
+  # ZM Zambia — 10 subdivisions
+  - slug: zm
+    name: Zambia
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: ZM'
+  - slug: zm-western
+    name: Western
+    parent: zm
+    description: 'ISO 3166-2: ZM-01'
+  - slug: zm-central
+    name: Central
+    parent: zm
+    description: 'ISO 3166-2: ZM-02'
+  - slug: zm-eastern
+    name: Eastern
+    parent: zm
+    description: 'ISO 3166-2: ZM-03'
+  - slug: zm-luapula
+    name: Luapula
+    parent: zm
+    description: 'ISO 3166-2: ZM-04'
+  - slug: zm-northern
+    name: Northern
+    parent: zm
+    description: 'ISO 3166-2: ZM-05'
+  - slug: zm-north-western
+    name: North-Western
+    parent: zm
+    description: 'ISO 3166-2: ZM-06'
+  - slug: zm-southern
+    name: Southern
+    parent: zm
+    description: 'ISO 3166-2: ZM-07'
+  - slug: zm-copperbelt
+    name: Copperbelt
+    parent: zm
+    description: 'ISO 3166-2: ZM-08'
+  - slug: zm-lusaka
+    name: Lusaka
+    parent: zm
+    description: 'ISO 3166-2: ZM-09'
+  - slug: zm-muchinga
+    name: Muchinga
+    parent: zm
+    description: 'ISO 3166-2: ZM-10'
+  # NA Namibia — 14 subdivisions
+  - slug: na
+    name: Namibia
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: NA'
+  - slug: na-zambezi
+    name: Zambezi
+    parent: na
+    description: 'ISO 3166-2: NA-CA'
+  - slug: na-erongo
+    name: Erongo
+    parent: na
+    description: 'ISO 3166-2: NA-ER'
+  - slug: na-hardap
+    name: Hardap
+    parent: na
+    description: 'ISO 3166-2: NA-HA'
+  - slug: na-karas
+    name: Karas
+    parent: na
+    description: 'ISO 3166-2: NA-KA'
+  - slug: na-kavango-east
+    name: Kavango East
+    parent: na
+    description: 'ISO 3166-2: NA-KE'
+  - slug: na-khomas
+    name: Khomas
+    parent: na
+    description: 'ISO 3166-2: NA-KH'
+  - slug: na-kunene
+    name: Kunene
+    parent: na
+    description: 'ISO 3166-2: NA-KU'
+  - slug: na-kavango-west
+    name: Kavango West
+    parent: na
+    description: 'ISO 3166-2: NA-KW'
+  - slug: na-otjozondjupa
+    name: Otjozondjupa
+    parent: na
+    description: 'ISO 3166-2: NA-OD'
+  - slug: na-omaheke
+    name: Omaheke
+    parent: na
+    description: 'ISO 3166-2: NA-OH'
+  - slug: na-oshana
+    name: Oshana
+    parent: na
+    description: 'ISO 3166-2: NA-ON'
+  - slug: na-omusati
+    name: Omusati
+    parent: na
+    description: 'ISO 3166-2: NA-OS'
+  - slug: na-oshikoto
+    name: Oshikoto
+    parent: na
+    description: 'ISO 3166-2: NA-OT'
+  - slug: na-ohangwena
+    name: Ohangwena
+    parent: na
+    description: 'ISO 3166-2: NA-OW'
+  # BW Botswana — 16 subdivisions
+  - slug: bw
+    name: Botswana
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: BW'
+  - slug: bw-central
+    name: Central
+    parent: bw
+    description: 'ISO 3166-2: BW-CE'
+  - slug: bw-chobe
+    name: Chobe
+    parent: bw
+    description: 'ISO 3166-2: BW-CH'
+  - slug: bw-francistown
+    name: Francistown
+    parent: bw
+    description: 'ISO 3166-2: BW-FR'
+  - slug: bw-gaborone
+    name: Gaborone
+    parent: bw
+    description: 'ISO 3166-2: BW-GA'
+  - slug: bw-ghanzi
+    name: Ghanzi
+    parent: bw
+    description: 'ISO 3166-2: BW-GH'
+  - slug: bw-jwaneng
+    name: Jwaneng
+    parent: bw
+    description: 'ISO 3166-2: BW-JW'
+  - slug: bw-kgalagadi
+    name: Kgalagadi
+    parent: bw
+    description: 'ISO 3166-2: BW-KG'
+  - slug: bw-kgatleng
+    name: Kgatleng
+    parent: bw
+    description: 'ISO 3166-2: BW-KL'
+  - slug: bw-kweneng
+    name: Kweneng
+    parent: bw
+    description: 'ISO 3166-2: BW-KW'
+  - slug: bw-lobatse
+    name: Lobatse
+    parent: bw
+    description: 'ISO 3166-2: BW-LO'
+  - slug: bw-north-east
+    name: North East
+    parent: bw
+    description: 'ISO 3166-2: BW-NE'
+  - slug: bw-north-west
+    name: North West
+    parent: bw
+    description: 'ISO 3166-2: BW-NW'
+  - slug: bw-south-east
+    name: South East
+    parent: bw
+    description: 'ISO 3166-2: BW-SE'
+  - slug: bw-southern
+    name: Southern
+    parent: bw
+    description: 'ISO 3166-2: BW-SO'
+  - slug: bw-selibe-phikwe
+    name: Selibe Phikwe
+    parent: bw
+    description: 'ISO 3166-2: BW-SP'
+  - slug: bw-sowa-town
+    name: Sowa Town
+    parent: bw
+    description: 'ISO 3166-2: BW-ST'
+  # MZ Mozambique — 11 subdivisions
+  - slug: mz
+    name: Mozambique
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: MZ'
+  - slug: mz-niassa
+    name: Niassa
+    parent: mz
+    description: 'ISO 3166-2: MZ-A'
+  - slug: mz-manica
+    name: Manica
+    parent: mz
+    description: 'ISO 3166-2: MZ-B'
+  - slug: mz-gaza
+    name: Gaza
+    parent: mz
+    description: 'ISO 3166-2: MZ-G'
+  - slug: mz-inhambane
+    name: Inhambane
+    parent: mz
+    description: 'ISO 3166-2: MZ-I'
+  - slug: mz-maputo
+    name: Maputo
+    parent: mz
+    description: 'ISO 3166-2: MZ-L'
+  - slug: mz-maputo-city
+    name: Maputo City
+    parent: mz
+    description: 'ISO 3166-2: MZ-MPM'
+  - slug: mz-nampula
+    name: Nampula
+    parent: mz
+    description: 'ISO 3166-2: MZ-N'
+  - slug: mz-cabo-delgado
+    name: Cabo Delgado
+    parent: mz
+    description: 'ISO 3166-2: MZ-P'
+  - slug: mz-zambezia
+    name: Zambézia
+    parent: mz
+    description: 'ISO 3166-2: MZ-Q'
+  - slug: mz-sofala
+    name: Sofala
+    parent: mz
+    description: 'ISO 3166-2: MZ-S'
+  - slug: mz-tete
+    name: Tete
+    parent: mz
+    description: 'ISO 3166-2: MZ-T'
+  # LS Lesotho — 10 subdivisions
+  - slug: ls
+    name: Lesotho
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: LS'
+  - slug: ls-maseru
+    name: Maseru
+    parent: ls
+    description: 'ISO 3166-2: LS-A'
+  - slug: ls-botha-bothe
+    name: Botha-Bothe
+    parent: ls
+    description: 'ISO 3166-2: LS-B'
+  - slug: ls-leribe
+    name: Leribe
+    parent: ls
+    description: 'ISO 3166-2: LS-C'
+  - slug: ls-berea
+    name: Berea
+    parent: ls
+    description: 'ISO 3166-2: LS-D'
+  - slug: ls-mafeteng
+    name: Mafeteng
+    parent: ls
+    description: 'ISO 3166-2: LS-E'
+  - slug: ls-mohales-hoek
+    name: Mohale's Hoek
+    parent: ls
+    description: 'ISO 3166-2: LS-F'
+  - slug: ls-quthing
+    name: Quthing
+    parent: ls
+    description: 'ISO 3166-2: LS-G'
+  - slug: ls-qachas-nek
+    name: Qacha's Nek
+    parent: ls
+    description: 'ISO 3166-2: LS-H'
+  - slug: ls-mokhotlong
+    name: Mokhotlong
+    parent: ls
+    description: 'ISO 3166-2: LS-J'
+  - slug: ls-thaba-tseka
+    name: Thaba-Tseka
+    parent: ls
+    description: 'ISO 3166-2: LS-K'
+  # SZ Eswatini — 4 subdivisions
+  - slug: sz
+    name: Eswatini
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: SZ'
+  - slug: sz-hhohho
+    name: Hhohho
+    parent: sz
+    description: 'ISO 3166-2: SZ-HH'
+  - slug: sz-lubombo
+    name: Lubombo
+    parent: sz
+    description: 'ISO 3166-2: SZ-LU'
+  - slug: sz-manzini
+    name: Manzini
+    parent: sz
+    description: 'ISO 3166-2: SZ-MA'
+  - slug: sz-shiselweni
+    name: Shiselweni
+    parent: sz
+    description: 'ISO 3166-2: SZ-SH'
+  # MW Malawi — 3 subdivisions
+  - slug: mw
+    name: Malawi
+    parent: southern-africa
+    description: 'ISO 3166-1 alpha-2: MW'
+  - slug: mw-central-region
+    name: Central Region
+    parent: mw
+    description: 'ISO 3166-2: MW-C'
+  - slug: mw-northern-region
+    name: Northern Region
+    parent: mw
+    description: 'ISO 3166-2: MW-N'
+  - slug: mw-southern-region
+    name: Southern Region
+    parent: mw
+    description: 'ISO 3166-2: MW-S'

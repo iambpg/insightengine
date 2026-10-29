@@ -172,6 +172,6 @@ fi
 rm -f "$resp" "$listf"
 unset token
 echo "wrote a new NetBox v2 token into the secret files (value not printed)"
-echo "restart ie-config and prometheus, recreate oxidized and netbox-device-types so they read it:"
+echo "restart ie-config and prometheus, recreate oxidized, netbox-device-types, and netbox-regions so they read it:"
 echo "  docker compose restart ie-config prometheus"
-echo "  docker compose up -d --force-recreate --no-deps oxidized netbox-device-types"
+echo "  docker compose up -d --force-recreate --no-deps oxidized netbox-device-types netbox-regions"

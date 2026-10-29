@@ -72,7 +72,12 @@ else skip "compose policy"; fi
 
 # --- setup service: syntax, page script, end-to-end API test against stubs
 if have python3; then
-  if python3 -m py_compile setup/server.py setup/tests/test_setup_api.py 2>"$TMP/py.err"; then ok "python syntax setup/server.py"; else bad "python syntax"; cat "$TMP/py.err"; fi
+  if python3 -m py_compile setup/server.py setup/tests/test_setup_api.py netbox/regions/import_regions.py 2>"$TMP/py.err"; then ok "python syntax setup/server.py"; else bad "python syntax"; cat "$TMP/py.err"; fi
+  if python3 -c 'import yaml' >/dev/null 2>&1; then
+    if python3 netbox/regions/test_regions.py >"$TMP/reg.out" 2>&1; then ok "region catalog tests"; else bad "region catalog tests"; tail -n 40 "$TMP/reg.out" | sed 's/^/      /'; fi
+  else
+    skip "region catalog tests (PyYAML missing)"
+  fi
   find setup -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null
   if timeout 120 python3 -W ignore setup/tests/test_setup_api.py >"$TMP/ut.out" 2>&1; then ok "setup API tests (stub docker/scripts; no real daemon)"; else bad "setup API tests"; tail -n 30 "$TMP/ut.out" | sed 's/^/      /'; fi
 else skip "setup service tests"; fi

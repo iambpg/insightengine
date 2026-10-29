@@ -445,6 +445,28 @@ def postgres17_volume_errors(services: dict, root: Path) -> list[str]:
     return errors
 
 
+def one_shot_netbox_errors(services: dict, name: str) -> list[str]:
+    """A NetBox preload runs once and must not stop the rest of the stack."""
+    errors = []
+    service = services.get(name)
+    if not isinstance(service, dict):
+        errors.append(f"{name} service is missing")
+        return errors
+    if service.get("restart") != "no":
+        errors.append(f"{name} must not restart")
+    if service.get("pull_policy") != "never":
+        errors.append(f"{name} pull_policy must be never")
+    info = depends(service).get("netbox")
+    if not info or info.get("required"):
+        errors.append(f"{name} must depend on netbox with required: false")
+    for other, candidate in services.items():
+        if other == name or not isinstance(candidate, dict):
+            continue
+        if name in depends(candidate):
+            errors.append(f"{other} must not wait on {name}")
+    return errors
+
+
 def stack_fix_errors(services: dict) -> list[str]:
     errors = []
     netbox = services.get("netbox") if isinstance(services.get("netbox"), dict) else {}
@@ -457,22 +479,8 @@ def stack_fix_errors(services: dict) -> list[str]:
     worker = services.get("netbox-worker") if isinstance(services.get("netbox-worker"), dict) else {}
     if worker.get("pull_policy") != "never":
         errors.append("netbox-worker pull_policy must be never")
-    types = services.get("netbox-device-types")
-    if not isinstance(types, dict):
-        errors.append("netbox-device-types service is missing")
-    else:
-        if types.get("restart") != "no":
-            errors.append("netbox-device-types must not restart")
-        if types.get("pull_policy") != "never":
-            errors.append("netbox-device-types pull_policy must be never")
-        info = depends(types).get("netbox")
-        if not info or info.get("required"):
-            errors.append("netbox-device-types must depend on netbox with required: false")
-        for name, service in services.items():
-            if name == "netbox-device-types" or not isinstance(service, dict):
-                continue
-            if "netbox-device-types" in depends(service):
-                errors.append(f"{name} must not wait on netbox-device-types")
+    for name in ("netbox-device-types", "netbox-regions"):
+        errors.extend(one_shot_netbox_errors(services, name))
     for name in ("netdisco-backend", "netdisco-web", "netdisco-scheduler"):
         service = services.get(name) or {}
         service_env = service.get("environment") or {}
