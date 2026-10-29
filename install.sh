@@ -226,8 +226,23 @@ EOF
 host_port_busy() { # host_port_busy <port> <tcp|udp|both>
   local port=$1 proto=$2 published
   PORT_BUSY_REASON=""
-  case " $TAKEN_PORTS " in
-    *" $port "*) return 0 ;;
+  # Same number on tcp and udp is not a clash (HTTPS 443/tcp and HTTP/3 443/udp).
+  case "$proto" in
+    udp)
+      case " $TAKEN_PORTS " in
+        *" ${port}/udp "*|*" ${port}/both "*) return 0 ;;
+      esac
+      ;;
+    both)
+      case " $TAKEN_PORTS " in
+        *" ${port}/tcp "*|*" ${port}/udp "*|*" ${port}/both "*) return 0 ;;
+      esac
+      ;;
+    *)
+      case " $TAKEN_PORTS " in
+        *" ${port}/tcp "*|*" ${port}/both "*) return 0 ;;
+      esac
+      ;;
   esac
   if command -v ss >/dev/null 2>&1; then
     if [ "$proto" != udp ] && ss -H -ltn "sport = :$port" 2>/dev/null | grep -q .; then return 0; fi
@@ -295,23 +310,30 @@ choose_host_port() { # choose_host_port <label> <default> <preferred> <proto>  -
   die "no free host port for $label near $preferred"
 }
 plan_one_port() { # plan_one_port <KEY> <default> <preferred> <proto>
-  local chosen
-  chosen="$(choose_host_port "$1" "$2" "$3" "$4")"
-  TAKEN_PORTS="$TAKEN_PORTS $chosen"
+  local chosen proto=$4
+  chosen="$(choose_host_port "$1" "$2" "$3" "$proto")"
+  TAKEN_PORTS="$TAKEN_PORTS ${chosen}/${proto}"
   PORT_PLAN="${PORT_PLAN}${1}=${chosen}"$'\n'
 }
 plan_published_ports() {
   TAKEN_PORTS=" "
   PORT_PLAN=""
-  plan_one_port PORT_HTTP 80 8080 tcp
-  plan_one_port PORT_HTTPS 443 8443 both
+  # Firewall-allowed host ports. NetBox owns 8080, so the UI HTTP front is 8086.
+  # HTTPS stays 443 unless that tcp port is busy. HTTP/3 is UDP 443 even when
+  # HTTPS tcp moves. Alternatives are only used when the firewall port is taken.
+  plan_one_port PORT_NETBOX 8080 18080 tcp
+  plan_one_port PORT_HTTP 8086 18086 tcp
+  plan_one_port PORT_HTTPS 443 8443 tcp
+  plan_one_port PORT_HTTP3 443 443 udp
   plan_one_port PORT_GRAFANA 3000 13000 tcp
   plan_one_port PORT_PROMETHEUS 9090 19090 tcp
   plan_one_port PORT_ALERTMANAGER 9093 19093 tcp
   plan_one_port PORT_ACTIVEPIECES 8081 18081 tcp
   plan_one_port PORT_NETDISCO 5000 15000 tcp
   plan_one_port PORT_OXIDIZED 8888 18888 tcp
-  plan_one_port PORT_NETBOX 8444 18444 tcp
+  plan_one_port PORT_SNMP_EXPORTER 9116 19116 tcp
+  plan_one_port PORT_BLACKBOX 9115 19115 tcp
+  plan_one_port PORT_TELEGRAF 57500 57501 tcp
   plan_one_port PORT_SYSLOG 514 5514 both
   plan_one_port PORT_TRAPS 162 1162 udp
 }
@@ -330,21 +352,25 @@ EOF
   else setenv HTTPS_PORT_SUFFIX ":${https}"; fi
 }
 print_port_table() {
-  local http https grafana prom am ap nd ox nb syslog traps origin
-  http="$(getenv_val PORT_HTTP)"; http="${http:-80}"
+  local http https http3 grafana prom am ap nd ox nb snmp bb tel syslog traps origin
+  http="$(getenv_val PORT_HTTP)"; http="${http:-8086}"
   https="$(getenv_val PORT_HTTPS)"; https="${https:-443}"
+  http3="$(getenv_val PORT_HTTP3)"; http3="${http3:-443}"
   grafana="$(getenv_val PORT_GRAFANA)"; grafana="${grafana:-3000}"
   prom="$(getenv_val PORT_PROMETHEUS)"; prom="${prom:-9090}"
   am="$(getenv_val PORT_ALERTMANAGER)"; am="${am:-9093}"
   ap="$(getenv_val PORT_ACTIVEPIECES)"; ap="${ap:-8081}"
   nd="$(getenv_val PORT_NETDISCO)"; nd="${nd:-5000}"
   ox="$(getenv_val PORT_OXIDIZED)"; ox="${ox:-8888}"
-  nb="$(getenv_val PORT_NETBOX)"; nb="${nb:-8444}"
+  nb="$(getenv_val PORT_NETBOX)"; nb="${nb:-8080}"
+  snmp="$(getenv_val PORT_SNMP_EXPORTER)"; snmp="${snmp:-9116}"
+  bb="$(getenv_val PORT_BLACKBOX)"; bb="${bb:-9115}"
+  tel="$(getenv_val PORT_TELEGRAF)"; tel="${tel:-57500}"
   syslog="$(getenv_val PORT_SYSLOG)"; syslog="${syslog:-514}"
   traps="$(getenv_val PORT_TRAPS)"; traps="${traps:-162}"
   if [ "$https" = 443 ]; then origin="https://${PUBLIC_HOST}"; else origin="https://${PUBLIC_HOST}:${https}"; fi
   say "Published host ports:"
-  say "  setup / UI        ${origin}/setup/    (PORT_HTTP=${http} PORT_HTTPS=${https})"
+  say "  setup / UI        ${origin}/setup/    (PORT_HTTP=${http} PORT_HTTPS=${https} HTTP/3 udp ${http3})"
   say "  Grafana           https://${PUBLIC_HOST}:${grafana}/"
   say "  Prometheus        https://${PUBLIC_HOST}:${prom}/"
   say "  Alertmanager      https://${PUBLIC_HOST}:${am}/"
@@ -352,8 +378,93 @@ print_port_table() {
   say "  Netdisco          https://${PUBLIC_HOST}:${nd}/"
   say "  Oxidized          https://${PUBLIC_HOST}:${ox}/"
   say "  NetBox            https://${PUBLIC_HOST}:${nb}/"
+  say "  SNMP exporter     http://${PUBLIC_HOST}:${snmp}/"
+  say "  blackbox exporter http://${PUBLIC_HOST}:${bb}/"
+  say "  Telegraf          http://${PUBLIC_HOST}:${tel}/metrics"
   say "  syslog            ${syslog}/tcp+udp"
   say "  SNMP traps        ${traps}/udp"
+}
+
+# Rewrite a published port only when it is missing or still a previous default.
+# Any other value is left, and the log names the firewall-allowed port.
+align_published_ports() {
+  local dry=$1
+  declare -A aligned=()
+  align_key() {
+    local key=$1 new=$2 cur="" old matched=0
+    shift 2
+    cur="$(getenv_val "$key")"
+    if [ -z "$cur" ]; then
+      aligned[$key]=$new
+      if [ "$dry" = 1 ]; then
+        say "would set ${key}=${new} (missing). Open host port ${new}."
+      else
+        say "set ${key}=${new} (was missing). Open host port ${new}."
+      fi
+      return
+    fi
+    if [ "$cur" = "$new" ]; then
+      aligned[$key]=$cur
+      return
+    fi
+    for old in "$@"; do
+      if [ "$cur" = "$old" ]; then matched=1; break; fi
+    done
+    if [ "$matched" = 1 ]; then
+      aligned[$key]=$new
+      if [ "$dry" = 1 ]; then
+        say "would set ${key}=${new} (was previous default ${cur}). Open host port ${new}."
+      else
+        say "set ${key}=${new} (was ${cur}). Open host port ${new}."
+      fi
+      return
+    fi
+    aligned[$key]=$cur
+    say "left ${key}=${cur}. The firewall-allowed port is ${new}. Open ${cur}, or edit .env to use ${new}. A value that is not a previous default is not changed."
+  }
+  # 80 was the old HTTP default. 8080 was the old alternate and is now NetBox.
+  align_key PORT_HTTP 8086 80 8080
+  align_key PORT_NETBOX 8080 8444
+  align_key PORT_HTTP3 443
+  align_key PORT_GRAFANA 3000
+  align_key PORT_PROMETHEUS 9090
+  align_key PORT_ALERTMANAGER 9093
+  align_key PORT_ACTIVEPIECES 8081
+  align_key PORT_NETDISCO 5000
+  align_key PORT_OXIDIZED 8888
+  align_key PORT_SNMP_EXPORTER 9116
+  align_key PORT_BLACKBOX 9115
+  align_key PORT_TELEGRAF 57500
+  local https
+  https="$(getenv_val PORT_HTTPS)"
+  if [ -z "$https" ]; then
+    aligned[PORT_HTTPS]=443
+    if [ "$dry" = 1 ]; then
+      say "would set PORT_HTTPS=443 (missing)."
+    else
+      say "set PORT_HTTPS=443 (was missing)."
+    fi
+  else
+    aligned[PORT_HTTPS]=$https
+    say "PORT_HTTPS stays ${https}. UI HTTPS is not moved. HTTP/3 is UDP port ${aligned[PORT_HTTP3]}."
+  fi
+  if [ "$dry" != 1 ]; then
+    local key
+    for key in "${!aligned[@]}"; do
+      if [ "$(getenv_val "$key")" != "${aligned[$key]}" ]; then
+        setenv "$key" "${aligned[$key]}"
+      fi
+    done
+    https="${aligned[PORT_HTTPS]}"
+    if [ "$https" = 443 ]; then setenv HTTPS_PORT_SUFFIX ""
+    else setenv HTTPS_PORT_SUFFIX ":${https}"; fi
+  fi
+  if [ "${aligned[PORT_HTTP]}" = "${aligned[PORT_NETBOX]}" ]; then
+    say "WARNING: PORT_HTTP and PORT_NETBOX are both ${aligned[PORT_HTTP]}. NetBox and the UI HTTP front cannot share a host port."
+  fi
+  if [ -n "${aligned[PORT_HTTP3]}" ] && [ "${aligned[PORT_HTTP3]}" = "$(getenv_val PORT_TRAPS)" ]; then
+    say "WARNING: PORT_HTTP3 and PORT_TRAPS are both UDP ${aligned[PORT_HTTP3]}."
+  fi
 }
 
 # Tests source this file to call setenv/dedupe_env. Stop before any install work.
@@ -505,7 +616,9 @@ if [ "$DRY_RUN" = 1 ]; then
   else
     say "install marker present; would backfill empty secrets only"
   fi
-  say "would leave PUBLIC_HOST, CLIENT_NAME, CLIENT_SLUG, INSTALL_DIR, ports, and existing certificates unchanged"
+  say "would leave PUBLIC_HOST, CLIENT_NAME, CLIENT_SLUG, INSTALL_DIR, and existing certificates unchanged"
+  say "published ports change only when they are still a previous default; every other value is left"
+  align_published_ports 1
   backfill_required_secrets 1
   maybe_oxidized_filter 1
   exit 0
@@ -519,6 +632,7 @@ if [ "$RESUME" = 1 ]; then
   fi
   # Every compose `:?run install.sh` secret. Only NETBOX_SUPERUSER_API_KEY is new
   # on an older .env; the rest are filled solely when they are blank.
+  align_published_ports 0
   backfill_required_secrets 0
   maybe_oxidized_filter 0
   # The marker is written only after the backfill, so a failed fill can be retried.

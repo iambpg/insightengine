@@ -6,6 +6,8 @@ To remove the install and start fresh, see [uninstall.md](uninstall.md).
 
 Prefer `./scripts/upgrade.sh` (add `--dry-run` to preview, or `--yes` to skip prompts). It fills missing `.env` secrets **before** any `docker compose` command, stops containers with `docker stop` on the `com.docker.compose.project` label (the containers stay so their volumes can be inspected), copies clusters only after they are identified, **rebuilds local images**, then starts and provisions the token.
 
+Published host ports follow the firewall list: Prometheus 9090, Grafana 3000, Alertmanager 9093, NetBox 8080, SNMP exporter 9116, blackbox exporter 9115, Activepieces 8081, UI HTTP 8086, Telegraf host 57500, HTTP/3 on UDP 443. Netdisco and Oxidized stay on 5000 and 8888. `upgrade.sh` rewrites a port in `.env` only when it is still a previous default (`PORT_HTTP` 80 or 8080 becomes 8086, because NetBox now uses 8080; `PORT_NETBOX` 8444 becomes 8080). A value such as `PORT_PROMETHEUS=19090` or `PORT_HTTPS=57400` is left in place, and the log names the firewall port so you can open the current one or edit `.env` yourself. Missing port keys are added. UI HTTPS is never moved.
+
 `docker compose up -d` alone reuses the old `insightengine/*:local` images (`pull_policy: never`). Those images do not contain this upgrade until `docker compose build` has run. The script prints the ie-config image id before and after the build.
 
 If you have not run `docker compose down` yet:
