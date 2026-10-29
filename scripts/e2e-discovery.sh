@@ -11,7 +11,7 @@ cd "$ROOT"
 
 envval() { local l; l="$(grep -E "^$1=" .env | head -n1 || true)"; l="${l#*=}"; l="${l#\'}"; l="${l%\'}"; printf '%s' "$l"; }
 PUBLIC_HOST="$(envval PUBLIC_HOST)"
-PORT_NETBOX="$(envval PORT_NETBOX)"; PORT_NETBOX="${PORT_NETBOX:-8080}"
+PORT_NETBOX="$(envval PORT_NETBOX)"; PORT_NETBOX="${PORT_NETBOX:-8092}"
 PORT_PROMETHEUS="$(envval PORT_PROMETHEUS)"; PORT_PROMETHEUS="${PORT_PROMETHEUS:-9090}"
 SLUG="$(envval CLIENT_SLUG)"
 if [ -z "$SLUG" ] || [ "$SLUG" = unconfigured ]; then echo "finish first-run setup first" >&2; exit 1; fi

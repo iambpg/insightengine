@@ -68,7 +68,7 @@ body="$(mktemp)"
 resp="${body}.response"
 trap 'rm -f "$hdr" "$body" "$resp"' EXIT
 host="$(envval PUBLIC_HOST)"
-port="$(envval PORT_NETBOX)"; port="${port:-8080}"
+port="$(envval PORT_NETBOX)"; port="${port:-8092}"
 if [ -n "${NETBOX_INTERNAL_URL:-}" ]; then
   base="${NETBOX_INTERNAL_URL%/}"
   curl_api() { curl -sS "$@"; }

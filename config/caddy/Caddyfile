@@ -41,8 +41,9 @@
 
 # PORT_* are the host ports install.sh chose. Compose publishes each one onto
 # the same port inside this container, so the site address and the public URL match.
-# HTTPS_PORT_SUFFIX is empty when PORT_HTTPS is 443, otherwise ":8443" (or whatever was free).
-http://:{$PORT_HTTP:80} {
+# HTTPS_PORT_SUFFIX is empty when PORT_HTTPS is 443, otherwise ":" plus that
+# port (57400 when 443 is already taken). The value is not rewritten on upgrade.
+http://:{$PORT_HTTP:18086} {
 	redir https://{$PUBLIC_HOST}{$HTTPS_PORT_SUFFIX:}{uri} permanent
 }
 
@@ -96,8 +97,8 @@ https://{$PUBLIC_HOST}:{$PORT_HTTPS:443} {
 	}
 }
 
-# NetBox (user-facing), moved off "/" to its own port.
-https://{$PUBLIC_HOST}:{$PORT_NETBOX:8444} {
+# NetBox (user-facing), on its own port. 8092 is reachable; 8080 is not.
+https://{$PUBLIC_HOST}:{$PORT_NETBOX:8092} {
 	import tls_local
 	import client_header
 	encode zstd gzip
@@ -126,7 +127,7 @@ https://{$PUBLIC_HOST}:{$PORT_PROMETHEUS:9090} {
 	reverse_proxy prometheus:9090
 }
 
-https://{$PUBLIC_HOST}:{$PORT_ALERTMANAGER:9093} {
+https://{$PUBLIC_HOST}:{$PORT_ALERTMANAGER:8086} {
 	import tls_local
 	import client_header
 	import admin_auth

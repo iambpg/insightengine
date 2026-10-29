@@ -161,7 +161,7 @@ preflight() {
   log "info   free space for dumps/copies in $STATE_DIR: $(df -h "$STATE_DIR" | awk 'NR==2{print $4}')"
 
   # --- port conflicts (old stack keeps running!)
-  local ports="80 443 3000 9090 9093 8081 5000 8888 514 162" busy=""
+  local ports="18086 443 3000 9090 8086 8081 5000 8888 8092 9116 9115 57500 514 162" busy=""
   for port in $ports; do
     if ss -Hltun 2>/dev/null | awk '{print $5}' | grep -qE "[:.]$port\$"; then busy="$busy $port"; fi
   done

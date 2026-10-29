@@ -10,6 +10,16 @@ def _truthy(name: str, default: str = "0") -> bool:
     return os.environ.get(name, default).lower() in ("1", "true", "yes", "on")
 
 
+def _reveal_seconds(raw: str) -> int:
+    try:
+        seconds = int(raw)
+    except (TypeError, ValueError):
+        return 300
+    if seconds < 60 or seconds > 900:
+        return 300
+    return seconds
+
+
 @dataclass(frozen=True)
 class Settings:
     config_root: str
@@ -46,6 +56,8 @@ class Settings:
     session_hours: int = 12
     oxidized_url: str = "http://oxidized:8888"
     device_cli_secret_dir: str = ""
+    env_file: str = ""
+    vault_reveal_seconds: int = 300
 
     @staticmethod
     def from_env() -> "Settings":
@@ -78,4 +90,6 @@ class Settings:
             device_cli_secret_dir=os.environ.get(
                 "DEVICE_CLI_SECRET_DIR", os.path.join(root, "secrets", "device-cli")
             ),
+            env_file=os.environ.get("ENV_FILE", os.path.join(root, ".env")),
+            vault_reveal_seconds=_reveal_seconds(os.environ.get("VAULT_REVEAL_SECONDS", "300")),
         )

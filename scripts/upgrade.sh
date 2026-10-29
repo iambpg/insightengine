@@ -352,7 +352,7 @@ if [ "$DRY" -eq 1 ]; then
   say "dry-run: missing secrets are listed and not written. Read-only compose config and the migration scan still run."
 fi
 
-say "Published ports: previous defaults move (PORT_HTTP 80 or 8080 -> 8086, PORT_NETBOX 8444 -> 8080). Any other value is left and named. Open the new host ports. HTTP/3 UDP stays 443."
+say "Published ports: previous defaults move (PORT_HTTP 80, 8080, or 8086 -> 18086; PORT_NETBOX 8444 or 8080 -> 8092; PORT_ALERTMANAGER 9093 -> 8086). Any other value is left and named. Open the new host ports. PORT_HTTPS is not moved (57400 stays 57400). HTTP/3 UDP stays 443."
 say "1. Backfill missing secrets before any docker compose command."
 preview_backfill
 if [ "$DRY" -eq 1 ]; then

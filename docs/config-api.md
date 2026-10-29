@@ -24,6 +24,8 @@ Editable configs use directory mounts. A bind mount of a single file keeps the o
 
 ie-config runs as root because it writes those host directories. It has no published port.
 
+The install `.env` is mounted read-only at `/opt/insightengine/.env` (`ENV_FILE`). `GET /api/v1/settings/vault` lists every key for an Administrator. Secret-looking values are omitted. `POST /api/v1/settings/vault/reveal` returns one value after `POST /api/v1/settings/vault/unlock` checks the current administrator password. The unlock lasts five minutes. Reveal and copy are audited with the key and never the value. The file is not written.
+
 ## Discovery loop
 
 A thread (disable with `IE_CONFIG_SCHEDULER=0`) renders the Netdisco deployment, and every `interval_hours` (default 6) syncs prefixes and refreshes the unapproved list. `scripts/netdisco-scheduler.sh` in the Netdisco image reads `scan-prefixes.txt` and runs `netdisco-do` with the CIDR as an argument (no `eval`). Netdisco's web and backend wait until `netdisco-db-init` has completed and ie-config is healthy, so the volume has a deployment file. If ie-config is down, Netdisco waits. ie-config, Caddy, and NetBox do not wait on Netdisco. `NETDISCO_DATABASE_URL` uses `NETDISCO_DB_USER`, `NETDISCO_DB_PASSWORD`, and host `netdisco-postgres`. That password is the app role (`NETDISCO_DB_PASS`), not the random PostgreSQL superuser password.
