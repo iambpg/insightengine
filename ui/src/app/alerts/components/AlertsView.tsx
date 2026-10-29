@@ -10,6 +10,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { devicePath, isMockMode } from '@/lib/apiMode';
 import { readSession } from '@/lib/session';
 import type { AlertItem, AlertSeverity } from '@/lib/types';
@@ -59,7 +60,7 @@ export default function AlertsView() {
     api
       .listAlerts()
       .then((d) => !cancelled && setAlerts(d))
-      .catch(() => !cancelled && setError('Failed to load alerts. Check your connection and try again.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'alerts')));
     return () => {
       cancelled = true;
     };

@@ -276,4 +276,24 @@ export const api = {
   async startScan(target: 'prefix' | 'ip', value: string): Promise<DiscoveryScan> {
     return (await backend()).startScan(target, value);
   },
+
+  // BACKEND: GET /api/v1/apps/launcher
+  async listLauncherApps() {
+    return (await backend()).listLauncherApps();
+  },
+
+  // BACKEND: GET /api/v1/devices/{id}/cli
+  async getDeviceCli(deviceId: string) {
+    return (await backend()).getDeviceCli(deviceId);
+  },
+
+  // BACKEND: POST /api/v1/devices/{id}/cli
+  async runDeviceCli(deviceId: string, command: string) {
+    return (await backend()).runDeviceCli(deviceId, command);
+  },
+
+  // BACKEND: PUT /api/v1/devices/{id}/cli/credentials
+  async saveDeviceCliCredentials(deviceId: string, username: string, password: string) {
+    return (await backend()).saveDeviceCliCredentials(deviceId, username, password);
+  },
 };

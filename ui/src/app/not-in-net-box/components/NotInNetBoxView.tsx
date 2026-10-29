@@ -10,6 +10,7 @@ import { isMockMode } from '@/lib/apiMode';
 import Modal from '@/components/ui/Modal';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { isApiError } from '@/lib/apiError';
 import type { DiscoveryCatalog, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
 
@@ -46,9 +47,7 @@ export default function NotInNetBoxView() {
         setItems(devices);
         setScans(recent);
       })
-      .catch(() =>
-        setError('Failed to load discovered devices. Check your connection and try again.')
-      );
+      .catch((cause) => setError(reportLoadError(cause, 'discovered devices')));
   };
 
   useEffect(() => {
@@ -82,9 +81,8 @@ export default function NotInNetBoxView() {
         setItems(devices);
         setScans(recent);
       })
-      .catch(() => {
-        if (!cancelled)
-          setError('Failed to load discovered devices. Check your connection and try again.');
+      .catch((cause) => {
+        if (!cancelled) setError(reportLoadError(cause, 'discovered devices'));
       });
     return () => {
       cancelled = true;

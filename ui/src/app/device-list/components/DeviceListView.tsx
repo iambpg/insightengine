@@ -6,8 +6,8 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
 import Link from 'next/link';
 import { api, type DeviceQuery } from '@/lib/apiClient';
-import { isApiError } from '@/lib/apiError';
 import { isMockMode } from '@/lib/apiMode';
+import { describeLoadError, redirectIfSignedOut } from '@/lib/loadError';
 import type { DeviceHealth, DeviceRow } from '@/lib/types';
 import HealthStrip from './HealthStrip';
 import DeviceFilters from './DeviceFilters';
@@ -52,14 +52,12 @@ export default function DeviceListView() {
         setTotal(res.total);
         if (res.roles) setRoles(res.roles);
       })
-      .catch((err: unknown) => {
+      .catch((cause) => {
         if (cancelled) return;
-        if (isApiError(err) && err.status === 401) {
-          setSignedOut(true);
-          setError('You are signed out - sign in');
-          return;
-        }
-        setError('Failed to load devices. Check your connection and try again.');
+        const failure = describeLoadError(cause, 'devices');
+        redirectIfSignedOut(failure);
+        setSignedOut(failure.signedOut);
+        setError(failure.text);
       });
     return () => {
       cancelled = true;

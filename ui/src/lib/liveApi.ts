@@ -307,3 +307,25 @@ export async function listScans(): Promise<DiscoveryScan[]> {
 export async function startScan(target: 'prefix' | 'ip', value: string): Promise<DiscoveryScan> {
   return request(`${API}/discovery/scan`, { method: 'POST', body: { target, value } });
 }
+
+export async function listLauncherApps() {
+  return request<import('@/lib/types').LauncherCatalog>(`${API}/apps/launcher`);
+}
+
+export async function getDeviceCli(deviceId: string) {
+  return request<import('@/lib/types').CliCatalog>(`${API}/devices/${encodeURIComponent(deviceId)}/cli`);
+}
+
+export async function runDeviceCli(deviceId: string, command: string) {
+  return request<{ command: string; output: string; platform: string }>(
+    `${API}/devices/${encodeURIComponent(deviceId)}/cli`,
+    { method: 'POST', body: { command } }
+  );
+}
+
+export async function saveDeviceCliCredentials(deviceId: string, username: string, password: string) {
+  return request<{ ok: boolean; configured: boolean }>(
+    `${API}/devices/${encodeURIComponent(deviceId)}/cli/credentials`,
+    { method: 'PUT', body: { username, password } }
+  );
+}

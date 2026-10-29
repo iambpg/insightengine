@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Icon from '@/components/ui/AppIcon';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { devicePath, isMockMode } from '@/lib/apiMode';
 
 interface Entry {
@@ -88,7 +89,8 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
             })),
           ]);
         })
-        .catch(() => {
+        .catch((cause) => {
+          reportLoadError(cause, 'search');
           if (!cancelled) setHits([]);
         });
     }, 200);

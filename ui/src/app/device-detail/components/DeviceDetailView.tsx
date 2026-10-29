@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
 import { api } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
+import { reportLoadError } from '@/lib/loadError';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData, PortInfo } from '@/lib/types';
 import IssuesPanel from './IssuesPanel';
@@ -32,25 +33,37 @@ const DEVICE_ICON: Record<string, string> = {
   generic: 'CubeIcon',
 };
 
+function initialDeviceKey(): string {
+  if (typeof window === 'undefined') return 'switch-stack';
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+  const form = params.get('form');
+  if (!isMockMode() && id) return id;
+  if (form) return form;
+  return 'switch-stack';
+}
+
 export default function DeviceDetailView() {
   const [form, setForm] = useState<string>('switch-stack');
-  const [deviceKey, setDeviceKey] = useState<string>('switch-stack');
+  const [deviceKey, setDeviceKey] = useState<string>(initialDeviceKey);
   const [device, setDevice] = useState<DeviceDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PortInfo | null>(null);
   const [rerun, setRerun] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const q = params.get('form');
-    const id = params.get('id');
     if (q && (FORMS.includes(q) || q.startsWith('fg-') || q.startsWith('pa-'))) setForm(q);
-    if (!isMockMode() && id) setDeviceKey(id);
-    else if (q) setDeviceKey(q);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+    if (!isMockMode() && deviceKey === 'switch-stack' && typeof window !== 'undefined' && !new URLSearchParams(window.location.search).get('id')) {
+      setError('Open a device from the list. This page needs a device id.');
+      return undefined;
+    }
     setDevice(null);
     setSelected(null);
     setError(null);
@@ -62,11 +75,11 @@ export default function DeviceDetailView() {
         const face = d.faceplate?.form_factor;
         if (face && FORMS.includes(face)) setForm(face);
       })
-      .catch(() => !cancelled && setError('Failed to load this device. Check your connection and try again.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'this device')));
     return () => {
       cancelled = true;
     };
-  }, [deviceKey]);
+  }, [deviceKey, attempt]);
 
   const allPorts = useMemo<PortInfo[]>(() => {
     if (!device) return [];
@@ -80,7 +93,7 @@ export default function DeviceDetailView() {
     return (
       <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
         <span className="flex items-center gap-2"><Icon name="ExclamationCircleIcon" size={18} />{error}</span>
-        <button type="button" onClick={() => setDeviceKey((key) => key)} className="rounded-md border border-destructive/40 px-3 py-1 text-xs font-semibold">Retry</button>
+        <button type="button" onClick={() => setAttempt((n) => n + 1)} className="rounded-md border border-destructive/40 px-3 py-1 text-xs font-semibold">Retry</button>
       </div>
     );
   }
@@ -250,10 +263,70 @@ export default function DeviceDetailView() {
         <ExampleDataBanner text="Device, port and graph values below come from mock JSON in the API client." />
       ) : null}
 
+      {device && !isMockMode() ? <Inventory device={device} /> : null}
+
       {device && <DeviceGraphs deviceId={device.id} />}
 
       {device && <PortTable ports={allPorts} selectedId={selected?.id ?? null} onSelect={setSelected} />}
     </div>
+  );
+}
+
+function Inventory({ device }: { device: DeviceDetailData }) {
+  const sources = device.sources ?? [];
+  return (
+    <section className="space-y-3 rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card" aria-label="Inventory">
+      {sources.length > 0 ? (
+        <ul className="flex flex-wrap gap-2 text-xs">
+          {sources.map((source) => (
+            <li key={source.name} className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1" title={source.detail || source.name}>
+              <span className={`h-2 w-2 rounded-full ${source.ok ? 'bg-success' : 'bg-warning'}`} />
+              <span className="font-medium capitalize">{source.name}</span>
+              {!source.ok && source.detail ? <span className="text-muted-foreground">{source.detail}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div>
+          <h2 className="text-sm font-semibold">Interfaces and addresses</h2>
+          {(device.interfaces ?? []).length === 0 && (device.addresses ?? []).length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">NetBox did not return interfaces or IP addresses for this device.</p>
+          ) : (
+            <ul className="mt-2 space-y-1 font-mono-data text-xs">
+              {(device.interfaces ?? []).slice(0, 40).map((row) => (
+                <li key={row.name}>{row.name} · {row.enabled ? 'enabled' : 'disabled'} · {row.type || '—'}</li>
+              ))}
+              {(device.addresses ?? []).slice(0, 20).map((row) => (
+                <li key={row.address}>{row.address}{row.interface ? ` on ${row.interface}` : ''}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold">Neighbours</h2>
+          {(device.neighbors ?? []).length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">No Netdisco LLDP or CDP neighbours were returned.</p>
+          ) : (
+            <ul className="mt-2 space-y-1 font-mono-data text-xs">
+              {(device.neighbors ?? []).map((row) => (
+                <li key={`${row.localPort}-${row.remoteName}-${row.remotePort}`}>
+                  {row.localPort} → {row.remoteName || row.remoteAddress || 'unknown'} {row.remotePort}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+      <div>
+        <h2 className="text-sm font-semibold">Last config backup</h2>
+        {device.backup?.available ? (
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono-data text-xs">{device.backup.config || device.backup.status || 'Backup recorded'}</pre>
+        ) : (
+          <p className="mt-1 text-sm text-muted-foreground">{device.backup?.reason || 'Oxidized has no backup for this device.'}</p>
+        )}
+      </div>
+    </section>
   );
 }
 

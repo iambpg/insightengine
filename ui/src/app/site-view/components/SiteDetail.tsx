@@ -8,6 +8,7 @@ import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate from '@/components/faceplate/Faceplate';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { devicePath } from '@/lib/apiMode';
 import { buildFaceplateFor } from '@/lib/mockData';
 import type { DeviceRow, SiteRow } from '@/lib/types';
@@ -24,7 +25,7 @@ export default function SiteDetail({ site }: { site: SiteRow | null }) {
     api
       .listSiteDevices(site.id)
       .then((d) => !cancelled && setDevices(d))
-      .catch(() => !cancelled && setError('Failed to load devices for this site.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'devices for this site')));
     return () => {
       cancelled = true;
     };

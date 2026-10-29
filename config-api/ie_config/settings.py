@@ -44,6 +44,8 @@ class Settings:
     lockout_failures: int = 5
     lockout_minutes: int = 15
     session_hours: int = 12
+    oxidized_url: str = "http://oxidized:8888"
+    device_cli_secret_dir: str = ""
 
     @staticmethod
     def from_env() -> "Settings":
@@ -72,4 +74,8 @@ class Settings:
             ca_file=os.environ.get("IE_CA_FILE", "/etc/ie-certs/ca.crt"),
             fleet_cache_seconds=float(os.environ.get("FLEET_CACHE_SECONDS", "8") or "8"),
             alert_webhook_token_file=os.environ.get("ALERT_WEBHOOK_TOKEN_FILE", ""),
+            oxidized_url=os.environ.get("OXIDIZED_URL", "http://oxidized:8888").rstrip("/"),
+            device_cli_secret_dir=os.environ.get(
+                "DEVICE_CLI_SECRET_DIR", os.path.join(root, "secrets", "device-cli")
+            ),
         )

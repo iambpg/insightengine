@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { redirectForSetup } from '@/lib/setupRedirect';
 
 // Sends the browser to the separately served setup app unless setup is complete.
@@ -16,8 +17,8 @@ export default function SetupGuard() {
         const target = redirectForSetup(state, window.location.pathname);
         if (target) window.location.assign(target);
       })
-      .catch(() => {
-        /* network or HTTP error: stay on this page */
+      .catch((cause) => {
+        reportLoadError(cause, 'setup');
       });
     return () => {
       cancelled = true;

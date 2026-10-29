@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '@/components/ui/AppIcon';
 import Badge from '@/components/ui/Badge';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
 import type {
   AppGroup,
@@ -44,7 +45,7 @@ export default function ApplicationsPanel({ role }: { role: RoleName | null }) {
       })
       .catch((cause) => {
         if (!cancelled)
-          setError(cause instanceof Error ? cause.message : 'Could not load application settings.');
+          setError(reportLoadError(cause, 'application settings'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

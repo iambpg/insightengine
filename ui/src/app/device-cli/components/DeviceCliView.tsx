@@ -8,8 +8,9 @@ import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
+import { reportLoadError } from '@/lib/loadError';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
-import type { DeviceDetailData } from '@/lib/types';
+import type { CliCatalog, DeviceDetailData } from '@/lib/types';
 
 interface CliCommand {
   id: string;
@@ -115,6 +116,19 @@ function buildOutput(id: string, d: DeviceDetailData): string {
 
 const ALL_COMMANDS: CliCommand[] = GROUPS.flatMap((g) => g.commands);
 
+function groupCommands(commands: { id: string; group: string; label: string; command: string }[]): CliGroup[] {
+  const groups: CliGroup[] = [];
+  commands.forEach((command) => {
+    let group = groups.find((item) => item.title === command.group);
+    if (!group) {
+      group = { title: command.group, commands: [] };
+      groups.push(group);
+    }
+    group.commands.push({ id: command.id, label: command.label, command: command.command, icon: 'CommandLineIcon' });
+  });
+  return groups;
+}
+
 const IPV4 = /^(\d{1,3})(\.\d{1,3}){3}$/;
 
 function normalize(s: string): string {
@@ -153,11 +167,26 @@ function resolveTyped(raw: string, d: DeviceDetailData): string | null {
   return null;
 }
 
+function initialDeviceKey(): string {
+  if (typeof window === 'undefined') return 'switch-stack';
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+  const form = params.get('form');
+  if (!isMockMode() && id) return id;
+  if (form) return form;
+  return 'switch-stack';
+}
+
 export default function DeviceCliView() {
+  const live = !isMockMode();
   const [form, setForm] = useState<string>('switch-stack');
-  const [deviceKey, setDeviceKey] = useState<string>('switch-stack');
+  const [deviceKey, setDeviceKey] = useState<string>(initialDeviceKey);
   const [device, setDevice] = useState<DeviceDetailData | null>(null);
+  const [cli, setCli] = useState<CliCatalog | null>(null);
+  const [username, setUsername] = useState('');
+  const [secret, setSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [runningLabel, setRunningLabel] = useState<string>('');
@@ -172,25 +201,35 @@ export default function DeviceCliView() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const q = params.get('form');
-    const id = params.get('id');
     if (q && Object.keys(FACEPLATE_SAMPLES).includes(q)) setForm(q);
-    if (!isMockMode() && id) setDeviceKey(id);
-    else if (q) setDeviceKey(q);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+    if (live && deviceKey === 'switch-stack' && typeof window !== 'undefined' && !new URLSearchParams(window.location.search).get('id')) {
+      setError('Open a device from the list. This page needs a device id.');
+      return undefined;
+    }
     setDevice(null);
+    setCli(null);
     setError(null);
     setHistory([]);
     api
       .getDevice(deviceKey)
-      .then((d) => !cancelled && setDevice(d))
-      .catch(() => !cancelled && setError('Failed to connect to this device. Check your connection and try again.'));
+      .then((d) => {
+        if (cancelled) return;
+        setDevice(d);
+        if (!live) return;
+        api
+          .getDeviceCli(d.id)
+          .then((catalog) => !cancelled && setCli(catalog))
+          .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the device CLI')));
+      })
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'this device')));
     return () => {
       cancelled = true;
     };
-  }, [deviceKey]);
+  }, [deviceKey, live, attempt]);
 
   useEffect(() => {
     const el = screenRef.current;
@@ -214,9 +253,52 @@ export default function DeviceCliView() {
     }, 450);
   };
 
+  const stamp = () => {
+    const now = new Date();
+    return [now.getHours(), now.getMinutes(), now.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+  };
+
+  const pushOutput = (commandText: string, output: string) => {
+    counter.current += 1;
+    setHistory((h) => [...h, { id: counter.current, command: commandText, output, time: stamp() }]);
+    setRunningId(null);
+    setRunningLabel('');
+    inputRef.current?.focus();
+  };
+
+  const runLive = (commandText: string) => {
+    if (!device || runningId) return;
+    const allowed = (cli?.commands ?? []).some((item) => normalize(item.command) === normalize(commandText));
+    if (!allowed) {
+      pushOutput(commandText, 'That command is not on the read-only allowlist for this platform.');
+      return;
+    }
+    setRunningId('run');
+    setRunningLabel(commandText);
+    api
+      .runDeviceCli(device.id, commandText)
+      .then((result) => pushOutput(commandText, result.output || ''))
+      .catch((cause) => pushOutput(commandText, reportLoadError(cause, 'the command')));
+  };
+
   const run = (cmd: CliCommand) => {
     if (!device) return;
+    if (live) {
+      runLive(cmd.command);
+      return;
+    }
     execute(cmd.command, () => buildOutput(cmd.id, device));
+  };
+
+  const saveCredentials = () => {
+    if (!device || !username || !secret) return;
+    const password = secret;
+    setSecret('');
+    api
+      .saveDeviceCliCredentials(device.id, username, password)
+      .then(() => api.getDeviceCli(device.id))
+      .then((catalog) => setCli(catalog))
+      .catch((cause) => setError(reportLoadError(cause, 'CLI credentials')));
   };
 
   const submitTyped = () => {
@@ -228,6 +310,10 @@ export default function DeviceCliView() {
     const typed = normalize(raw);
     if (typed === 'clear' || typed === 'cls') {
       setHistory([]);
+      return;
+    }
+    if (live) {
+      runLive(raw);
       return;
     }
     const out = resolveTyped(raw, device);
@@ -273,7 +359,7 @@ export default function DeviceCliView() {
     return (
       <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
         <span className="flex items-center gap-2"><Icon name="ExclamationCircleIcon" size={18} />{error}</span>
-        <button type="button" onClick={() => setForm((f) => f)} className="rounded-md border border-destructive/40 px-3 py-1 text-xs font-semibold">Retry</button>
+        <button type="button" onClick={() => setAttempt((n) => n + 1)} className="rounded-md border border-destructive/40 px-3 py-1 text-xs font-semibold">Retry</button>
       </div>
     );
   }
@@ -295,8 +381,9 @@ export default function DeviceCliView() {
               <h1 className="font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
               <HealthBadge health={device.health} />
               <span className="font-mono-data text-xs text-muted-foreground">{device.mgmtIp} · {device.modelFamily}</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success">
-                <span className="h-1.5 w-1.5 rounded-full bg-success" />Session open
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${live && !cli?.credentialsConfigured ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${live && !cli?.credentialsConfigured ? 'bg-warning' : 'bg-success'}`} />
+                {live ? (cli?.credentialsConfigured ? 'Credentials set' : 'Credentials not set') : 'Session open'}
               </span>
             </div>
             <Link
@@ -311,14 +398,43 @@ export default function DeviceCliView() {
         )}
       </header>
 
+      {live && cli && !cli.platform ? (
+        <p role="status" className="rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">{cli.message}</p>
+      ) : null}
+      {live && cli && cli.platform && !cli.credentialsConfigured ? (
+        <section className="rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm" role="status">
+          <p className="font-medium">{cli.message || 'CLI credentials are not set for this device.'}</p>
+          <form
+            className="mt-3 flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveCredentials();
+            }}
+          >
+            <label className="text-xs">
+              Username
+              <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="off" className="mt-1 block rounded-md border border-border bg-card px-2 py-1 text-sm" />
+            </label>
+            <label className="text-xs">
+              Password
+              <input value={secret} onChange={(event) => setSecret(event.target.value)} type="password" autoComplete="new-password" className="mt-1 block rounded-md border border-border bg-card px-2 py-1 text-sm" />
+            </label>
+            <button type="submit" className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium">Save credentials</button>
+          </form>
+        </section>
+      ) : null}
+      {live && cli?.message && cli.credentialsConfigured ? (
+        <p className="px-1 text-sm text-muted-foreground">{cli.message}</p>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[320px_1fr]">
         <aside className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Predefined commands">
           <div className="border-b border-border px-4 py-2.5">
             <h2 className="text-base font-semibold">Commands</h2>
-            <p className="text-xs text-muted-foreground">Click a button to run it on the device. Read-only checks.</p>
+            <p className="text-xs text-muted-foreground">{live ? 'Allowlisted read-only commands for this platform. Nothing else is sent.' : 'Click a button to run it on the device. Read-only checks.'}</p>
           </div>
           <div className="scroll-thin max-h-[560px] space-y-4 overflow-y-auto p-3">
-            {GROUPS.map((g) => (
+            {(live ? groupCommands(cli?.commands ?? []) : GROUPS).map((g) => (
               <div key={`grp-${g.title}`}>
                 <p className="label-caps mb-1.5 text-muted-foreground">{g.title}</p>
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-1">
@@ -379,8 +495,17 @@ export default function DeviceCliView() {
             {!device && <Skeleton className="h-5 w-64" />}
             {device && history.length === 0 && !runningId && (
               <div className="text-down">
-                <p>Connected to {device.hostname} ({device.mgmtIp}).</p>
-                <p>Choose a command from the list or type your own below. Type &quot;help&quot; to see what is supported.</p>
+                {live ? (
+                  <>
+                    <p>{device.hostname} ({device.mgmtIp}). {cli?.platformLabel || 'Platform not allowlisted.'}</p>
+                    <p>{cli?.credentialsConfigured ? 'Choose an allowlisted command. Configuration mode is not available.' : 'Credentials are not set, so no SSH session was opened.'}</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Connected to {device.hostname} ({device.mgmtIp}).</p>
+                    <p>Choose a command from the list or type your own below. Type &quot;help&quot; to see what is supported.</p>
+                  </>
+                )}
               </div>
             )}
             {history.map((h) => (
@@ -423,7 +548,7 @@ export default function DeviceCliView() {
         </section>
       </div>
 
-      <ExampleDataBanner text="Command output is simulated example data. No live connection is made to the device." />
+      {live ? null : <ExampleDataBanner text="Command output is simulated example data. No live connection is made to the device." />}
     </div>
   );
 }

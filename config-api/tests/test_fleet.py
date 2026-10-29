@@ -485,6 +485,12 @@ def test_populated_shapes_filters_and_paging(stack):
     assert ports[0]["type"] == "RJ45"
     assert any(item["kind"] == "power" and item["status"] == "fail" for item in device["hardware"])
     assert any(issue["severity"] == "critical" for issue in device["issues"])
+    assert device["backup"]["available"] is False
+    assert {row["name"] for row in device["sources"]} >= {"netbox", "prometheus", "alertmanager", "oxidized", "netdisco"}
+    assert isinstance(device["interfaces"], list)
+    assert isinstance(device["addresses"], list)
+    assert isinstance(device["neighbors"], list)
+    assert isinstance(device["history"], list)
     by_form = client.get("/api/v1/devices/access-switch-24").json()
     assert by_form["hostname"] == "edge-2"
     assert by_form["faceplate"]["form_factor"] == "access-switch-24"

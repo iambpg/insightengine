@@ -10,11 +10,13 @@ import RolesTab from './RolesTab';
 import DatabaseTab from './DatabaseTab';
 import WebhookTab from './WebhookTab';
 import ApplicationsPanel from './ApplicationsPanel';
+import AppsLauncher from '@/components/AppsLauncher';
 import SnmpTab from './SnmpTab';
 
-type Tab = 'applications' | 'roles' | 'database' | 'webhook' | 'snmp';
+type Tab = 'applications' | 'apps' | 'roles' | 'database' | 'webhook' | 'snmp';
 
 const BASE_TABS: { key: Tab; label: string; icon: string }[] = [
+  { key: 'apps', label: 'Apps', icon: 'Squares2X2Icon' },
   { key: 'roles', label: 'Roles and users', icon: 'UserGroupIcon' },
   { key: 'database', label: 'Database (read-only)', icon: 'CircleStackIcon' },
   { key: 'webhook', label: 'Alertmanager webhook', icon: 'BellAlertIcon' },
@@ -96,6 +98,7 @@ export default function SettingsView() {
           key={tab}
         >
           {tab === 'applications' && showApps && <ApplicationsPanel role={role} />}
+          {tab === 'apps' && <AppsLauncher layout="page" />}
           {tab === 'roles' && <RolesTab />}
           {tab === 'database' && <DatabaseTab />}
           {tab === 'webhook' && <WebhookTab />}

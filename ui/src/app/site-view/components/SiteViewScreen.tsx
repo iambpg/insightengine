@@ -5,6 +5,7 @@ import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
 import { api } from '@/lib/apiClient';
+import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
 import type { DeviceHealth, SiteRow } from '@/lib/types';
 import SiteList from './SiteList';
@@ -61,7 +62,7 @@ export default function SiteViewScreen() {
           return current ?? res.rows[0] ?? null;
         });
       })
-      .catch(() => !cancelled && setError('Failed to load sites. Check your connection and try again.'));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'sites')));
     return () => {
       cancelled = true;
     };

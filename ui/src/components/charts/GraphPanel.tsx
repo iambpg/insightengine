@@ -6,6 +6,7 @@ import RangeSelector from '@/components/charts/RangeSelector';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Icon from '@/components/ui/AppIcon';
 import type { RangeKey } from '@/lib/mockData';
+import { reportLoadError } from '@/lib/loadError';
 import type { SeriesDef } from '@/components/charts/ZoomableChart';
 
 const ZoomableChart = dynamic(() => import('@/components/charts/ZoomableChart'), {
@@ -40,7 +41,7 @@ export default function GraphPanel({ id, title, subtitle, unit, kind, series, yM
     setError(null);
     fetcher(range, customMin)
       .then((d) => !cancelled && setData(d))
-      .catch(() => !cancelled && setError(`Failed to load ${title.toLowerCase()}. Check your connection and try again.`));
+      .catch((cause) => !cancelled && setError(reportLoadError(cause, title.toLowerCase())));
     return () => {
       cancelled = true;
     };

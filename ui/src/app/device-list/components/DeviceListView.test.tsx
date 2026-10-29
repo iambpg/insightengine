@@ -44,11 +44,11 @@ describe('DeviceListView signed-out state', () => {
     expect(screen.queryByText('Failed to load devices. Check your connection and try again.')).toBeNull();
   });
 
-  it('keeps the generic message for other failures', async () => {
+  it('names a service failure and does not offer the sign-in link', async () => {
     vi.mocked(api.listDevices).mockRejectedValue(new ApiError(503, 'down', 'unavailable'));
     render(<DeviceListView />);
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toContain('Failed to load devices');
+      expect(screen.getByRole('alert').textContent).toContain('The service failed while loading devices (HTTP 503).');
     });
     expect(screen.queryByRole('link', { name: 'sign in' })).toBeNull();
   });
