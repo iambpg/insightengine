@@ -1061,6 +1061,27 @@ services:
         condition: service_healthy
         required: false
 
+  # One-shot, idempotent load of dcim.region from netbox/regions/regions.yaml.
+  # Same failure isolation as netbox-device-types: nothing else depends on it.
+  netbox-regions:
+    build:
+      context: ./netbox/regions
+    image: insightengine/netbox-regions:local
+    pull_policy: never
+    restart: "no"
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      NETBOX_URL: http://netbox:8080
+      NETBOX_TOKEN_FILE: /run/secrets/netbox.token
+      REGIONS_FILE: /data/regions.yaml
+    volumes:
+      - ./secrets/prometheus/netbox.token:/run/secrets/netbox.token:ro
+    depends_on:
+      netbox:
+        condition: service_healthy
+        required: false
+
   # ===========================================================================
   # ACTIVEPIECES (replaces n8n). Own PostgreSQL + own Redis, as per the
   # official docker-compose (app + worker(s) + postgres + redis).

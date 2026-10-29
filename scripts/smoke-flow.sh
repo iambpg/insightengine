@@ -36,6 +36,7 @@ for needle in (
     "pull_policy: never",
     "SUPERUSER_API_KEY:",
     "netbox-device-types:",
+    "netbox-regions:",
     "required: false",
 ):
     if needle not in compose:
@@ -70,7 +71,7 @@ else
   echo "SKIP  presweep self-test (perl not installed)"
 fi
 
-if python3 -m py_compile netbox/device-types/import_device_types.py config-api/ie_config/discovery.py; then
+if python3 -m py_compile netbox/device-types/import_device_types.py netbox/regions/import_regions.py config-api/ie_config/discovery.py; then
   ok "python compile"
 else
   bad "python compile"

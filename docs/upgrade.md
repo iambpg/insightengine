@@ -36,7 +36,7 @@ docker compose up -d
 # wait until netbox is healthy
 ./scripts/provision-netbox-token.sh --apply
 docker compose restart ie-config prometheus
-docker compose up -d --force-recreate --no-deps oxidized netbox-device-types
+docker compose up -d --force-recreate --no-deps oxidized netbox-device-types netbox-regions
 ```
 
 `./install.sh --upgrade-env --no-start` is what `scripts/upgrade.sh` runs. `--upgrade-env` (also `--backfill-env`) accepts an existing `.env` that has no `.install-started` marker, which is every install made before that file existed. It accepts the file only when `PUBLIC_HOST`, `CLIENT_NAME`, `CLIENT_SLUG`, `INSTALL_DIR`, `NETBOX_DB_PASSWORD`, and `NETBOX_SECRET_KEY` are present and non-empty. It fills **missing or empty** required secrets and leaves every non-empty secret as it is. The one an older `.env` does not have is `NETBOX_SUPERUSER_API_KEY` (12 characters). The same pass fills any other required secret that is blank (`NETBOX_SUPERUSER_API_TOKEN`, the database passwords, Grafana, Activepieces, Netdisco). It writes `.install-started` only after that backfill. It does not change the host, client, ports, or certificates that already exist. A partial or corrupt `.env` is refused and left untouched. A plain `./install.sh` still refuses a `.env` that has no marker.
@@ -96,10 +96,10 @@ Authorization: Bearer nbt_<key>.<secret>
 
 `POST /api/users/tokens/provision/` on 4.6.3 returns `key` (12 characters) and `token` (the 40-character secret, **without** the `nbt_` prefix). `scripts/provision-netbox-token.sh` joins those into `nbt_<key>.<secret>`. If it cannot store the token, it deletes the one it just created so a retry does not leave an orphan. A later run that already authenticates does not create another token.
 
-The device-type importer re-reads `secrets/prometheus/netbox.token` on every retry. Recreate that one-shot after provisioning so it is not still inside an old wait loop:
+The device-type importer and the region importer re-read `secrets/prometheus/netbox.token` on every retry. Recreate those one-shots after provisioning so they are not still inside an old wait loop:
 
 ```bash
-docker compose up -d --force-recreate --no-deps netbox-device-types
+docker compose up -d --force-recreate --no-deps netbox-device-types netbox-regions
 ```
 
 Also restart `ie-config` and `prometheus`, and recreate `oxidized`, so they read the new file.

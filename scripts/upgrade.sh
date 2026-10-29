@@ -438,6 +438,6 @@ fi
 
 say "8. Restart services that read the token or the new image."
 plan docker compose restart ie-config prometheus
-plan docker compose up -d --force-recreate --no-deps oxidized netbox-device-types
+plan docker compose up -d --force-recreate --no-deps oxidized netbox-device-types netbox-regions
 
 say "=== upgrade steps finished ==="
