@@ -36,6 +36,8 @@ x-logging: &default-logging
 # ----------------------------- shared definitions ----------------------------
 x-snmp-exporter: &snmp-exporter
   image: ${SNMP_EXPORTER_IMAGE}
+  # The generated runtime file is mode 0600. The stock image user cannot read it.
+  user: "0:0"
   restart: unless-stopped
   logging: *default-logging
   networks: [monitoring-net]
@@ -49,8 +51,10 @@ x-snmp-exporter: &snmp-exporter
     SNMP_V3_PRIV_PASSWORD: ${SNMP_V3_PRIV_PASSWORD:-unset-placeholder}
   volumes:
     - ./snmp/out:/etc/snmp_exporter:ro
+    - ./data/snmp:/etc/ie-snmp:ro
+    - ./config/snmp/snmp-exporter-run.sh:/snmp-exporter-run.sh:ro
+  entrypoint: ["/bin/sh", "/snmp-exporter-run.sh"]
   command:
-    - --config.file=/etc/snmp_exporter/snmp.yml
     - --config.expand-environment-variables
     - --snmp.module-concurrency=${SNMP_MODULE_CONCURRENCY:-4}
     - --web.listen-address=:9116
@@ -145,6 +149,7 @@ x-netbox: &netbox
     - ./config/netbox/extra.py:/etc/netbox/config/extra.py:ro
     - ./config/netbox/plugins.py:/etc/netbox/config/plugins.py:ro
     - ./config/discovery/module-map.yml:/etc/ie/module-map.yml:ro
+    - ./data/snmp:/etc/ie/snmp:ro
 
 x-activepieces-env: &activepieces-env
   # Names follow https://www.activepieces.com/docs/install/configuration/environment-variables
