@@ -234,6 +234,13 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     def healthz():
         return {"ok": True}
 
+    @app.get("/internal/user-count")
+    def user_count(request: Request):
+        token = read_setup_token(settings.setup_token_file)
+        if not check_bearer(request.headers.get("authorization", ""), token):
+            raise ApiError(401, "unauthorized", "missing or invalid token")
+        return {"count": auth.user_count()}
+
     @app.post("/internal/bootstrap-admin")
     async def bootstrap(request: Request):
         token = read_setup_token(settings.setup_token_file)
@@ -891,4 +898,33 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         return created
 
     mount_fleet(app, user_of)
+    warn_complete_setup_without_users(settings, auth)
     return app
+
+
+def warn_complete_setup_without_users(settings: Settings, auth: Auth) -> None:
+    """Log when data/setup says complete and the users table is empty.
+
+    The setup service owns the state file and reopens the admin step.
+    This process only reports the mismatch. A missing file, or a failure
+    to read the database, does not change anything.
+    """
+    path = os.path.join(settings.config_root, "data", "setup", "config.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except (OSError, ValueError):
+        return
+    if not isinstance(cfg, dict) or cfg.get("state") != "complete":
+        return
+    try:
+        count = auth.user_count()
+    except Exception:
+        log.error("setup state is complete; could not count ie-config users, so nothing was changed")
+        return
+    if count == 0:
+        log.error(
+            "setup state is complete but the ie-config users table is empty. "
+            "Create the administrator with sudo ./scripts/reset-admin-password.sh. "
+            "The setup service reopens the first-administrator step when it can read this count."
+        )

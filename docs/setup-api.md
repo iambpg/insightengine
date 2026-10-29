@@ -42,6 +42,8 @@ unconfigured/client --POST client--> applying --ok--> unconfigured/admin --POST 
 
 After `complete`, `POST /setup/client` (rename) re-applies and returns to `complete` (§4.2); the migrate/history calls remain available (§5).
 
+`complete` is stored only in `data/setup/config.json`. ie-config users are rows in Postgres. Those can diverge: the state file stays `complete` after a Postgres volume is replaced by an empty cluster. On startup and on `GET /setup/state`, the service calls ie-config `GET /internal/user-count` (setup token). Count 0 reopens `unconfigured` / `step=admin` and sets `error`, and keeps `client_name`, `mode`, and `history`. A failed check (ie-config down, or no `IE_CONFIG_URL`) logs that the state was left unchanged and does not rewrite the file. The host command `sudo ./scripts/reset-admin-password.sh` can create that administrator without waiting for this reopen.
+
 Only one background job runs at a time (`job.kind` = `apply | preflight | migrate | prom-history`); starting another gives `409`.
 Job state survives restarts in `data/setup/job.json`; a job that was running when the service restarted is reported as `failed` ("interrupted").
 

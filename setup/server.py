@@ -428,6 +428,79 @@ def bootstrap_admin(email, password):
         return 0, b""
 
 
+_LAST_USER_CHECK = {"at": 0.0, "logged": ""}
+
+
+def ie_config_user_count():
+    """Return the ie-config user count, or None when it cannot be read.
+
+    None must not be treated as zero: a down ie-config leaves setup state alone.
+    """
+    base = os.environ.get("IE_CONFIG_URL", "").rstrip("/")
+    if not base:
+        return None
+    token = get_token()
+    if not token:
+        return None
+    req = urllib.request.Request(base + "/internal/user-count", method="GET")
+    req.add_header("Authorization", "Bearer " + token)
+    try:
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(body, dict):
+        return None
+    count = body.get("count")
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        return None
+    return count
+
+
+def reconcile_complete_without_users(config, user_count):
+    """Reopen the first-administrator step when setup says complete and users is empty.
+
+    ``user_count`` None means ie-config could not be asked. The config is left
+    unchanged and the return value is a log line. A positive count returns None.
+    Client name, mode, and history are kept when the step is reopened.
+    """
+    if config.get("state") != "complete":
+        return None
+    if user_count is None:
+        return "setup state is complete; ie-config user count could not be read, so the state was left unchanged"
+    if user_count > 0:
+        return None
+    config["state"] = "unconfigured"
+    config["step"] = "admin"
+    config["error"] = (
+        "setup was marked complete but ie-config has no users; "
+        "the first-administrator step is open again. "
+        "Create one at /setup/ or run sudo ./scripts/reset-admin-password.sh"
+    )
+    return config["error"]
+
+
+def note_user_mismatch():
+    """Ask ie-config once in a while. Does not flip state when the check fails."""
+    with LOCK:
+        if CONFIG.get("state") != "complete":
+            return
+        if time.time() - _LAST_USER_CHECK["at"] < 15:
+            return
+    count = ie_config_user_count()
+    with LOCK:
+        _LAST_USER_CHECK["at"] = time.time()
+        if CONFIG.get("state") != "complete":
+            return
+        msg = reconcile_complete_without_users(CONFIG, count)
+        if count == 0:
+            save_config()
+        if msg and msg != _LAST_USER_CHECK["logged"]:
+            log(msg)
+            sys.stderr.write("%s\n" % msg)
+            _LAST_USER_CHECK["logged"] = msg
+
+
 # ------------------------------------------------------------------- responses
 class Err(Exception):
     def __init__(self, code, msg):
@@ -604,6 +677,7 @@ class Handler(BaseHTTPRequestHandler):
                 has_auth = bool(self.headers.get("Authorization"))
                 if has_auth:
                     self.authed()
+                note_user_mismatch()
                 with LOCK:
                     return self.send_json(200, full_state() if has_auth else public_state())
             routes = {
@@ -801,6 +875,7 @@ def main():
     if not get_token():
         sys.stderr.write("FATAL: setup token file %s missing or empty\n" % TOKEN_FILE)
         sys.exit(1)
+    note_user_mismatch()
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     sys.stderr.write("setup service listening on %s:%d (root=%s)\n" % (BIND, PORT, ROOT))
     srv.serve_forever()

@@ -4,7 +4,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
+import Link from 'next/link';
 import { api, type DeviceQuery } from '@/lib/apiClient';
+import { isApiError } from '@/lib/apiError';
 import { isMockMode } from '@/lib/apiMode';
 import type { DeviceHealth, DeviceRow } from '@/lib/types';
 import HealthStrip from './HealthStrip';
@@ -25,6 +27,7 @@ export default function DeviceListView() {
   const [rows, setRows] = useState<DeviceRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [visible, setVisible] = useState<ColumnKey[]>(COLUMNS.map((c) => c.key));
   const [reload, setReload] = useState(0);
@@ -40,6 +43,7 @@ export default function DeviceListView() {
     let cancelled = false;
     setRows(null);
     setError(null);
+    setSignedOut(false);
     api
       .listDevices(query)
       .then((res) => {
@@ -48,7 +52,15 @@ export default function DeviceListView() {
         setTotal(res.total);
         if (res.roles) setRoles(res.roles);
       })
-      .catch(() => !cancelled && setError('Failed to load devices. Check your connection and try again.'));
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (isApiError(err) && err.status === 401) {
+          setSignedOut(true);
+          setError('You are signed out - sign in');
+          return;
+        }
+        setError('Failed to load devices. Check your connection and try again.');
+      });
     return () => {
       cancelled = true;
     };
@@ -139,6 +151,11 @@ export default function DeviceListView() {
           </div>
         )}
 
+        {signedOut ? (
+          <div role="alert" className="m-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+            You are signed out - <Link href="/login-screen" className="font-semibold underline">sign in</Link>
+          </div>
+        ) : (
         <DeviceTable
           rows={rows}
           error={error}
@@ -151,6 +168,7 @@ export default function DeviceListView() {
           onSort={(k) => patch({ sortKey: k, sortDir: query.sortKey === k && query.sortDir === 'asc' ? 'desc' : 'asc', page: 1 })}
           onClear={() => patch({ search: '', health: 'all', role: 'all' })}
         />
+        )}
 
         <Pagination
           page={query.page}
