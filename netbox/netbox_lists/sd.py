@@ -47,7 +47,23 @@ def choose_module(role: str, manufacturer: str, platform: str, custom_module: st
     return modules, auth
 
 
-def target_for(device: dict, mapping: dict) -> dict | None:
+def load_auth_map(path: str) -> dict:
+    """IP to snmp-exporter auth name. The file has no secrets. Missing means the job default."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(ip): str(name) for ip, name in data.items() if ip and name}
+
+
+def default_auth_map_path() -> str:
+    return os.environ.get("IE_SNMP_AUTH_MAP", "/etc/ie/snmp/auth-by-ip.yml")
+
+
+def target_for(device: dict, mapping: dict, auth_by_ip: dict | None = None) -> dict | None:
     """device is a plain dict (tests) or the fields the view extracts from a NetBox Device."""
     ip = (device.get("primary_ip4") or "").split("/")[0]
     if not ip:
@@ -56,6 +72,9 @@ def target_for(device: dict, mapping: dict) -> dict | None:
     manufacturer = _slug(device.get("manufacturer"))
     platform = _slug(device.get("platform"))
     module, auth = choose_module(role, manufacturer, platform, _slug(device.get("snmp_module")), _slug(device.get("snmp_auth")), mapping)
+    resolved = (auth_by_ip or {}).get(ip)
+    if resolved:
+        auth = resolved
     labels = {
         "__meta_netbox_name": _slug(device.get("name")),
         "__meta_netbox_site_name": _slug(device.get("site")),

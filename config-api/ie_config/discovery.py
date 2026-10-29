@@ -475,6 +475,7 @@ class Discovery:
         env["SNMP_RETRIES"] = str(retries)
         env["SNMP_TRY_SLOW"] = "true" if slow in (True, "true", "yes", "on", 1, "1") else "false"
         rendered = render_template(text, env, _RENDER_VARS)
+        rendered = self._splice_snmp_profiles(rendered)
         out = self.settings.netdisco_out_dir
         os.makedirs(out, exist_ok=True)
         path = os.path.join(out, "deployment.yml")
@@ -491,6 +492,23 @@ class Discovery:
             os.chmod(tmp, 0o644)
         os.replace(tmp, path)
         self._write_presweep_env(sync)
+
+    def _splice_snmp_profiles(self, rendered: str) -> str:
+        """Add per-profile device_auth before the .env fallback. No-op when nothing was resolved."""
+        from .snmp_sync import ASSIGNMENTS_NAME, netdisco_yaml_entries, read_json, snmp_dir, splice_device_auth
+        path = os.path.join(snmp_dir(self.settings), ASSIGNMENTS_NAME)
+        data = read_json(path, {})
+        groups = data.get("groups") if isinstance(data, dict) else None
+        if not groups:
+            return rendered
+        normalized = []
+        for group in groups:
+            if not isinstance(group, dict) or not group.get("ips"):
+                continue
+            profile = {key: value for key, value in group.items() if key not in ("auth", "ips", "source")}
+            normalized.append({"auth": group.get("auth") or "ie_snmp", "ips": group["ips"], "profile": profile})
+        extra = netdisco_yaml_entries(normalized)
+        return splice_device_auth(rendered, extra)
 
     def request_scan(self) -> None:
         out = self.settings.netdisco_out_dir

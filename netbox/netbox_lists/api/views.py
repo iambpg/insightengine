@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from netbox_lists.sd import default_map_path, load_map, target_for
+from netbox_lists.sd import default_auth_map_path, default_map_path, load_auth_map, load_map, target_for
 
 
 def _text(value):
@@ -48,6 +48,7 @@ class PrometheusDevicesView(APIView):
         from dcim.models import Device
 
         mapping = load_map(default_map_path())
+        auth_by_ip = load_auth_map(default_auth_map_path())
         qs = Device.objects.filter(status="active").select_related(
             "role", "device_type", "device_type__manufacturer", "platform", "site",
             "site__region", "site__group", "tenant", "primary_ip4",
@@ -60,7 +61,7 @@ class PrometheusDevicesView(APIView):
             qs = qs.filter(status=status)
         targets = []
         for device in qs:
-            item = target_for(device_dict(device), mapping)
+            item = target_for(device_dict(device), mapping, auth_by_ip)
             if item:
                 targets.append(item)
         return Response(targets)
