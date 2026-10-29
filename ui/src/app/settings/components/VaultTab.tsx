@@ -144,6 +144,15 @@ function shownValue(entry: Entry, revealed: Record<string, string>): string {
   return revealed[entry.key] ?? MASK;
 }
 
+function endpointLabel(endpoint: Endpoint): string {
+  if (endpoint.url) return endpoint.url;
+  return `${endpoint.scheme} port ${endpoint.port}`;
+}
+
+function keyCountLabel(count: number): string {
+  return count === 1 ? '1 key' : `${count} keys`;
+}
+
 export default function VaultTab() {
   const [data, setData] = useState<VaultList | null>(isMockMode() ? MOCK : null);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +162,7 @@ export default function VaultTab() {
   const [pending, setPending] = useState<Job | null>(null);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (isMockMode()) return;
@@ -189,6 +199,44 @@ export default function VaultTab() {
       }))
       .filter((group) => group.entries.length > 0);
   }, [data, filter]);
+
+  const remaskGroup = (groupId: string) => {
+    const keys = new Set(
+      (data?.groups ?? []).find((group) => group.id === groupId)?.entries.map((entry) => entry.key) ?? []
+    );
+    if (keys.size === 0) return;
+    setRevealed((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const key of keys) {
+        if (key in next) {
+          delete next[key];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  };
+
+  const toggleGroup = (groupId: string) => {
+    const closing = openIds.has(groupId);
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (closing) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+    if (closing) remaskGroup(groupId);
+  };
+
+  const expandAll = () => {
+    setOpenIds(new Set(groups.map((group) => group.id)));
+  };
+
+  const collapseAll = () => {
+    setOpenIds(new Set());
+    setRevealed({});
+  };
 
   const findEntry = (key: string): Entry | undefined => {
     for (const group of data?.groups ?? []) {
@@ -297,6 +345,22 @@ export default function VaultTab() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <h2 className="text-base font-semibold">Vault</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+          >
+            Expand all
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+          >
+            Collapse all
+          </button>
+        </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="sr-only">Filter keys</span>
           <input
@@ -311,37 +375,41 @@ export default function VaultTab() {
 
       {!data && !error ? <p className="text-sm text-muted-foreground">Loading vault…</p> : null}
 
-      {groups.map((group) => (
+      {groups.map((group) => {
+        const open = openIds.has(group.id);
+        const panelId = `vault-panel-${group.id}`;
+        return (
         <section
           key={group.id}
           aria-labelledby={`vault-${group.id}`}
           className="rounded-none border-x-0 border-y border-border bg-card shadow-card"
         >
-          <header className="border-b border-border px-5 py-3">
-            <h3 id={`vault-${group.id}`} className="text-base font-semibold">
-              {group.name}
-            </h3>
-            {group.note ? <p className="mt-1 text-xs text-muted-foreground">{group.note}</p> : null}
-            <ul className="mt-2 space-y-1">
-              {group.endpoints.map((endpoint) => (
-                <li key={endpoint.portKey} className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{endpoint.name}</span>
-                  {' '}
-                  {endpoint.url ? (
-                    <a href={endpoint.url} target="_blank" rel="noopener noreferrer" className="font-mono-data text-cyan hover:underline">
-                      {endpoint.url}
-                    </a>
-                  ) : (
-                    <span className="font-mono-data">
-                      {endpoint.scheme} port {endpoint.port}
-                    </span>
-                  )}
-                  <span className="font-mono-data"> ({endpoint.portKey} {endpoint.port})</span>
-                </li>
-              ))}
-            </ul>
-          </header>
-          <div className="scroll-thin overflow-x-auto">
+          <h3 id={`vault-${group.id}`} className="text-base font-semibold">
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={panelId}
+              onClick={() => toggleGroup(group.id)}
+              className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-left hover:bg-muted/60"
+            >
+              <Icon
+                name="ChevronDownIcon"
+                size={16}
+                className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-0' : '-rotate-90'}`}
+              />
+              <span>{group.name}</span>
+              <span className="min-w-0 flex-1 truncate font-mono-data text-xs font-normal text-muted-foreground">
+                {group.endpoints.map(endpointLabel).join(' · ') || 'No published URL'}
+              </span>
+              <span className="font-mono-data text-xs font-normal text-muted-foreground">
+                {keyCountLabel(group.entries.length)}
+              </span>
+            </button>
+          </h3>
+          {open ? (
+          <div id={panelId} role="region" aria-labelledby={`vault-${group.id}`}>
+          {group.note ? <p className="border-t border-border px-5 py-2 text-xs text-muted-foreground">{group.note}</p> : null}
+          <div className="scroll-thin overflow-x-auto border-t border-border">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/60 text-left">
@@ -406,8 +474,11 @@ export default function VaultTab() {
               </tbody>
             </table>
           </div>
+          </div>
+          ) : null}
         </section>
-      ))}
+        );
+      })}
 
       <Modal
         open={pending !== null}

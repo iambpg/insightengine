@@ -18,7 +18,8 @@ describe('Settings Vault tab', () => {
     const vault = await screen.findByRole('tab', { name: 'Vault' });
     await user.click(vault);
     expect(screen.getByRole('heading', { name: 'Vault' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'NetBox' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /NetBox/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /NetBox/ })).toHaveAttribute('aria-expanded', 'false');
     unmount();
 
     roleBox.role = 'Engineer';
