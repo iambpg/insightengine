@@ -241,6 +241,31 @@ def health_errors(services: dict) -> list[str]:
         for text in walk_strings(service.get("healthcheck")):
             if "http://localhost" in text:
                 errors.append(f"{name}: healthcheck uses http://localhost ({text})")
+        if name == "netbox":
+            errors.extend(netbox_login_probe_errors(service))
+    return errors
+
+
+def netbox_login_probe_errors(service: dict) -> list[str]:
+    """The login probe must be allowed by Django's Host check.
+
+    curl to http://127.0.0.1:8080/login/ sends Host 127.0.0.1. The NetBox
+    image only auto-adds localhost, so that probe is HTTP 400 DisallowedHost
+    and the container stays unhealthy.
+    """
+    errors = []
+    env = service.get("environment") or {}
+    hosts = env.get("ALLOWED_HOSTS", "") if isinstance(env, dict) else ""
+    tokens = hosts.split() if isinstance(hosts, str) else []
+    if "127.0.0.1" not in tokens:
+        errors.append("netbox ALLOWED_HOSTS must include 127.0.0.1")
+    if "localhost" not in tokens:
+        errors.append("netbox ALLOWED_HOSTS must include localhost")
+    command = " ".join(walk_strings((service.get("healthcheck") or {}).get("test")))
+    if "127.0.0.1:8080/login/" not in command:
+        errors.append("netbox healthcheck must request http://127.0.0.1:8080/login/")
+    if "Host: localhost" not in command and "Host:localhost" not in command:
+        errors.append("netbox healthcheck must send Host: localhost")
     return errors
 
 
@@ -586,6 +611,38 @@ services:
     command: ["--web.enable-lifecycle"]
 """,
         lambda errs: any("http://localhost" in e for e in errs),
+    )
+    expect(
+        "netbox login probe without an allowed host",
+        """
+services:
+  netbox:
+    image: x
+    environment:
+      ALLOWED_HOSTS: monitor.example.invalid caddy netbox localhost
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/login/ -o /dev/null || exit 1"]
+  prometheus:
+    image: p
+    command: ["--web.enable-lifecycle"]
+""",
+        lambda errs: any("127.0.0.1" in e for e in errs) and any("Host: localhost" in e for e in errs),
+    )
+    expect(
+        "netbox login probe sends localhost",
+        """
+services:
+  netbox:
+    image: x
+    environment:
+      ALLOWED_HOSTS: monitor.example.invalid caddy netbox localhost 127.0.0.1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: localhost' http://127.0.0.1:8080/login/ -o /dev/null || exit 1"]
+  prometheus:
+    image: p
+    command: ["--web.enable-lifecycle"]
+""",
+        lambda errs: not any(e.startswith("netbox ") or e.startswith("netbox ALLOWED") or "login" in e for e in errs),
     )
     expect(
         "core service waiting on netdisco",
