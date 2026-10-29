@@ -24,6 +24,7 @@ It is a Docker Compose bundle for **one install per client**, sized (by estimate
 | `docs/setup-api.md` | The setup service HTTP API (endpoints, JSON, token, states) for the UI developer. |
 | `docs/settings-api.md` | Settings and discovery API implemented by `config-api/` (`ie-config`). |
 | `docs/fleet-api.md` | Device, site, alert, summary and health routes the customer UI calls. |
+| `docs/snmp-credentials.md` | SNMP credentials in NetBox config contexts, with the `.env` values as the fallback. |
 | `ui/` | Customer UI (Next.js). `./install.sh` builds `insightengine-ui:local` from `ui/Dockerfile` (port 8080, `GET /healthz`, `NEXT_PUBLIC_IE_API_MODE=live`). Empty `IE_UI_IMAGE` means that build. |
 | `config/` | Prometheus, Alertmanager, Caddy, blackbox, Loki, Grafana provisioning, Telegraf, Oxidized, alert relay, Netdisco. `config/ui-placeholder/` is only a copy of the setup-redirect sample. |
 | `snmp/`, `trapd/` | SNMP generator input / exporter skeleton / MIBs; snmptrapd image (traps → Alertmanager + Loki). |

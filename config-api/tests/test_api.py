@@ -222,6 +222,10 @@ def test_bootstrap_csrf_and_roles(world):
         json={},
     )
     assert restarted.status_code == 403
+    # SNMP credentials are administrator only, for reads and writes
+    assert client.get("/api/v1/settings/snmp").status_code == 403
+    for method, path in (("put", "/api/v1/settings/snmp/mode"), ("post", "/api/v1/settings/snmp/profiles"), ("post", "/api/v1/settings/snmp/test")):
+        assert getattr(client, method)(path, headers={"X-CSRF-Token": eng}, json={}).status_code == 403, path
 
 
 def test_secret_file_hidden_and_traversal(world):
@@ -417,6 +421,12 @@ def test_discovery_scan_and_ui_shapes(world):
     assert unknown.status_code == 404
     rejected = client.post("/api/v1/discovery/999/reject", headers=headers)
     assert rejected.status_code == 404
+    # SNMP settings: malformed bodies are a 400, never a 500, and never echo input.
+    garbage = {**headers, "Content-Type": "application/json"}
+    for method, path in (("put", "/api/v1/settings/snmp/mode"), ("post", "/api/v1/settings/snmp/profiles"), ("post", "/api/v1/settings/snmp/test")):
+        assert getattr(client, method)(path, headers=garbage, content="{bad").status_code == 400, path
+        assert getattr(client, method)(path, headers=headers, json=[1]).status_code == 400, path
+    assert client.post("/api/v1/settings/snmp/test", headers=headers, json={"device_id": "abc"}).status_code == 400
 
 
 def test_fake_promtool_does_not_write_live_file(tmp_path, monkeypatch):

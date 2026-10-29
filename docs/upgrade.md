@@ -1,6 +1,6 @@
 # Upgrading an existing install
 
-This covers a server that was installed before the Postgres volume fix and the NetBox 4.6 token change. New installs do not need the volume copy.
+This covers a server that was installed before the Postgres volume fix and the NetBox 4.6 token change. New installs do not need the volume copy. SNMP credentials in NetBox config contexts are described in [snmp-credentials.md](snmp-credentials.md). Devices with no `monitoring_snmp` context keep the `.env` SNMP values.
 
 To remove the install and start fresh, see [uninstall.md](uninstall.md).
 
