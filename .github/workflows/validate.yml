@@ -18,6 +18,7 @@ jobs:
           python3 scripts/check-docker-copy.py
           python3 scripts/check-compose-audit.py
           python3 netbox/regions/test_regions.py
+          python3 netbox/component-backfill/test_backfill.py
           bash scripts/smoke.sh --self-test
       - name: shellcheck
         run: |

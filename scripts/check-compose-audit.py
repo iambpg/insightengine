@@ -445,9 +445,10 @@ def postgres17_volume_errors(services: dict, root: Path) -> list[str]:
     return errors
 
 
-def one_shot_netbox_errors(services: dict, name: str) -> list[str]:
+def one_shot_netbox_errors(services: dict, name: str, allowed_dependents: tuple[str, ...] = ()) -> list[str]:
     """A NetBox preload runs once and must not stop the rest of the stack."""
     errors = []
+    allowed = set(allowed_dependents)
     service = services.get(name)
     if not isinstance(service, dict):
         errors.append(f"{name} service is missing")
@@ -462,8 +463,14 @@ def one_shot_netbox_errors(services: dict, name: str) -> list[str]:
     for other, candidate in services.items():
         if other == name or not isinstance(candidate, dict):
             continue
-        if name in depends(candidate):
-            errors.append(f"{other} must not wait on {name}")
+        if name not in depends(candidate):
+            continue
+        if other in allowed:
+            spec = (candidate.get("depends_on") or {}).get(name)
+            if not isinstance(spec, dict) or spec.get("required") is not False:
+                errors.append(f"{other} must depend on {name} with required: false")
+            continue
+        errors.append(f"{other} must not wait on {name}")
     return errors
 
 
@@ -479,8 +486,16 @@ def stack_fix_errors(services: dict) -> list[str]:
     worker = services.get("netbox-worker") if isinstance(services.get("netbox-worker"), dict) else {}
     if worker.get("pull_policy") != "never":
         errors.append("netbox-worker pull_policy must be never")
-    for name in ("netbox-device-types", "netbox-regions"):
-        errors.extend(one_shot_netbox_errors(services, name))
+    errors.extend(one_shot_netbox_errors(services, "netbox-device-types", ("netbox-component-backfill",)))
+    errors.extend(one_shot_netbox_errors(services, "netbox-regions"))
+    errors.extend(one_shot_netbox_errors(services, "netbox-component-backfill"))
+    backfill = services.get("netbox-component-backfill") if isinstance(services.get("netbox-component-backfill"), dict) else {}
+    waited = (backfill.get("depends_on") or {}).get("netbox-device-types")
+    if not isinstance(waited, dict) or waited.get("condition") != "service_completed_successfully":
+        errors.append("netbox-component-backfill must wait until netbox-device-types has completed")
+    backfill_env = backfill.get("environment") or {}
+    if not isinstance(backfill_env, dict) or backfill_env.get("NETBOX_BACKFILL_COMPONENTS") != "${NETBOX_BACKFILL_COMPONENTS:-true}":
+        errors.append("netbox-component-backfill must honor NETBOX_BACKFILL_COMPONENTS (default true)")
     for name in ("netdisco-backend", "netdisco-web", "netdisco-scheduler"):
         service = services.get(name) or {}
         service_env = service.get("environment") or {}
