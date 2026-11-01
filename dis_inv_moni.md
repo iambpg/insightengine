@@ -99,7 +99,7 @@ SNMPv2c:
 - `security_level`: `noAuthNoPriv`, `authNoPriv` or `authPriv`; optional `context_name`.
 - NetBox deep-merges contexts: give every `monitoring_snmp` context the same keys.
 - No context on a device → `.env` fallback (`SNMP_V2_COMMUNITY`, `SNMP_V3_USER`, `SNMP_V3_AUTH_PASSWORD`, `SNMP_V3_PRIV_PASSWORD`; auth names `ntt_snmpv3_auth`, `ie_snmp_v2`).
-- ie-config syncs every **5 minutes** and right after a save in Settings → SNMP. It writes `data/snmp/auth-by-ip.yml`, `data/snmp/snmp.runtime.yml`, reloads the snmp-exporters and adds Netdisco `device_auth` entries.
+- ie-config syncs every **5 minutes** and right after a save in Settings → SNMP. It writes `data/snmp/auth-by-ip.yml`, `data/snmp/snmp.runtime.yml`, reloads the snmp-exporters that are actually running, adds Netdisco `device_auth` entries, and reloads Prometheus when the auth map changes.
 
 **Alternative (secrets off NetBox):** InsightEngine UI → Settings → **SNMP**, File mode. The context then holds only `{"monitoring_snmp":{"profile":"<name>"}}`; secrets stay in `data/snmp/profiles.json` (0600). The SNMP tab has a test-device action.
 
@@ -143,7 +143,7 @@ Requirements for monitoring: status `active` + a primary IPv4. Optional device c
 
 ## 6. Monitoring
 
-- Prometheus reads targets from NetBox http_sd (`/api/plugins/lists/prometheus-devices/?status=active&role=<role>`), `refresh_interval: 5m`. Allow **5–10 minutes** after adding a device.
+- Prometheus reads targets from NetBox http_sd (`/api/plugins/lists/prometheus-devices/?status=active&role=<role>`). ICMP jobs refresh every 5m (allow **5–10 minutes** after adding a device). SNMP jobs refresh every 1m, and an auth-map change is pushed on the next sync.
 - Jobs per role: `icmp-*` (blackbox `icmp`) and `snmp-*` (access/core/distribution switches, fortigate sdwan/hub/core-fw, cisco-wlc), plus `icmp-other` / `snmp-other` catch-alls.
 - SNMP modules from `config/discovery/module-map.yml`: Cisco switch roles → `if_mib, cisco_environ, cisco_mem, cisco_pro`; FortiGate roles/manufacturer/platform `fortigate` → `if_mib_fortigate, fortigate, fortigate_bandwidth`; Palo Alto / platform `pan-os` → `if_mib`; `wireless-controller` → `cisco_wlc_universal`; default `if_mib`.
 - Verify:
