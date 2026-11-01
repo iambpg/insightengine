@@ -13,7 +13,7 @@ import { devicePath } from '@/lib/apiMode';
 import { buildFaceplateFor } from '@/lib/mockData';
 import type { DeviceRow, SiteRow } from '@/lib/types';
 
-export default function SiteDetail({ site }: { site: SiteRow | null }) {
+export default function SiteDetail({ site, loading = false }: { site: SiteRow | null; loading?: boolean }) {
   const [devices, setDevices] = useState<DeviceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +40,14 @@ export default function SiteDetail({ site }: { site: SiteRow | null }) {
   }, [devices]);
 
   if (!site) {
+    if (loading) {
+      return (
+        <section role="status" className="rounded-none border-x-0 border-y border-border bg-card p-5 shadow-card">
+          <p className="sr-only">Loading site</p>
+          <Skeleton className="h-36 w-full" />
+        </section>
+      );
+    }
     return (
       <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card">
         <EmptyState icon="BuildingOffice2Icon" title="Pick a site" description="Choose a site on the left to see its switches drawn as faceplates with live port state." />

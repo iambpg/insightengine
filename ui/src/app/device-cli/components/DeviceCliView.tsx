@@ -9,6 +9,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { devicePath, isMockMode } from '@/lib/apiMode';
 import { reportLoadError } from '@/lib/loadError';
+import { useKeyedLoad } from '@/lib/useKeyedLoad';
+import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { CliCatalog, DeviceDetailData } from '@/lib/types';
 
@@ -167,33 +169,37 @@ function resolveTyped(raw: string, d: DeviceDetailData): string | null {
   return null;
 }
 
-function detailHref(device: DeviceDetailData | null, form: string, live: boolean): string {
-  if (!live) return `/device-detail?form=${encodeURIComponent(form)}`;
-  const id = device?.id || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : '') || '';
-  if (!id) return '/';
-  return devicePath(id, device?.faceplate?.form_factor || form);
-}
+const NEEDS_ID = 'Open a device from the list. This page needs a device id.';
+const FORM_KEYS = Object.keys(FACEPLATE_SAMPLES);
 
-function initialDeviceKey(): string {
-  if (typeof window === 'undefined') return 'switch-stack';
-  const params = new URLSearchParams(window.location.search);
-  const id = params.get('id');
-  const form = params.get('form');
-  if (!isMockMode()) return id || 'switch-stack';
-  if (form) return form;
-  return 'switch-stack';
+function detailHref(device: DeviceDetailData | null, form: string, live: boolean, id: string): string {
+  if (!live) return `/device-detail?form=${encodeURIComponent(form)}`;
+  const key = device?.id || id;
+  if (!key) return '/';
+  return devicePath(key, device?.faceplate?.form_factor || form);
 }
 
 export default function DeviceCliView() {
   const live = !isMockMode();
-  const [form, setForm] = useState<string>('switch-stack');
-  const [deviceKey, setDeviceKey] = useState<string>(initialDeviceKey);
-  const [device, setDevice] = useState<DeviceDetailData | null>(null);
+  const { ready, params } = usePageQuery('/device-cli');
+  const id = params.get('id') ?? '';
+  const formQuery = params.get('form') ?? '';
+  const mockKey = formQuery && FORM_KEYS.includes(formQuery) ? formQuery : 'switch-stack';
+  const deviceKey = live ? id : mockKey;
+  const canLoad = ready && (!live || Boolean(id));
+  const [attempt, setAttempt] = useState(0);
+  const [missingId, setMissingId] = useState(false);
+  const loaded = useKeyedLoad<DeviceDetailData>(deviceKey, canLoad, attempt, 'this device', (key) => api.getDevice(key));
+  const device = loaded.data;
+  const face = device?.faceplate?.form_factor;
+  const form = (face && FORM_KEYS.includes(face) ? face : '') || (formQuery && FORM_KEYS.includes(formQuery) ? formQuery : '') || 'switch-stack';
   const [cli, setCli] = useState<CliCatalog | null>(null);
+  const [cliError, setCliError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [secret, setSecret] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  const showMissing = ready && live && !id && missingId;
+  const error = showMissing ? NEEDS_ID : loaded.error || cliError || actionError;
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [runningLabel, setRunningLabel] = useState<string>('');
@@ -205,38 +211,42 @@ export default function DeviceCliView() {
   const screenRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get('form');
-    if (q && Object.keys(FACEPLATE_SAMPLES).includes(q)) setForm(q);
-  }, []);
+  const cliToken = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
-    if (live && deviceKey === 'switch-stack' && typeof window !== 'undefined' && !new URLSearchParams(window.location.search).get('id')) {
-      setError('Open a device from the list. This page needs a device id.');
+    if (!ready || !live || id) {
+      setMissingId(false);
       return undefined;
     }
-    setDevice(null);
+    const timer = window.setTimeout(() => setMissingId(true), 50);
+    return () => window.clearTimeout(timer);
+  }, [ready, live, id]);
+
+  useEffect(() => {
     setCli(null);
-    setError(null);
+    setCliError(null);
+    setActionError(null);
     setHistory([]);
+  }, [deviceKey]);
+
+  useEffect(() => {
+    if (!live || !device) return undefined;
+    const current = ++cliToken.current;
+    const deviceId = device.id;
     api
-      .getDevice(deviceKey)
-      .then((d) => {
-        if (cancelled) return;
-        setDevice(d);
-        if (!live) return;
-        api
-          .getDeviceCli(d.id)
-          .then((catalog) => !cancelled && setCli(catalog))
-          .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the device CLI')));
+      .getDeviceCli(deviceId)
+      .then((catalog) => {
+        if (cliToken.current !== current) return;
+        setCli(catalog);
       })
-      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'this device')));
+      .catch((cause) => {
+        if (cliToken.current !== current) return;
+        setCliError(reportLoadError(cause, 'the device CLI'));
+      });
     return () => {
-      cancelled = true;
+      cliToken.current += 1;
     };
-  }, [deviceKey, live, attempt]);
+  }, [live, device]);
 
   useEffect(() => {
     const el = screenRef.current;
@@ -305,7 +315,7 @@ export default function DeviceCliView() {
       .saveDeviceCliCredentials(device.id, username, password)
       .then(() => api.getDeviceCli(device.id))
       .then((catalog) => setCli(catalog))
-      .catch((cause) => setError(reportLoadError(cause, 'CLI credentials')));
+      .catch((cause) => setActionError(reportLoadError(cause, 'CLI credentials')));
   };
 
   const submitTyped = () => {
@@ -376,7 +386,7 @@ export default function DeviceCliView() {
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
         <Link href="/" className="hover:text-foreground hover:underline">Devices</Link>
         <Icon name="ChevronRightIcon" size={12} />
-        <Link href={detailHref(device, form, live)} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
+        <Link href={detailHref(device, form, live, id)} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
         <Icon name="ChevronRightIcon" size={12} />
         <span className="text-foreground">Device CLI</span>
       </nav>
@@ -394,14 +404,17 @@ export default function DeviceCliView() {
               </span>
             </div>
             <Link
-              href={detailHref(device, form, live)}
+              href={detailHref(device, form, live, id)}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
             >
               <Icon name="ArrowLeftIcon" size={16} />Back to device
             </Link>
           </div>
         ) : (
-          <Skeleton className="h-8 w-96" />
+          <div>
+            <p role="status" className="sr-only">Loading device</p>
+            <Skeleton className="h-8 w-96" />
+          </div>
         )}
       </header>
 
