@@ -16,6 +16,7 @@ import type {
   AuditQuery,
   DiffResult,
   DiscoveryCatalog,
+  DeviceDiscoveryJob,
   DiscoveryScan,
   FileDocument,
   HistoryDocument,
@@ -275,6 +276,16 @@ export const api = {
   // BACKEND: POST /api/v1/discovery/scan
   async startScan(target: 'prefix' | 'ip', value: string): Promise<DiscoveryScan> {
     return (await backend()).startScan(target, value);
+  },
+
+  // BACKEND: POST /api/v1/discovery/device
+  async discoverDevice(ip: string, neighbours = false): Promise<DeviceDiscoveryJob> {
+    return (await backend()).discoverDevice(ip, neighbours);
+  },
+
+  // BACKEND: GET /api/v1/discovery/device/{id}
+  async getDeviceDiscovery(id: string): Promise<DeviceDiscoveryJob> {
+    return (await backend()).getDeviceDiscovery(id);
   },
 
   // BACKEND: GET /api/v1/apps/launcher

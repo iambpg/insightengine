@@ -9,6 +9,7 @@ import type {
   AuditQuery,
   DiffResult,
   DiscoveryCatalog,
+  DeviceDiscoveryJob,
   DiscoveryScan,
   FileDocument,
   HistoryDocument,
@@ -306,6 +307,14 @@ export async function listScans(): Promise<DiscoveryScan[]> {
 
 export async function startScan(target: 'prefix' | 'ip', value: string): Promise<DiscoveryScan> {
   return request(`${API}/discovery/scan`, { method: 'POST', body: { target, value } });
+}
+
+export async function discoverDevice(ip: string, neighbours = false): Promise<DeviceDiscoveryJob> {
+  return request(`${API}/discovery/device`, { method: 'POST', body: { ip, neighbours } });
+}
+
+export async function getDeviceDiscovery(id: string): Promise<DeviceDiscoveryJob> {
+  return request(`${API}/discovery/device/${encodeURIComponent(id)}`);
 }
 
 export async function listLauncherApps() {

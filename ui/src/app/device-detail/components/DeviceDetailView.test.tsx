@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/apiError';
 import { api } from '@/lib/apiClient';
@@ -24,7 +25,7 @@ vi.mock('@/lib/apiMode', () => ({
 }));
 
 vi.mock('@/lib/apiClient', () => ({
-  api: { getDevice: vi.fn() },
+  api: { getDevice: vi.fn(), discoverDevice: vi.fn(), getDeviceDiscovery: vi.fn() },
 }));
 
 vi.mock('./DeviceGraphs', () => ({ default: () => null }));
@@ -71,6 +72,8 @@ describe('DeviceDetailView client navigation', () => {
     queryState.value = '';
     window.history.pushState({}, '', '/');
     vi.mocked(api.getDevice).mockReset();
+    vi.mocked(api.discoverDevice).mockReset();
+    vi.mocked(api.getDeviceDiscovery).mockReset();
   });
 
   afterEach(() => {
@@ -182,5 +185,39 @@ describe('DeviceDetailView client navigation', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'core-7' })).toBeInTheDocument();
     expect(api.getDevice).toHaveBeenCalledWith('7');
     expect(api.getDevice).not.toHaveBeenCalledWith('switch-stack');
+  });
+
+  it('rediscovers the management address and shows the Netdisco error', async () => {
+    queryState.value = 'id=42';
+    vi.mocked(api.getDevice).mockResolvedValue(device('42', 'edge-42'));
+    vi.mocked(api.discoverDevice).mockResolvedValue({
+      id: '9',
+      ip: '10.1.0.2',
+      status: 'running',
+      message: 'SNMP reachable via profile default',
+      steps: [
+        { name: 'snmp', status: 'done', message: 'SNMP reachable via profile default' },
+        { name: 'discover', status: 'running', message: 'Discovering.' },
+        { name: 'macsuck', status: 'queued', message: 'Waiting for discover to finish.' },
+        { name: 'arpnip', status: 'queued', message: 'Waiting for discover to finish.' },
+      ],
+    });
+    vi.mocked(api.getDeviceDiscovery).mockResolvedValue({
+      id: '9',
+      ip: '10.1.0.2',
+      status: 'error',
+      message: 'discover failed: could not SNMP connect',
+      steps: [
+        { name: 'snmp', status: 'done', message: 'SNMP reachable via profile default' },
+        { name: 'discover', status: 'error', message: 'discover failed: could not SNMP connect' },
+        { name: 'macsuck', status: 'error', message: 'Not started because discover failed.' },
+        { name: 'arpnip', status: 'error', message: 'Not started because discover failed.' },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<DeviceDetailView />);
+    await user.click(await screen.findByRole('button', { name: 'Rediscover' }));
+    expect(api.discoverDevice).toHaveBeenCalledWith('10.1.0.2', false);
+    expect((await screen.findAllByText('discover failed: could not SNMP connect')).length).toBeGreaterThan(0);
   });
 });

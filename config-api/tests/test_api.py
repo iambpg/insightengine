@@ -449,3 +449,58 @@ def test_fake_promtool_does_not_write_live_file(tmp_path, monkeypatch):
     assert live.read_text(encoding="utf-8") == "groups: []\n"
     good = validate_content("promtool-rules", "yaml", "groups: []\n")
     assert good["ok"] is True
+
+
+def test_device_discover_api_auth_and_precheck(world, monkeypatch):
+    from ie_config.netdisco_jobs import MemoryAdmin
+
+    client = world["client"]
+    _bootstrap(client)
+    csrf = _login(client)
+    created = client.post(
+        "/api/v1/auth/users",
+        headers={"X-CSRF-Token": csrf},
+        json={"email": "op@example.com", "password": "Operatorpass1", "role": "Operator"},
+    )
+    assert created.status_code == 200, created.text
+    client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": csrf})
+    op = _login(client, "op@example.com", "Operatorpass1")
+    denied = client.post(
+        "/api/v1/discovery/device",
+        headers={"X-CSRF-Token": op},
+        json={"ip": "10.9.9.9"},
+    )
+    assert denied.status_code == 403
+    client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": op})
+    csrf = _login(client)
+    discovery = client.app.state.discovery
+    monkeypatch.setenv("SNMP_V2_COMMUNITY", "s3cret-community")
+    discovery._snmp_sync = lambda: None
+    discovery.restart_backend = lambda: False
+    discovery._probe = lambda profile, host, auth: {"ok": False, "error": "timeout"}
+    discovery._jobs = MemoryAdmin()
+    missing = client.post("/api/v1/discovery/device", json={"ip": "10.9.9.9"})
+    assert missing.status_code == 403
+    bad = client.post(
+        "/api/v1/discovery/device",
+        headers={"X-CSRF-Token": csrf},
+        json={"ip": "not-an-ip", "neighbours": False},
+    )
+    assert bad.status_code == 400
+    failed = client.post(
+        "/api/v1/discovery/device",
+        headers={"X-CSRF-Token": csrf},
+        json={"ip": "10.9.9.9", "neighbours": True},
+    )
+    assert failed.status_code == 200, failed.text
+    body = failed.json()
+    assert body["status"] == "error"
+    assert "timed out" in body["message"]
+    assert "s3cret-community" not in failed.text
+    assert body["steps"][0]["name"] == "snmp"
+    status = client.get("/api/v1/discovery/device/" + body["id"])
+    assert status.status_code == 200
+    assert status.json()["status"] == "error"
+    by_ip = client.get("/api/v1/discovery/device/10.9.9.9")
+    assert by_ip.status_code == 200
+    assert by_ip.json()["id"] == body["id"]
