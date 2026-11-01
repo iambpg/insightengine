@@ -7,6 +7,7 @@ import Pagination from '@/components/ui/Pagination';
 import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
+import { usePageQuery } from '@/lib/usePageQuery';
 import type { DeviceHealth, SiteRow } from '@/lib/types';
 import SiteList from './SiteList';
 import SiteDetail from './SiteDetail';
@@ -24,14 +25,18 @@ export default function SiteViewScreen() {
   const [reload, setReload] = useState(0);
   const [text, setText] = useState('');
   const [regions, setRegions] = useState<string[] | undefined>();
+  const { ready, params } = usePageQuery('/site-view');
+  const wantedSite = params.get('site') ?? '';
+  const wantedQuery = params.get('q') ?? '';
+  const [appliedQuery, setAppliedQuery] = useState<string | null>(null);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get('q');
-    if (q) {
-      setText(q);
-      setSearch(q);
-    }
-  }, []);
+    if (!ready || appliedQuery === wantedQuery) return;
+    setText(wantedQuery);
+    setSearch(wantedQuery);
+    setPage(1);
+    setAppliedQuery(wantedQuery);
+  }, [ready, wantedQuery, appliedQuery]);
 
   useEffect(() => {
     if (text === search) return;
@@ -43,6 +48,7 @@ export default function SiteViewScreen() {
   }, [text, search]);
 
   useEffect(() => {
+    if (!ready) return undefined;
     let cancelled = false;
     setRows(null);
     setError(null);
@@ -53,20 +59,24 @@ export default function SiteViewScreen() {
         setRows(res.rows);
         setTotal(res.total);
         if (res.regions) setRegions(res.regions);
-        const wanted = new URLSearchParams(window.location.search).get('site');
-        setActive((current) => {
-          if (wanted) {
-            const match = res.rows.find((row) => row.id === wanted);
-            if (match) return match;
-          }
-          return current ?? res.rows[0] ?? null;
-        });
       })
       .catch((cause) => !cancelled && setError(reportLoadError(cause, 'sites')));
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize, search, health, region, reload]);
+  }, [ready, page, pageSize, search, health, region, reload]);
+
+  useEffect(() => {
+    if (!ready || !rows) return;
+    if (wantedSite) {
+      const match = rows.find((row) => row.id === wantedSite);
+      if (match) {
+        setActive(match);
+        return;
+      }
+    }
+    setActive((current) => current ?? rows[0] ?? null);
+  }, [ready, rows, wantedSite]);
 
   return (
     <div className="space-y-5">
@@ -124,7 +134,7 @@ export default function SiteViewScreen() {
           <Pagination page={page} pageSize={pageSize} total={total} noun="sites" sizes={[10, 25, 50]} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} />
         </section>
 
-        <SiteDetail site={active} />
+        <SiteDetail site={active} loading={!ready || (rows === null && !error)} />
       </div>
     </div>
   );

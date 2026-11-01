@@ -9,7 +9,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
 import { api } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
-import { reportLoadError } from '@/lib/loadError';
+import { useKeyedLoad } from '@/lib/useKeyedLoad';
+import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData, PortInfo, SourceComparison } from '@/lib/types';
 import IssuesPanel from './IssuesPanel';
@@ -20,6 +21,11 @@ import DeviceGraphs from './DeviceGraphs';
 import PortTable from './PortTable';
 
 const FORMS = Object.keys(FACEPLATE_SAMPLES);
+const NEEDS_ID = 'Open a device from the list. This page needs a device id.';
+
+function isFaceplateKey(value: string): boolean {
+  return FORMS.includes(value) || value.startsWith('fg-') || value.startsWith('pa-');
+}
 
 const DEVICE_ICON: Record<string, string> = {
   'access-switch-24': 'ServerIcon',
@@ -33,53 +39,45 @@ const DEVICE_ICON: Record<string, string> = {
   generic: 'CubeIcon',
 };
 
-function initialDeviceKey(): string {
-  if (typeof window === 'undefined') return 'switch-stack';
-  const params = new URLSearchParams(window.location.search);
-  const id = params.get('id');
-  const form = params.get('form');
-  if (!isMockMode()) return id || 'switch-stack';
-  if (form) return form;
-  return 'switch-stack';
-}
-
 export default function DeviceDetailView() {
-  const [form, setForm] = useState<string>('switch-stack');
-  const [deviceKey, setDeviceKey] = useState<string>(initialDeviceKey);
-  const [device, setDevice] = useState<DeviceDetailData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const live = !isMockMode();
+  const { ready, params } = usePageQuery('/device-detail');
+  const id = params.get('id') ?? '';
+  const formQuery = params.get('form') ?? '';
+  const [pickedForm, setPickedForm] = useState<string | null>(null);
   const [selected, setSelected] = useState<PortInfo | null>(null);
   const [rerun, setRerun] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [missingId, setMissingId] = useState(false);
+
+  const mockKey = pickedForm || (isFaceplateKey(formQuery) ? formQuery : '') || 'switch-stack';
+  const deviceKey = live ? id : mockKey;
+  const canLoad = ready && (!live || Boolean(id));
+  const loaded = useKeyedLoad<DeviceDetailData>(deviceKey, canLoad, attempt, 'this device', (key) => api.getDevice(key));
+  const device = loaded.data;
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get('form');
-    if (q && (FORMS.includes(q) || q.startsWith('fg-') || q.startsWith('pa-'))) setForm(q);
-  }, []);
+    setSelected(null);
+  }, [deviceKey]);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!isMockMode() && deviceKey === 'switch-stack' && typeof window !== 'undefined' && !new URLSearchParams(window.location.search).get('id')) {
-      setError('Open a device from the list. This page needs a device id.');
+    if (!ready || !live || id) {
+      setMissingId(false);
       return undefined;
     }
-    setDevice(null);
-    setSelected(null);
-    setError(null);
-    api
-      .getDevice(deviceKey)
-      .then((d) => {
-        if (cancelled) return;
-        setDevice(d);
-        const face = d.faceplate?.form_factor;
-        if (face && FORMS.includes(face)) setForm(face);
-      })
-      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'this device')));
-    return () => {
-      cancelled = true;
-    };
-  }, [deviceKey, attempt]);
+    // A client navigation can paint `?form=` before `id`. Keep loading until
+    // that snapshot has had a chance to gain the id.
+    const timer = window.setTimeout(() => setMissingId(true), 50);
+    return () => window.clearTimeout(timer);
+  }, [ready, live, id]);
+
+  const face = device?.faceplate?.form_factor;
+  const form = (!live && pickedForm && isFaceplateKey(pickedForm) ? pickedForm : '')
+    || (face && isFaceplateKey(face) ? face : '')
+    || (isFaceplateKey(formQuery) ? formQuery : '')
+    || 'switch-stack';
+  const showMissing = ready && live && !id && missingId;
+  const error = showMissing ? NEEDS_ID : loaded.error;
 
   const allPorts = useMemo<PortInfo[]>(() => {
     if (!device) return [];
@@ -152,7 +150,7 @@ export default function DeviceDetailView() {
                 href={
                   isMockMode()
                     ? `/device-cli?form=${encodeURIComponent(form)}`
-                    : `/device-cli?id=${encodeURIComponent(device?.id || deviceKey)}&form=${encodeURIComponent(form)}`
+                    : `/device-cli?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
                 }
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
               >
@@ -163,7 +161,7 @@ export default function DeviceDetailView() {
                 href={
                   isMockMode()
                     ? `/topology?form=${encodeURIComponent(form)}`
-                    : `/topology?id=${encodeURIComponent(device?.id || deviceKey)}&form=${encodeURIComponent(form)}`
+                    : `/topology?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
                 }
                 className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
               >
@@ -174,6 +172,7 @@ export default function DeviceDetailView() {
           </div>
         ) : (
           <div className="space-y-3">
+            <p role="status" className="sr-only">Loading device</p>
             <Skeleton className="h-8 w-72" />
             <Skeleton className="h-5 w-full max-w-3xl" />
           </div>
@@ -216,10 +215,7 @@ export default function DeviceDetailView() {
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => {
-                  setForm(f);
-                  setDeviceKey(f);
-                }}
+                onClick={() => setPickedForm(f)}
                 className={`inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
                   active ? 'border-primary bg-primary/10 text-foreground shadow-card' : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}

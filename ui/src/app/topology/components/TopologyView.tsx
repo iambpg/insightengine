@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge } from '@/components/ui/Badge';
@@ -10,6 +9,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
+import { useKeyedLoad } from '@/lib/useKeyedLoad';
+import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData, DeviceHealth, DeviceRow, SiteRow } from '@/lib/types';
 import DeviceArt, { ArtDefs } from '@/app/topology/components/DeviceArt';
@@ -163,36 +164,16 @@ function ErrorBox({ text, onRetry }: { text: string; onRetry: () => void }) {
 }
 
 function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: string }) {
-  const [device, setDevice] = useState<DeviceDetailData | null>(null);
-  const [siteDevices, setSiteDevices] = useState<DeviceRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setDevice(null);
-    setSiteDevices(null);
-    setError(null);
-    api
-      .getDevice(deviceKey)
-      .then((d) => {
-        if (cancelled) return;
-        setDevice(d);
-        const siteKey = isMockMode() ? 3 : d.siteId;
-        if (!siteKey) {
-          setSiteDevices([]);
-          return;
-        }
-        api
-          .listSiteDevices(siteKey)
-          .then((rows) => !cancelled && setSiteDevices(rows))
-          .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the topology')));
-      })
-      .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the topology')));
-    return () => {
-      cancelled = true;
-    };
-  }, [deviceKey, reload]);
+  const loaded = useKeyedLoad(deviceKey, true, reload, 'the topology', async (key) => {
+    const device = await api.getDevice(key);
+    const siteKey = isMockMode() ? 3 : device.siteId;
+    const siteDevices = siteKey ? await api.listSiteDevices(siteKey) : [];
+    return { device, siteDevices };
+  });
+  const device = loaded.data?.device ?? null;
+  const siteDevices = loaded.data?.siteDevices ?? null;
+  const error = loaded.error;
 
   const live = !isMockMode();
   const devTopo = useMemo(() => (device ? buildDeviceTopology(device, siteDevices ?? [], live) : null), [device, siteDevices, live]);
@@ -235,7 +216,10 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
             </Link>
           </div>
         ) : (
-          <Skeleton className="h-8 w-96" />
+          <div>
+            <p role="status" className="sr-only">Loading device</p>
+            <Skeleton className="h-8 w-96" />
+          </div>
         )}
       </header>
 
@@ -355,11 +339,20 @@ function SiteTopologyPage({ site, onBack }: { site: SiteRow; onBack: () => void 
 }
 
 export default function TopologyView() {
-  const searchParams = useSearchParams();
-  const q = searchParams?.get('form') ?? null;
+  const { ready, params } = usePageQuery('/topology');
+  const q = params.get('form');
   const form = q && FORMS.includes(q) ? q : null;
-  const id = searchParams?.get('id');
+  const id = params.get('id');
   const [site, setSite] = useState<SiteRow | null>(null);
+
+  if (!ready) {
+    return (
+      <div className="px-3 sm:px-4 py-4" role="status">
+        <p className="sr-only">Loading topology</p>
+        <Skeleton className="h-72 w-full" />
+      </div>
+    );
+  }
 
   if (!isMockMode() && id) return <DeviceTopologyPage form={form ?? 'generic'} deviceKey={id} />;
   if (isMockMode() && form) return <DeviceTopologyPage form={form} deviceKey={form} />;
