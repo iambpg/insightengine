@@ -7,7 +7,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
-import { isMockMode } from '@/lib/apiMode';
+import { devicePath, isMockMode } from '@/lib/apiMode';
 import { reportLoadError } from '@/lib/loadError';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { CliCatalog, DeviceDetailData } from '@/lib/types';
@@ -167,12 +167,19 @@ function resolveTyped(raw: string, d: DeviceDetailData): string | null {
   return null;
 }
 
+function detailHref(device: DeviceDetailData | null, form: string, live: boolean): string {
+  if (!live) return `/device-detail?form=${encodeURIComponent(form)}`;
+  const id = device?.id || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : '') || '';
+  if (!id) return '/';
+  return devicePath(id, device?.faceplate?.form_factor || form);
+}
+
 function initialDeviceKey(): string {
   if (typeof window === 'undefined') return 'switch-stack';
   const params = new URLSearchParams(window.location.search);
   const id = params.get('id');
   const form = params.get('form');
-  if (!isMockMode() && id) return id;
+  if (!isMockMode()) return id || 'switch-stack';
   if (form) return form;
   return 'switch-stack';
 }
@@ -369,7 +376,7 @@ export default function DeviceCliView() {
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
         <Link href="/" className="hover:text-foreground hover:underline">Devices</Link>
         <Icon name="ChevronRightIcon" size={12} />
-        <Link href={`/device-detail?form=${form}`} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
+        <Link href={detailHref(device, form, live)} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
         <Icon name="ChevronRightIcon" size={12} />
         <span className="text-foreground">Device CLI</span>
       </nav>
@@ -387,7 +394,7 @@ export default function DeviceCliView() {
               </span>
             </div>
             <Link
-              href={`/device-detail?form=${form}`}
+              href={detailHref(device, form, live)}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
             >
               <Icon name="ArrowLeftIcon" size={16} />Back to device

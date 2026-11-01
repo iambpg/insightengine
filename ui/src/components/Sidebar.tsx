@@ -123,13 +123,16 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
       </div>
 
       <nav className="scroll-thin flex-1 space-y-5 overflow-y-auto px-2 py-4" aria-label="Primary">
-        {GROUPS.map((g) => (
+        {GROUPS.map((g) => {
+          const items = g.items.filter((item) => isMockMode() || item.href !== '/device-detail');
+          if (items.length === 0) return null;
+          return (
           <div key={`grp-${g.title}`}>
             {!isCollapsed && (
               <p className="label-caps mb-1.5 px-3 text-[10px] text-down">{g.title}</p>
             )}
             <ul className="space-y-0.5">
-              {g.items.map((item) => {
+              {items.map((item) => {
                 const active = isActive(item.href);
                 const badge = item.href === '/not-in-net-box' ? pending : item.badge;
                 return (
@@ -166,7 +169,8 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
               })}
             </ul>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="border-t border-navy-3 p-2">

@@ -4,14 +4,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
-import { HealthBadge } from '@/components/ui/Badge';
+import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
 import { api } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
 import { reportLoadError } from '@/lib/loadError';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
-import type { DeviceDetailData, PortInfo } from '@/lib/types';
+import type { DeviceDetailData, PortInfo, SourceComparison } from '@/lib/types';
 import IssuesPanel from './IssuesPanel';
 import HealthChecks from './HealthChecks';
 import HardwareHealth from './HardwareHealth';
@@ -38,7 +38,7 @@ function initialDeviceKey(): string {
   const params = new URLSearchParams(window.location.search);
   const id = params.get('id');
   const form = params.get('form');
-  if (!isMockMode() && id) return id;
+  if (!isMockMode()) return id || 'switch-stack';
   if (form) return form;
   return 'switch-stack';
 }
@@ -114,6 +114,7 @@ export default function DeviceDetailView() {
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="font-mono-data text-2xl font-semibold tracking-tight">{device.hostname}</h1>
                 <HealthBadge health={device.health} />
+                <StatusBadge status={device.status} />
                 {device.faceplate.modelName && (
                   <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono-data text-xs font-semibold text-foreground">{device.faceplate.modelName}</span>
                 )}
@@ -194,6 +195,8 @@ export default function DeviceDetailView() {
         </div>
       </section>
 
+      {device && !isMockMode() ? <ComparisonPanel comparison={device.comparison} /> : null}
+
       {/* faceplate */}
       <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-labelledby="fp-title">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5">
@@ -203,6 +206,7 @@ export default function DeviceDetailView() {
           </div>
         </div>
 
+        {isMockMode() ? (
         <div role="tablist" aria-label="Devices at this site" className="scroll-thin flex gap-2 overflow-x-auto border-b border-border bg-muted/40 px-4 py-2">
           {FORMS.map((f) => {
             const active = f === form;
@@ -226,6 +230,7 @@ export default function DeviceDetailView() {
             );
           })}
         </div>
+        ) : null}
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto]">
           <div className="min-w-0 p-4">
@@ -269,6 +274,50 @@ export default function DeviceDetailView() {
 
       {device && <PortTable ports={allPorts} selectedId={selected?.id ?? null} onSelect={setSelected} />}
     </div>
+  );
+}
+
+const COMPARE_ROWS: { key: keyof SourceComparison['netbox']; label: string }[] = [
+  { key: 'vendor', label: 'Vendor' },
+  { key: 'model', label: 'Model' },
+  { key: 'serial', label: 'Serial' },
+  { key: 'os', label: 'OS' },
+  { key: 'portCount', label: 'Port count' },
+];
+
+function ComparisonPanel({ comparison }: { comparison?: SourceComparison }) {
+  if (!comparison) return null;
+  const source = comparison.faceplateSource || 'none';
+  return (
+    <section className="rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card" aria-label="NetBox and Netdisco comparison">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold">NetBox and Netdisco</h2>
+          <p className="text-xs text-muted-foreground">Faceplate built from {source}.</p>
+        </div>
+        {comparison.differ ? (
+          <span className="rounded-md border border-warning/40 bg-warning/15 px-2 py-1 text-xs font-semibold text-foreground">NetBox and Netdisco differ</span>
+        ) : null}
+      </div>
+      <table className="mt-3 w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="py-1.5 pr-3 font-semibold">Field</th>
+            <th className="py-1.5 pr-3 font-semibold">NetBox</th>
+            <th className="py-1.5 font-semibold">Netdisco</th>
+          </tr>
+        </thead>
+        <tbody>
+          {COMPARE_ROWS.map((row) => (
+            <tr key={row.key} className="border-b border-border/70">
+              <th scope="row" className="py-1.5 pr-3 text-left font-medium">{row.label}</th>
+              <td className="py-1.5 pr-3 font-mono-data">{String(comparison.netbox?.[row.key] ?? '—') || '—'}</td>
+              <td className="py-1.5 font-mono-data">{String(comparison.netdisco?.[row.key] ?? '—') || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

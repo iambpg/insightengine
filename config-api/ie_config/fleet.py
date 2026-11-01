@@ -136,13 +136,37 @@ def _secret_match(got: str, want: str) -> bool:
 
 
 def is_form_key(value: str) -> bool:
-    if value in FORM_FACTORS:
-        return True
-    return value.startswith("fg-") or value.startswith("pa-")
+    """Faceplate sample keys. Hostnames such as fg-edge and pa-edge are devices."""
+    return value in FORM_FACTORS
 
 
-def form_factor_for(role_slug: str, role_name: str, model: str) -> tuple[str, str]:
-    """Map a NetBox role to the UI display role and faceplate form factor."""
+# AP only when the role or the model says so. Hostname prefixes are not a signal:
+# "apc-ups" and "apex-" are not access points.
+_AP_MODEL = re.compile(
+    r"(?i)(?:\bair-ap|\bair-cap|\bair-lap|\bc91\d{2}ax|\bcw91\d{2}|\bfap[-\s]?\d|\baruba\s*ap|\bmeraki\s*mr|\bmr\d{2,3}\b)"
+)
+_FW_MODEL = re.compile(r"(?i)(fortigate|\bfg-\d|\bpa-\d|\basa-?\d|\bfpr-?\d|firepower)")
+_ROUTER_MODEL = re.compile(r"(?i)(\bisr-?\d|\basr-?\d)")
+_WLC_MODEL = re.compile(r"(?i)(\bc9800|\bair-ct|\bwlc\b|wireless\s+controller)")
+_SWITCH_MODEL = re.compile(r"(?i)(catalyst\s*\d|\bc9[23]\d{2}|\bc2960|\bc3850|\bc3650|\bnexus|\bn9k|fortiswitch)")
+_VIRTUAL_NAME = re.compile(
+    r"(?i)^(vlan|vl\d|loopback|lo\d*|null\d*|tunnel|tu\d|bdi|nve|port-channel|po\d|cpu|stackport|internal)"
+)
+_FORM_KIND = {
+    "access-switch-24": "switch",
+    "access-switch-48": "switch",
+    "switch-stack": "stack",
+    "ceiling-ap": "ap",
+    "wireless-controller": "controller",
+    "firewall": "firewall",
+    "branch-router": "router",
+    "modular-chassis": "chassis",
+    "generic": "generic",
+}
+
+
+def _role_form(role_slug: str, role_name: str, model: str) -> tuple[str, str]:
+    """Role and model text only. Same order the faceplate used before classify_device."""
     slug = (role_slug or "").strip().lower()
     name = (role_name or "").strip()
     blob = " ".join((slug, name.lower(), (model or "").lower()))
@@ -165,6 +189,333 @@ def form_factor_for(role_slug: str, role_name: str, model: str) -> tuple[str, st
         return "Access switch", form
     display = name or role_slug or "Unclassified"
     return display, "generic"
+
+
+def _size_from_model(model: str) -> str:
+    text = model or ""
+    if re.search(r"(^|[^0-9])24([^0-9]|$)", text) or re.search(r"(^|[^0-9])(8|12)([^0-9]|$)", text):
+        return "access-switch-24"
+    return "access-switch-48"
+
+
+def _mbps(value) -> float:
+    if value is None or value == "":
+        return 0.0
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+        return number / 1_000_000.0 if number >= 100_000 else number
+    text = str(value).strip().lower().replace(",", "")
+    match = re.search(r"([\d.]+)\s*([gmk])?", text)
+    if not match:
+        return 0.0
+    try:
+        number = float(match.group(1))
+    except ValueError:
+        return 0.0
+    unit = match.group(2) or ""
+    if unit == "g":
+        return number * 1000.0
+    if unit == "k":
+        return number / 1000.0
+    if not unit and number >= 100_000:
+        return number / 1_000_000.0
+    return number
+
+
+def port_medium(name: str, type_text: str = "", mbps: float = 0) -> str:
+    """Copper or optic from the port type, speed and name."""
+    blob = "%s %s" % (name or "", type_text or "")
+    low = blob.lower()
+    if "console" in low:
+        return "CONSOLE"
+    if "usb" in low:
+        return "USB"
+    if "mgmt" in low or "management" in low or low.strip().startswith("fxp"):
+        return "MGMT"
+    if "base-t" in low or "rj45" in low:
+        return "RJ45"
+    if "qsfp" in low or "40gbase" in low or "100gbase" in low or (mbps and mbps >= 40000):
+        return "QSFP"
+    if any(part in low for part in ("sfp+", "sfp28", "10gbase", "sfpp", "25gbase")) or (mbps and mbps >= 10000):
+        return "SFP+"
+    if any(part in low for part in ("sfp", "base-x", "base-sr", "base-lr", "fiber", "fibre")):
+        return "SFP"
+    named = port_type_for(name or "")
+    return named
+
+
+def _is_radio(name: str, type_text: str = "") -> bool:
+    blob = "%s %s" % (name or "", type_text or "")
+    low = blob.lower()
+    return any(token in low for token in ("radio", "dot11", "802.11", "wlan"))
+
+
+def _is_virtual_port(name: str, type_text: str = "") -> bool:
+    low_type = (type_text or "").lower()
+    if low_type in ("virtual", "lag", "bridge") or "virtual" in low_type:
+        return True
+    return bool(_VIRTUAL_NAME.match(name or ""))
+
+
+def _norm_text(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip().lower())
+
+
+def _port_name(port: dict) -> str:
+    return str(port.get("name") or port.get("port") or "")
+
+
+def _port_type_text(port: dict) -> str:
+    kind = port.get("type")
+    if isinstance(kind, dict):
+        return str(kind.get("label") or kind.get("value") or "")
+    return str(kind or "")
+
+
+def _is_physical(port: dict) -> bool:
+    return not _is_virtual_port(_port_name(port), _port_type_text(port))
+
+
+def _medium_of(port: dict) -> str:
+    stored = port.get("medium")
+    if stored in ("RJ45", "SFP", "SFP+", "QSFP", "MGMT", "CONSOLE", "USB"):
+        return stored
+    return port_medium(_port_name(port), _port_type_text(port), _mbps(port.get("speed")))
+
+
+def _ethernet_ports(ports: list[dict]) -> list[dict]:
+    kept = []
+    for port in ports or []:
+        if not _is_physical(port) or _is_radio(_port_name(port), _port_type_text(port)):
+            continue
+        if _medium_of(port) in ("CONSOLE", "USB", "MGMT"):
+            continue
+        kept.append(port)
+    return kept
+
+
+def _copper_count(ports: list[dict]) -> int:
+    return sum(1 for port in _ethernet_ports(ports) if _medium_of(port) == "RJ45")
+
+
+def _switch_sized(ports: list[dict]) -> bool:
+    return len(_ethernet_ports(ports)) >= 8
+
+
+def _ap_shaped(ports: list[dict]) -> bool:
+    if not ports:
+        return False
+    radios = [port for port in ports if _is_physical(port) and _is_radio(_port_name(port), _port_type_text(port))]
+    return len(radios) >= 1 and len(_ethernet_ports(ports)) <= 2
+
+
+def _is_stack(ports: list[dict], role_blob: str, model: str) -> bool:
+    blob = "%s %s" % (role_blob or "", model or "")
+    if "stack" in blob.lower() or "distribution" in blob.lower():
+        return True
+    members = set()
+    for port in ports or []:
+        match = _MEMBER_RE.match(_port_name(port))
+        if match:
+            members.add(int(match.group(1)))
+    return len(members) >= 2
+
+
+def _switch_form_from_ports(ports: list[dict], model: str) -> str:
+    if _is_stack(ports, "", model):
+        return "switch-stack"
+    copper = _copper_count(ports)
+    if copper <= 0:
+        return _size_from_model(model)
+    if copper <= 28:
+        return "access-switch-24"
+    return "access-switch-48"
+
+
+def _canonical_port(port: dict, fallback_state: str = "down") -> dict:
+    name = _port_name(port)
+    mbps = _mbps(port.get("speed"))
+    medium = _medium_of(port)
+    admin = str(port.get("admin") or port.get("up_admin") or "").lower()
+    oper = str(port.get("up") or port.get("state") or "").lower()
+    if port.get("enabled") is False or admin in ("down", "disabled", "off"):
+        state = "disabled"
+    elif oper in ("up", "true", "1"):
+        state = "up"
+    elif oper in ("warning", "fault", "down", "false", "0"):
+        state = oper if oper in ("warning", "fault", "down") else "down"
+    elif port.get("enabled") is True and not oper:
+        state = "up"
+    else:
+        state = fallback_state
+    built = {
+        "id": str(port.get("id") or name),
+        "name": name,
+        "type": medium if medium in ("RJ45", "SFP", "SFP+", "QSFP", "MGMT", "CONSOLE", "USB") else "RJ45",
+        "speed": speed_text(mbps, state),
+        "state": state,
+        "utilisation": float(port.get("utilisation") or 0),
+        "errors": int(port.get("errors") or 0),
+    }
+    remote = str(port.get("remoteName") or port.get("remote_id") or "")
+    remote_port = str(port.get("remotePort") or port.get("remote_port") or "")
+    remote_ip = str(port.get("remoteAddress") or "")
+    if remote or remote_ip:
+        built["neighbour"] = {
+            "device": remote or remote_ip,
+            "port": remote_port,
+            "deviceId": str(port.get("deviceId") or ""),
+        }
+    return built
+
+
+def _inventory_ports(rows: list[dict] | None) -> list[dict]:
+    ports = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        if _is_virtual_port(_port_name(row), _port_type_text(row)):
+            continue
+        ports.append(_canonical_port(row))
+    return ports
+
+
+def _comparison_side(vendor: str, model: str, serial: str, os_name: str, port_count: int) -> dict:
+    return {
+        "vendor": vendor or "",
+        "model": model or "",
+        "serial": mask_serial(serial) if (serial or "").strip() else "",
+        "os": os_name or "",
+        "portCount": int(port_count or 0),
+    }
+
+
+def _sides_differ(netbox_side: dict, netdisco_side: dict, raw_netbox: dict, raw_netdisco: dict) -> bool:
+    nb_ports = int(netbox_side.get("portCount") or 0)
+    nd_ports = int(netdisco_side.get("portCount") or 0)
+    if nb_ports > 0 and nd_ports > 0 and nb_ports != nd_ports:
+        return True
+    for key in ("vendor", "model", "os"):
+        left = _norm_text(netbox_side.get(key) or "")
+        right = _norm_text(netdisco_side.get(key) or "")
+        if left and right and left != right:
+            return True
+    left_serial = _norm_text(raw_netbox.get("serial") or "")
+    right_serial = _norm_text(raw_netdisco.get("serial") or "")
+    if left_serial and right_serial and left_serial != right_serial:
+        return True
+    return False
+
+
+def classify_device(netbox: dict | None, netdisco: dict | None) -> dict:
+    """Choose a faceplate class from NetBox role and device type, then Netdisco.
+
+    NetBox role, manufacturer and model are the first signal. Netdisco vendor,
+    model, sysDescr and the port list cross-check that. An access point is
+    returned only when the role or the model says so, or when the port list is
+    one or two ethernet uplinks plus radios. Anything else unknown is generic
+    and keeps its real ports. A hostname such as apc-ups is not an access point.
+    When both sides have a port count and they disagree, the faceplate uses
+    the Netdisco ports.
+    """
+    nb = netbox or {}
+    nd = netdisco or {}
+    role_slug = str(nb.get("role_slug") or "")
+    role_name = str(nb.get("role_name") or "")
+    manufacturer = str(nb.get("manufacturer") or "")
+    model = str(nb.get("model") or "")
+    nd_model = str(nd.get("model") or "")
+    nd_vendor = str(nd.get("vendor") or "")
+    description = str(nd.get("description") or nd.get("sysDescr") or "")
+    device_blob = " ".join(part for part in (manufacturer, model, nd_vendor, nd_model, description) if part)
+    role_blob = " ".join((role_slug.lower(), role_name.lower()))
+    # Role classification uses the NetBox model only. Netdisco model and sysDescr
+    # are applied afterwards so a disagreeing discovery record can correct it.
+    display, form = _role_form(role_slug, role_name, model)
+    nb_ports = _inventory_ports(nb.get("interfaces") if isinstance(nb.get("interfaces"), list) else nb.get("ports"))
+    nd_ports = _inventory_ports(nd.get("ports") if isinstance(nd.get("ports"), list) else None)
+    evidence = nd_ports or nb_ports
+    ap_model = bool(_AP_MODEL.search(device_blob))
+    if ap_model and not _switch_sized(evidence):
+        display, form = "Access point", "ceiling-ap"
+    elif _FW_MODEL.search(device_blob) or (
+        form == "generic" and any(token in device_blob.lower() for token in ("fortinet", "palo alto", "paloalto"))
+        and "fortiswitch" not in device_blob.lower()
+    ):
+        display, form = "Firewall", "firewall"
+    elif _ROUTER_MODEL.search(device_blob) and form in ("generic", "access-switch-24", "access-switch-48"):
+        display, form = "Branch router", "branch-router"
+    elif _WLC_MODEL.search(device_blob) and form == "generic":
+        display, form = "Wireless controller", "wireless-controller"
+    elif form == "generic" and _SWITCH_MODEL.search(device_blob):
+        display, form = "Access switch", _size_from_model(model or nd_model)
+    port_count_hint = 0
+    try:
+        port_count_hint = int(nd.get("port_count") or 0)
+    except (TypeError, ValueError):
+        port_count_hint = 0
+    if form == "ceiling-ap" and not ap_model:
+        if _switch_sized(evidence) or port_count_hint >= 12:
+            display, form = "Access switch", _switch_form_from_ports(evidence, model or nd_model) if evidence else _size_from_model(model or nd_model)
+        elif not (role_slug.lower() in ("access-point", "ap") or "access point" in role_blob or "access-point" in role_blob):
+            display, form = "Unclassified", "generic"
+    elif form == "generic" and _ap_shaped(evidence):
+        display, form = "Access point", "ceiling-ap"
+    elif form == "generic" and (_switch_sized(evidence) or port_count_hint >= 12):
+        display, form = "Access switch", _switch_form_from_ports(evidence, model or nd_model) if evidence else _size_from_model(model or nd_model)
+    if form in ("access-switch-24", "access-switch-48") and evidence and _is_stack(evidence, role_blob, model or nd_model):
+        form = "switch-stack"
+        display = "Switch stack"
+    elif form in ("access-switch-24", "access-switch-48") and evidence and nd_ports:
+        form = _switch_form_from_ports(nd_ports, nd_model or model)
+        if form == "switch-stack":
+            display = "Switch stack"
+        else:
+            display = "Access switch"
+    if form not in FORM_FACTORS:
+        form = "generic"
+    nb_count = len(nb_ports)
+    nd_count = len(nd_ports) if nd_ports else (port_count_hint if not nd.get("ports") else 0)
+    if nd_ports and nb_ports and len(nd_ports) != len(nb_ports):
+        face_ports = nd_ports
+        source = "netdisco"
+    elif nb_ports:
+        face_ports = nb_ports
+        source = "netbox"
+    elif nd_ports:
+        face_ports = nd_ports
+        source = "netdisco"
+    else:
+        face_ports = []
+        source = "none"
+    os_nd = " ".join(part for part in (str(nd.get("os") or ""), str(nd.get("os_ver") or "")) if part).strip()
+    raw_nb = {"serial": str(nb.get("serial") or "")}
+    raw_nd = {"serial": str(nd.get("serial") or "")}
+    nb_side = _comparison_side(manufacturer, model, raw_nb["serial"], str(nb.get("platform") or ""), nb_count)
+    nd_side = _comparison_side(nd_vendor, nd_model, raw_nd["serial"], os_nd, nd_count if nd_count else len(nd_ports))
+    differ = _sides_differ(nb_side, nd_side, raw_nb, raw_nd)
+    return {
+        "role": display,
+        "form": form,
+        "kind": _FORM_KIND.get(form, "generic"),
+        "faceplate_source": source,
+        "ports": face_ports,
+        "comparison": {
+            "netbox": nb_side,
+            "netdisco": nd_side,
+            "faceplateSource": source,
+            "differ": differ,
+        },
+    }
+
+
+def form_factor_for(role_slug: str, role_name: str, model: str) -> tuple[str, str]:
+    """Map a NetBox role and model to the UI display role and faceplate form factor."""
+    result = classify_device(
+        {"role_slug": role_slug, "role_name": role_name, "model": model, "manufacturer": "", "hostname": ""},
+        None,
+    )
+    return result["role"], result["form"]
 
 
 def classify_health(probe, snmp_up, last_age_s, ports_fault, ports_warn, ports_total) -> str:
@@ -537,7 +888,7 @@ class FleetService:
             return cached
         sites = {row["id"]: row for row in self._sites_raw(client)}
         rows = []
-        for raw in self._walk(client, "/api/dcim/devices/?status=active&limit=1000"):
+        for raw in self._walk(client, "/api/dcim/devices/?limit=1000"):
             site = raw.get("site") if isinstance(raw.get("site"), dict) else {}
             site_id = str(site.get("id") or "")
             known = sites.get(site_id) or {}
@@ -547,9 +898,15 @@ class FleetService:
             manufacturer = dtype.get("manufacturer") if isinstance(dtype.get("manufacturer"), dict) else {}
             platform = raw.get("platform") if isinstance(raw.get("platform"), dict) else {}
             role = raw.get("role") if isinstance(raw.get("role"), dict) else {}
+            status_raw = raw.get("status")
+            if isinstance(status_raw, dict):
+                status = str(status_raw.get("value") or status_raw.get("label") or "active")
+            else:
+                status = str(status_raw or "active")
             rows.append({
                 "id": str(raw.get("id")),
                 "name": str(raw.get("name") or ("device-%s" % raw.get("id"))),
+                "status": status.strip().lower() or "active",
                 "role_slug": str(role.get("slug") or ""),
                 "role_name": str(role.get("name") or ""),
                 "site_id": site_id,
@@ -702,7 +1059,9 @@ class FleetService:
             ports_fault = int(_lookup(prom["ports_fault"], host, ip) or 0)
             ports_warn = int(_lookup(prom["ports_warn"], host, ip) or 0)
             uptime_text, uptime_s = format_uptime(_lookup(prom["uptime"], host, ip))
-            display, form = form_factor_for(device["role_slug"], device["role_name"], device["model"])
+            nd_hint = _index_hit(self._netdisco_index(), device.get("ip") or "", device.get("name") or "")
+            classified = classify_device(_netbox_facts(device), nd_hint)
+            display, form = classified["role"], classified["form"]
             health = classify_health(probe, snmp_up, age, ports_fault, ports_warn, ports_total)
             if health == "unreachable":
                 ports_up = 0
@@ -725,6 +1084,7 @@ class FleetService:
                 "lastPoll": format_ago(age),
                 "last_age": age if age is not None else 10**12,
                 "formFactor": form,
+                "status": device.get("status") or "active",
                 "_device": device,
             })
         roles = sorted({row["role"] for row in built if row["role"]})
@@ -745,9 +1105,10 @@ class FleetService:
             "portsWarn": row["portsWarn"],
             "portsFault": row["portsFault"],
             "uptime": row["uptime"],
-            "lastPoll": row["lastPoll"],
-            "formFactor": row["formFactor"],
-        }
+                "lastPoll": row["lastPoll"],
+                "formFactor": row["formFactor"],
+                "status": row.get("status") or "active",
+            }
 
     def _with_degraded(self, body: dict, degraded: list[str]) -> dict:
         if degraded:
@@ -809,22 +1170,19 @@ class FleetService:
             "roles": meta["roles"],
         }, degraded)
 
-    def _find_device(self, rows: list[dict], device_id: str) -> dict | None:
-        key = unquote(device_id or "").strip()
-        for row in rows:
-            if row["id"] == key or row["hostname"].lower() == key.lower():
-                return row
-        return None
+    def _netdisco_url(self) -> str:
+        return getattr(self.settings, "netdisco_database_url", "") or ""
 
-    def _representative(self, rows: list[dict], form_key: str) -> dict | None:
-        wanted = "firewall" if form_key.startswith(("fg-", "pa-")) else form_key
-        matches = [row for row in rows if row["formFactor"] == wanted]
-        if not matches and wanted != form_key:
-            matches = [row for row in rows if row["formFactor"] == "firewall"]
-        if not matches:
-            return None
-        matches.sort(key=lambda row: row["hostname"].lower())
-        return matches[0]
+    def _netdisco_index(self) -> dict:
+        cached = self.cache.get("nd-index")
+        if cached is not None:
+            return cached
+        index = netdisco_index(self._netdisco_url())
+        self.cache.put("nd-index", index)
+        return index
+
+    def _find_device(self, rows: list[dict], device_id: str) -> dict | None:
+        return _match_record(rows, device_id, name_key="hostname", ip_key="mgmtIp")
 
     def get_device(self, device_id: str) -> dict:
         key = unquote(device_id or "").strip()
@@ -832,9 +1190,14 @@ class FleetService:
             with self._session() as client:
                 rows, _meta, degraded = self._decorated(client)
                 found = self._find_device(rows, key)
-                if found is None and is_form_key(key):
-                    found = self._representative(rows, key)
                 if found is None:
+                    # Form keys are faceplate samples, not devices. Do not pick a
+                    # representative switch or firewall for them.
+                    if not is_form_key(key):
+                        snap = netdisco_find(self._netdisco_url(), key)
+                        if snap is not None:
+                            detail = _detail_from_netdisco(snap, self._now_dt())
+                            return self._with_degraded(detail, degraded)
                     raise ApiError(404, "not_found", "unknown device")
                 try:
                     detail = self._detail(client, found, rows)
@@ -842,7 +1205,7 @@ class FleetService:
                     log.warning("device detail assembly failed for %s", found.get("hostname"))
                     detail = _minimal_detail(found, self._now_dt())
                 alerts = self._alerts_raw(client)
-                self._attach_inventory(client, detail, found)
+                self._attach_inventory(client, detail, found, rows)
                 if alerts.get("degraded"):
                     for source in detail.get("sources") or []:
                         if source.get("name") == "alertmanager":
@@ -876,11 +1239,19 @@ class FleetService:
                 rows = self._devices_raw(client)
         except UpstreamError as exc:
             raise _as_upstream(exc)
-        found = None
-        for row in rows:
-            if row["id"] == key or row["name"].lower() == key.lower():
-                found = row
-                break
+        found = _match_record(rows, key, name_key="name", ip_key="ip")
+        if found is None and not is_form_key(key):
+            snap = netdisco_find(self._netdisco_url(), key)
+            device = (snap or {}).get("device") if snap else None
+            if device:
+                hostname = device.get("dns") or device.get("name") or device.get("ip") or ""
+                return {
+                    "id": device.get("ip") or hostname,
+                    "hostname": hostname,
+                    "ip": device.get("ip") or "",
+                    "platform": device.get("os") or "",
+                    "manufacturer": device.get("vendor") or "",
+                }
         if found is None:
             raise ApiError(404, "not_found", "unknown device")
         return {
@@ -891,10 +1262,11 @@ class FleetService:
             "manufacturer": found["manufacturer"],
         }
 
-    def _attach_inventory(self, client, detail: dict, found: dict) -> None:
+    def _attach_inventory(self, client, detail: dict, found: dict, rows: list[dict]) -> None:
         """NetBox interfaces and IPs, Prometheus history, Oxidized and Netdisco.
 
         A missing source is recorded on the device and does not fail the page.
+        Interface pages past the first 200 are followed until NetBox reports no next link.
         """
         device = found.get("_device") or {}
         device_id = str(device.get("id") or found.get("id") or "")
@@ -919,15 +1291,51 @@ class FleetService:
         detail["history"] = history
         backup = self._oxidized_backup(client, found.get("hostname") or "")
         detail["backup"] = backup
-        neighbors = netdisco_neighbors(getattr(self.settings, "netdisco_database_url", "") or "", device.get("ip") or found.get("mgmtIp") or "")
-        detail["neighbors"] = neighbors.get("neighbors") or []
+        snap = netdisco_snapshot(
+            self._netdisco_url(),
+            ip=device.get("ip") or found.get("mgmtIp") or "",
+            name=device.get("name") or found.get("hostname") or "",
+        )
+        detail["neighbors"] = snap.get("neighbors") or []
+        self._apply_faceplate(detail, found, interfaces, snap, rows)
         detail["sources"] = [
             {"name": "netbox", "ok": not iface_error and not addr_error, "detail": iface_error or addr_error},
             {"name": "prometheus", "ok": not detail.get("_port_degraded") and not history_error, "detail": history_error},
             {"name": "alertmanager", "ok": True, "detail": ""},
             {"name": "oxidized", "ok": bool(backup.get("available")), "detail": backup.get("reason") or ""},
-            {"name": "netdisco", "ok": bool(neighbors.get("available")), "detail": neighbors.get("reason") or ""},
+            {"name": "netdisco", "ok": bool(snap.get("available")), "detail": snap.get("reason") or ""},
         ]
+
+    def _apply_faceplate(self, detail: dict, found: dict, interfaces: list, snap: dict, rows: list[dict]) -> None:
+        """Rebuild the faceplate from NetBox and Netdisco, keeping Prometheus oper state."""
+        device = found.get("_device") or {}
+        prom_ports = _ports_from_faceplate(detail.get("faceplate") or {})
+        nd_device = snap.get("device") if isinstance(snap.get("device"), dict) else None
+        nd_payload = None
+        if nd_device or snap.get("ports"):
+            nd_payload = dict(nd_device or {})
+            nd_payload["ports"] = snap.get("ports") or []
+        facts = _netbox_facts(device)
+        facts["interfaces"] = [row for row in interfaces if isinstance(row, dict)]
+        classified = classify_device(facts, nd_payload)
+        source = classified["faceplate_source"]
+        ports = list(classified["ports"])
+        if source == "none":
+            ports = prom_ports
+            source = "prometheus" if prom_ports else "none"
+        else:
+            ports = _overlay_port_state(ports, prom_ports)
+        ports = _overlay_neighbours(ports, snap.get("ports") or [], rows)
+        form = classified["form"] if classified["form"] in FORM_FACTORS else "generic"
+        role = classified["role"]
+        detail["role"] = role
+        detail["status"] = found.get("status") or device.get("status") or "active"
+        detail["faceplate"] = _faceplate(form, role, detail.get("hostname") or "", device.get("model") or (nd_device or {}).get("model") or "", ports)
+        comparison = dict(classified["comparison"])
+        comparison["faceplateSource"] = source
+        detail["comparison"] = comparison
+        if device.get("model"):
+            detail["modelFamily"] = device["model"]
 
     def _netbox_rows(self, client, path: str):
         try:
@@ -995,6 +1403,7 @@ class FleetService:
             "mgmtIp": row["mgmtIp"] or "—",
             "modelFamily": row["modelFamily"],
             "health": row["health"],
+            "status": row.get("status") or "active",
             "uptime": row["uptime"],
             "lastPoll": row["lastPoll"],
             "firmware": device.get("platform") or "—",
@@ -1171,6 +1580,7 @@ class FleetService:
                 "site": site_name,
                 "siteId": device["siteId"] if device else "",
                 "deviceHostname": host,
+                "deviceId": device["id"] if device else "",
                 "formFactor": device["formFactor"] if device else "generic",
                 "category": str(labels.get("whatisdown") or labels.get("category") or labels.get("alertname") or "Alert"),
                 "raisedAt": _stamp(starts),
@@ -1270,10 +1680,11 @@ class FleetService:
                 device = None
                 if device_id:
                     found = self._find_device(rows, device_id)
-                    if found is None and is_form_key(device_id):
-                        found = self._representative(rows, device_id)
                     if found is None:
-                        if is_form_key(device_id):
+                        decoded = unquote(device_id or "").strip()
+                        if is_form_key(decoded):
+                            return []
+                        if netdisco_find(self._netdisco_url(), decoded):
                             return []
                         raise ApiError(404, "not_found", "unknown device")
                     device = found
@@ -1546,6 +1957,7 @@ def _minimal_detail(row: dict, now: datetime) -> dict:
         "mgmtIp": row.get("mgmtIp") or "—",
         "modelFamily": row.get("modelFamily") or "—",
         "health": row.get("health") or "unreachable",
+        "status": row.get("status") or "active",
         "uptime": row.get("uptime") or "—",
         "lastPoll": row.get("lastPoll") or "—",
         "firmware": "—",
@@ -1602,39 +2014,326 @@ def _public_address(raw: dict) -> dict:
     }
 
 
-def netdisco_neighbors(database_url: str, ip: str) -> dict:
-    """LLDP/CDP neighbours from Netdisco device_port, when that database is set."""
-    address = (ip or "").split("/")[0].strip()
+def _match_record(rows: list[dict], device_id: str, *, name_key: str, ip_key: str) -> dict | None:
+    """Resolve a device by NetBox id, then name, then primary IP.
+
+    A faceplate form key is never treated as a name. That used to return the
+    first device of that form.
+    """
+    key = unquote(device_id or "").strip()
+    if not key:
+        return None
+    for row in rows:
+        if str(row.get("id") or "") == key:
+            return row
+    if is_form_key(key):
+        return None
+    lowered = key.lower()
+    for row in rows:
+        if str(row.get(name_key) or "").lower() == lowered:
+            return row
+    ip = key.split("/")[0].strip()
+    if not ip:
+        return None
+    for row in rows:
+        if str(row.get(ip_key) or "").split("/")[0] == ip:
+            return row
+    return None
+
+
+def _netbox_facts(device: dict) -> dict:
+    return {
+        "role_slug": device.get("role_slug") or "",
+        "role_name": device.get("role_name") or "",
+        "model": device.get("model") or "",
+        "manufacturer": device.get("manufacturer") or "",
+        "hostname": device.get("name") or device.get("hostname") or "",
+        "serial": device.get("serial") or "",
+        "platform": device.get("platform") or "",
+    }
+
+
+def _index_hit(index: dict, ip: str, name: str) -> dict | None:
+    if not index:
+        return None
+    by_ip = index.get("by_ip") or {}
+    by_name = index.get("by_name") or {}
+    if ip and ip in by_ip:
+        return by_ip[ip]
+    lowered = (name or "").lower()
+    if lowered and lowered in by_name:
+        return by_name[lowered]
+    return None
+
+
+def _empty_netdisco(reason: str) -> dict:
+    return {"available": False, "reason": reason, "device": None, "ports": [], "neighbors": []}
+
+
+def _netdisco_device_row(row: tuple) -> dict:
+    ip, dns, name, description, vendor, model, os_name, os_ver, serial = row[:9]
+    port_count = int(row[9]) if len(row) > 9 and row[9] is not None else 0
+    return {
+        "ip": str(ip or ""),
+        "dns": str(dns or ""),
+        "name": str(name or ""),
+        "description": str(description or ""),
+        "vendor": str(vendor or ""),
+        "model": str(model or ""),
+        "os": str(os_name or ""),
+        "os_ver": str(os_ver or ""),
+        "serial": str(serial or ""),
+        "port_count": port_count,
+    }
+
+
+def netdisco_index(database_url: str) -> dict:
+    """Vendor, model and port counts from Netdisco, keyed by IP and name."""
+    empty = {"by_ip": {}, "by_name": {}}
     if not database_url:
-        return {"available": False, "reason": "Netdisco is not configured", "neighbors": []}
-    if not address:
-        return {"available": False, "reason": "This device has no address to look up in Netdisco", "neighbors": []}
+        return empty
     try:
         import psycopg
         with psycopg.connect(database_url, connect_timeout=3) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT port, COALESCE(host(remote_ip)::text, ''), COALESCE(remote_port, ''), "
-                    "COALESCE(remote_id, ''), COALESCE(remote_type, '') "
-                    "FROM device_port WHERE host(ip) = %s "
-                    "AND (remote_ip IS NOT NULL OR COALESCE(remote_id, '') <> '') "
-                    "ORDER BY port LIMIT 200",
-                    (address,),
+                    "SELECT host(ip)::text, COALESCE(dns, ''), COALESCE(name, ''), "
+                    "COALESCE(description, ''), COALESCE(vendor, ''), COALESCE(model, ''), "
+                    "COALESCE(os, ''), COALESCE(os_ver, ''), COALESCE(serial, '') FROM device"
                 )
-                fetched = cur.fetchall()
+                devices = cur.fetchall()
+                cur.execute("SELECT host(ip)::text, count(*) FROM device_port GROUP BY host(ip)::text")
+                counts = {str(ip or ""): int(total or 0) for ip, total in cur.fetchall()}
     except Exception:
-        log.warning("netdisco neighbour read failed")
-        return {"available": False, "reason": "Netdisco neighbours could not be read", "neighbors": []}
+        log.warning("netdisco device index could not be read")
+        return empty
+    by_ip: dict[str, dict] = {}
+    by_name: dict[str, dict] = {}
+    for raw in devices:
+        item = _netdisco_device_row(tuple(raw) + (counts.get(str(raw[0] or ""), 0),))
+        if item["ip"]:
+            by_ip[item["ip"]] = item
+        for label in (item["dns"], item["name"]):
+            if label:
+                by_name.setdefault(label.lower(), item)
+    return {"by_ip": by_ip, "by_name": by_name}
+
+
+def netdisco_snapshot(database_url: str, ip: str = "", name: str = "") -> dict:
+    """One Netdisco device, its ports, and LLDP/CDP neighbours."""
+    address = (ip or "").split("/")[0].strip()
+    label = (name or "").strip()
+    if not database_url:
+        return _empty_netdisco("Netdisco is not configured")
+    if not address and not label:
+        return _empty_netdisco("This device has no address to look up in Netdisco")
+    try:
+        import psycopg
+        with psycopg.connect(database_url, connect_timeout=3) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT host(ip)::text, COALESCE(dns, ''), COALESCE(name, ''), "
+                    "COALESCE(description, ''), COALESCE(vendor, ''), COALESCE(model, ''), "
+                    "COALESCE(os, ''), COALESCE(os_ver, ''), COALESCE(serial, '') "
+                    "FROM device WHERE host(ip)::text = %s "
+                    "OR lower(COALESCE(dns, '')) = lower(%s) "
+                    "OR lower(COALESCE(name, '')) = lower(%s) "
+                    "ORDER BY CASE WHEN host(ip)::text = %s THEN 0 ELSE 1 END LIMIT 1",
+                    (address, label or address, label or address, address),
+                )
+                found = cur.fetchone()
+                if not found:
+                    return {"available": True, "reason": "", "device": None, "ports": [], "neighbors": []}
+                device = _netdisco_device_row(tuple(found))
+                cur.execute(
+                    "SELECT COALESCE(port, ''), COALESCE(name, ''), COALESCE(descr, ''), "
+                    "COALESCE(type, ''), COALESCE(speed::text, ''), COALESCE(up, ''), COALESCE(up_admin, ''), "
+                    "COALESCE(host(remote_ip)::text, ''), COALESCE(remote_port, ''), "
+                    "COALESCE(remote_id, ''), COALESCE(remote_type, '') "
+                    "FROM device_port WHERE host(ip)::text = %s ORDER BY port",
+                    (device["ip"],),
+                )
+                port_rows = cur.fetchall()
+    except Exception:
+        log.warning("netdisco device read failed")
+        return _empty_netdisco("Netdisco could not be read")
+    ports = []
     neighbors = []
-    for port, remote_ip, remote_port, remote_id, remote_type in fetched:
-        neighbors.append({
-            "localPort": str(port or ""),
+    for port, port_name, descr, kind, speed, up, up_admin, remote_ip, remote_port, remote_id, remote_type in port_rows:
+        item = {
+            "port": str(port or ""),
+            "name": str(port_name or port or ""),
+            "descr": str(descr or ""),
+            "type": str(kind or ""),
+            "speed": speed,
+            "up": str(up or ""),
+            "admin": str(up_admin or ""),
             "remoteAddress": str(remote_ip or ""),
             "remotePort": str(remote_port or ""),
             "remoteName": str(remote_id or ""),
             "protocol": str(remote_type or ""),
-        })
-    return {"available": True, "reason": "", "neighbors": neighbors}
+        }
+        ports.append(item)
+        if item["remoteAddress"] or item["remoteName"]:
+            neighbors.append({
+                "localPort": item["name"],
+                "remoteAddress": item["remoteAddress"],
+                "remotePort": item["remotePort"],
+                "remoteName": item["remoteName"],
+                "protocol": item["protocol"],
+            })
+    device["port_count"] = len(ports)
+    return {"available": True, "reason": "", "device": device, "ports": ports, "neighbors": neighbors}
+
+
+def netdisco_find(database_url: str, key: str) -> dict | None:
+    """Netdisco device for an id that NetBox did not have. None when it is not there."""
+    text = unquote(key or "").strip()
+    if not text or not database_url or is_form_key(text):
+        return None
+    snap = netdisco_snapshot(database_url, ip=text, name=text)
+    if not snap.get("available") or not snap.get("device"):
+        return None
+    return snap
+
+
+def netdisco_neighbors(database_url: str, ip: str) -> dict:
+    """LLDP/CDP neighbours from Netdisco device_port, when that database is set."""
+    snap = netdisco_snapshot(database_url, ip=ip)
+    return {
+        "available": bool(snap.get("available")),
+        "reason": snap.get("reason") or "",
+        "neighbors": snap.get("neighbors") or [],
+    }
+
+
+def _ports_from_faceplate(face: dict) -> list[dict]:
+    if not isinstance(face, dict):
+        return []
+    if face.get("members"):
+        ports = []
+        for member in face.get("members") or []:
+            ports.extend(member.get("ports") or [])
+        return ports
+    if face.get("modules"):
+        ports = []
+        for module in face.get("modules") or []:
+            ports.extend(module.get("ports") or [])
+        return ports
+    return list(face.get("ports") or [])
+
+
+def _overlay_port_state(ports: list[dict], prom_ports: list[dict]) -> list[dict]:
+    by_name = {str(port.get("name") or "").lower(): port for port in prom_ports if port.get("name")}
+    for port in ports:
+        prom = by_name.get(str(port.get("name") or "").lower())
+        if not prom:
+            continue
+        if prom.get("state"):
+            port["state"] = prom["state"]
+        port["utilisation"] = prom.get("utilisation") or 0
+        port["errors"] = prom.get("errors") or 0
+        if prom.get("speed") and prom.get("speed") != "—":
+            port["speed"] = prom["speed"]
+        if prom.get("id"):
+            port["id"] = prom["id"]
+        if prom.get("type") in ("SFP", "SFP+", "QSFP", "MGMT", "CONSOLE", "USB"):
+            port["type"] = prom["type"]
+    return ports
+
+
+def _overlay_neighbours(ports: list[dict], nd_ports: list[dict], rows: list[dict]) -> list[dict]:
+    by_name = {}
+    for raw in nd_ports or []:
+        label = str(raw.get("name") or raw.get("port") or "").lower()
+        if label:
+            by_name[label] = raw
+    for port in ports:
+        raw = by_name.get(str(port.get("name") or "").lower())
+        remote = ""
+        remote_port = ""
+        remote_ip = ""
+        if raw:
+            remote = str(raw.get("remoteName") or "")
+            remote_port = str(raw.get("remotePort") or "")
+            remote_ip = str(raw.get("remoteAddress") or "")
+        elif isinstance(port.get("neighbour"), dict):
+            remote = str(port["neighbour"].get("device") or "")
+            remote_port = str(port["neighbour"].get("port") or "")
+        if not remote and not remote_ip:
+            continue
+        match = _match_record(rows, remote, name_key="hostname", ip_key="mgmtIp") if remote else None
+        if match is None and remote_ip:
+            match = _match_record(rows, remote_ip, name_key="hostname", ip_key="mgmtIp")
+        port["neighbour"] = {
+            "device": remote or remote_ip,
+            "port": remote_port,
+            "deviceId": match["id"] if match else "",
+        }
+    return ports
+
+
+def _detail_from_netdisco(snap: dict, now: datetime) -> dict:
+    device = snap.get("device") or {}
+    payload = dict(device)
+    payload["ports"] = snap.get("ports") or []
+    classified = classify_device(None, payload)
+    hostname = device.get("dns") or device.get("name") or device.get("ip") or "—"
+    model = device.get("model") or ""
+    ports = _overlay_neighbours(list(classified["ports"]), snap.get("ports") or [], [])
+    form = classified["form"] if classified["form"] in FORM_FACTORS else "generic"
+    face = _faceplate(form, classified["role"], hostname, model, ports)
+    firmware = " ".join(part for part in (device.get("os") or "", device.get("os_ver") or "") if part).strip()
+    comparison = dict(classified["comparison"])
+    comparison["faceplateSource"] = classified["faceplate_source"] if ports else "none"
+    return {
+        "id": device.get("ip") or hostname,
+        "hostname": hostname,
+        "role": classified["role"],
+        "site": "—",
+        "siteId": "",
+        "mgmtIp": device.get("ip") or "—",
+        "modelFamily": model or "—",
+        "health": "unreachable",
+        "status": "netdisco-only",
+        "netdiscoOnly": True,
+        "uptime": "—",
+        "lastPoll": "—",
+        "firmware": firmware or "—",
+        "serialMasked": mask_serial(device.get("serial") or ""),
+        "faceplate": face,
+        "issues": [],
+        "checks": [{
+            "id": "c6",
+            "name": "Approved in NetBox",
+            "result": "fail",
+            "detail": "This device is in Netdisco and not in NetBox",
+        }],
+        "hardware": [],
+        "checkRunAt": _clock_stamp(now),
+        "interfaces": [
+            {
+                "name": port.get("name") or "",
+                "type": port.get("type") or "",
+                "enabled": port.get("state") != "disabled",
+                "mac": "",
+                "description": "",
+            }
+            for port in ports
+        ],
+        "addresses": [],
+        "neighbors": snap.get("neighbors") or [],
+        "backup": {"available": False, "reason": "This device is in Netdisco only", "status": "", "at": "", "config": ""},
+        "history": [],
+        "sources": [
+            {"name": "netbox", "ok": False, "detail": "Not in NetBox"},
+            {"name": "prometheus", "ok": False, "detail": "No NetBox device to query"},
+            {"name": "alertmanager", "ok": True, "detail": ""},
+            {"name": "oxidized", "ok": False, "detail": "This device is in Netdisco only"},
+            {"name": "netdisco", "ok": True, "detail": ""},
+        ],
+        "comparison": comparison,
+    }
 
 
 def _faceplate(form: str, role: str, hostname: str, model: str, ports: list[dict]) -> dict:

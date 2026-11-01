@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ie_config.app import create_app
-from ie_config.fleet import FleetService, classify_health, form_factor_for, mask_serial
+from ie_config.fleet import FleetService, classify_device, classify_health, form_factor_for, is_form_key, mask_serial
 from ie_config.settings import Settings
 
 NOW = datetime(2026, 10, 27, 14, 30, tzinfo=timezone.utc).timestamp()
@@ -138,6 +138,7 @@ class Upstream:
         self.alertmanager = "ok"
         self.calls = []
         self.posted = []
+        self.interfaces = {}
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         host = request.url.host
@@ -161,6 +162,20 @@ class Upstream:
             return httpx.Response(200, json={"count": len(self.devices), "next": None, "results": self.devices})
         if path.startswith("/api/dcim/sites"):
             return httpx.Response(200, json={"count": len(self.sites), "next": None, "results": self.sites})
+        if path.startswith("/api/dcim/interfaces"):
+            device_id = request.url.params.get("device_id", "")
+            rows = list(self.interfaces.get(str(device_id), []))
+            try:
+                offset = int(request.url.params.get("offset") or 0)
+            except ValueError:
+                offset = 0
+            page = rows[offset:offset + 200]
+            nxt = None
+            if offset + 200 < len(rows):
+                nxt = "http://netbox.test/api/dcim/interfaces/?device_id=%s&limit=200&offset=%s" % (device_id, offset + 200)
+            return httpx.Response(200, json={"count": len(rows), "next": nxt, "results": page})
+        if path.startswith("/api/ipam/ip-addresses"):
+            return httpx.Response(200, json={"count": 0, "next": None, "results": []})
         return httpx.Response(404, json={"detail": "missing"})
 
     def _prom(self, request, path):
@@ -335,8 +350,66 @@ def test_classify_and_form_helpers():
     assert form_factor_for("core-switch", "Core", "C9500")[1] == "modular-chassis"
     assert form_factor_for("sdwan", "SD-WAN", "FG-60F") == ("Firewall", "firewall")
     assert form_factor_for("distribution-switch", "Distribution", "stack")[1] == "switch-stack"
+    assert is_form_key("firewall") is True
+    assert is_form_key("access-switch-48") is True
+    assert is_form_key("fg-edge") is False
+    assert is_form_key("pa-820") is False
     assert mask_serial("ABCDEF123456") == "ABC••••••456"
     assert mask_serial("") == "—"
+
+    fortigate = classify_device(
+        {"role_name": "Security", "role_slug": "security", "manufacturer": "Fortinet", "model": "FortiGate 60F", "hostname": "apc-ups"},
+        None,
+    )
+    assert fortigate["form"] == "firewall"
+    assert fortigate["kind"] != "ap"
+    palo = classify_device(
+        {"role_name": "Security", "role_slug": "security", "manufacturer": "Palo Alto", "model": "PA-820"},
+        None,
+    )
+    assert palo["form"] == "firewall"
+    catalyst = classify_device(
+        {"role_slug": "access-switch", "role_name": "Access Switch", "manufacturer": "Cisco", "model": "Catalyst 9300-48P"},
+        None,
+    )
+    assert catalyst["form"] == "access-switch-48"
+    isr = classify_device(
+        {"role_name": "Edge", "role_slug": "edge", "manufacturer": "Cisco", "model": "ISR4451"},
+        None,
+    )
+    assert isr["form"] == "branch-router"
+    air = classify_device(
+        {"role_name": "Device", "role_slug": "device", "manufacturer": "Cisco", "model": "AIR-AP2802I-E-K9"},
+        None,
+    )
+    assert air["form"] == "ceiling-ap"
+    ups = classify_device(
+        {"hostname": "apc-ups", "role_slug": "ups", "role_name": "UPS", "manufacturer": "APC", "model": "Smart-UPS 3000"},
+        None,
+    )
+    assert ups["form"] == "generic"
+    assert ups["form"] != "ceiling-ap"
+    mislabelled = classify_device(
+        {
+            "role_slug": "access-point",
+            "role_name": "Access Point",
+            "manufacturer": "Cisco",
+            "model": "C9300-48P",
+            "hostname": "apc-ups",
+            "interfaces": [{"name": "Gi1/0/1", "type": "1000base-t", "enabled": True}],
+        },
+        {
+            "vendor": "cisco",
+            "model": "C9300-48P",
+            "description": "Cisco IOS Software, Catalyst L3 Switch",
+            "ports": [{"name": "Gi1/0/%d" % n, "type": "ethernetCsmacd", "speed": "1000", "up": "up"} for n in range(1, 49)]
+            + [{"name": "Te1/1/%d" % n, "type": "sfp", "speed": "10000", "up": "up"} for n in range(1, 5)],
+        },
+    )
+    assert mislabelled["form"] == "access-switch-48"
+    assert mislabelled["faceplate_source"] == "netdisco"
+    assert mislabelled["comparison"]["differ"] is True
+    assert mislabelled["comparison"]["faceplateSource"] == "netdisco"
 
 
 def test_requires_session(stack):
@@ -489,11 +562,21 @@ def test_populated_shapes_filters_and_paging(stack):
     assert {row["name"] for row in device["sources"]} >= {"netbox", "prometheus", "alertmanager", "oxidized", "netdisco"}
     assert isinstance(device["interfaces"], list)
     assert isinstance(device["addresses"], list)
+    assert device["status"] == "active"
+    assert device["comparison"]["faceplateSource"] == "prometheus"
+    assert device["comparison"]["differ"] is False
     assert isinstance(device["neighbors"], list)
     assert isinstance(device["history"], list)
-    by_form = client.get("/api/v1/devices/access-switch-24").json()
-    assert by_form["hostname"] == "edge-2"
-    assert by_form["faceplate"]["form_factor"] == "access-switch-24"
+    by_form = client.get("/api/v1/devices/access-switch-24")
+    assert by_form.status_code == 404
+    assert by_form.json()["error"]["message"] == "unknown device"
+    by_name = client.get("/api/v1/devices/EDGE-2")
+    assert by_name.status_code == 200, by_name.text
+    assert by_name.json()["hostname"] == "edge-2"
+    assert by_name.json()["faceplate"]["form_factor"] == "access-switch-24"
+    by_ip = client.get("/api/v1/devices/10.1.0.2")
+    assert by_ip.status_code == 200, by_ip.text
+    assert by_ip.json()["id"] == "11"
     missing = client.get("/api/v1/devices/does-not-exist")
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "not_found"
@@ -639,6 +722,109 @@ def test_webhook_and_upstream_failures(stack, monkeypatch):
     assert "NetBox" in failed.json()["error"]["message"]
     assert TOKEN not in failed.text
     assert metrics.status_code in (200, 502)
+
+
+def test_resolve_id_name_ip_status_netdisco_and_paging(stack, monkeypatch):
+    _auth(stack)
+    client = stack["client"]
+    offline = {
+        "id": 40,
+        "name": "apc-ups",
+        "serial": "UPS123456789",
+        "status": {"value": "offline", "label": "Offline"},
+        "role": {"name": "UPS", "slug": "ups"},
+        "site": {"id": 1, "name": "Rotterdam", "slug": "rotterdam"},
+        "device_type": {"model": "Smart-UPS 3000", "manufacturer": {"name": "APC"}},
+        "primary_ip4": {"address": "10.9.0.40/32"},
+        "platform": {"name": "UPS"},
+    }
+    stack["up"].devices.append(offline)
+    stack["fleet"].cache.drop("nb-devices")
+    listed = client.get("/api/v1/devices?page=1&page_size=50&health=all&role=all")
+    assert listed.status_code == 200, listed.text
+    ups = next(row for row in listed.json()["rows"] if row["hostname"] == "apc-ups")
+    assert ups["status"] == "offline"
+    assert ups["formFactor"] == "generic"
+    assert ups["formFactor"] != "ceiling-ap"
+    detail = client.get("/api/v1/devices/APC-UPS")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["id"] == "40"
+    assert body["status"] == "offline"
+    assert body["faceplate"]["form_factor"] == "generic"
+    assert body["role"] == "UPS"
+    by_ip = client.get("/api/v1/devices/10.9.0.40")
+    assert by_ip.status_code == 200
+    assert by_ip.json()["hostname"] == "apc-ups"
+    form_key = client.get("/api/v1/devices/ceiling-ap")
+    assert form_key.status_code == 404
+    assert form_key.json()["error"]["message"] == "unknown device"
+    assert client.get("/api/v1/devices/ceiling-ap/metrics/throughput?range=1h").json() == []
+
+    interfaces = [
+        {"id": index, "name": "Gi1/0/%d" % index, "type": {"value": "1000base-t", "label": "1000BASE-T"}, "enabled": True}
+        for index in range(1, 202)
+    ]
+    stack["up"].interfaces["10"] = interfaces
+    stack["fleet"].cache.drop("ports:core-1")
+    paged = client.get("/api/v1/devices/10")
+    assert paged.status_code == 200, paged.text
+    paged_body = paged.json()
+    assert len(paged_body["interfaces"]) == 201
+    face_ports = paged_body["faceplate"]["modules"][0]["ports"]
+    assert len(face_ports) == 201
+    assert paged_body["comparison"]["faceplateSource"] == "netbox"
+    assert paged_body["comparison"]["netbox"]["portCount"] == 201
+    assert paged_body["faceplate"]["form_factor"] == "modular-chassis"
+
+    def fake_find(_url, key):
+        if key not in ("10.9.9.9", "nd-orphan"):
+            return None
+        ports = [
+            {"name": "Gi1/0/%d" % n, "type": "ethernetCsmacd", "speed": "1000", "up": "up", "admin": "up"}
+            for n in range(1, 25)
+        ]
+        return {
+            "available": True,
+            "reason": "",
+            "device": {
+                "ip": "10.9.9.9",
+                "dns": "nd-orphan",
+                "name": "nd-orphan",
+                "description": "Cisco IOS Software, Catalyst L3 Switch",
+                "vendor": "Cisco",
+                "model": "C9300-24P",
+                "os": "ios",
+                "os_ver": "17.9",
+                "serial": "NDSERIAL1",
+            },
+            "ports": ports,
+            "neighbors": [],
+        }
+
+    monkeypatch.setattr("ie_config.fleet.netdisco_find", fake_find)
+    orphan = client.get("/api/v1/devices/10.9.9.9")
+    assert orphan.status_code == 200, orphan.text
+    orphan_body = orphan.json()
+    assert orphan_body["netdiscoOnly"] is True
+    assert orphan_body["status"] == "netdisco-only"
+    assert orphan_body["hostname"] == "nd-orphan"
+    assert orphan_body["faceplate"]["form_factor"] == "access-switch-24"
+    assert orphan_body["comparison"]["faceplateSource"] == "netdisco"
+    assert orphan_body["comparison"]["netdisco"]["vendor"] == "Cisco"
+    assert orphan_body["comparison"]["netdisco"]["model"] == "C9300-24P"
+    assert len(orphan_body["faceplate"]["ports"]) == 24
+    by_nd_name = client.get("/api/v1/devices/nd-orphan")
+    assert by_nd_name.status_code == 200
+    assert by_nd_name.json()["mgmtIp"] == "10.9.9.9"
+    assert client.get("/api/v1/devices/10.9.9.9/metrics/throughput?range=1h").json() == []
+    access = stack["fleet"].device_access("10.9.9.9")
+    assert access["hostname"] == "nd-orphan"
+    assert access["manufacturer"] == "Cisco"
+    from ie_config.errors import ApiError
+    with pytest.raises(ApiError) as caught:
+        stack["fleet"].device_access("firewall")
+    assert caught.value.status == 404
 
 
 def test_missing_token_is_a_clear_error(stack):
