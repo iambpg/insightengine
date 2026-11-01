@@ -21,7 +21,7 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
   }, [ports, filter, search]);
 
   const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
-  const FILTERS: Filter[] = ['all', 'up', 'warning', 'fault', 'down', 'disabled'];
+  const FILTERS: Filter[] = ['all', 'up', 'warning', 'fault', 'down', 'disabled', 'unknown'];
 
   return (
     <section className="rounded-lg border border-border bg-card shadow-card" aria-labelledby="ports-title">

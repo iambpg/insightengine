@@ -7,6 +7,7 @@ import PortTooltip from './PortTooltip';
 import RadioTooltip from './RadioTooltip';
 import SwitchLayout, { SW_H, switchWidth } from './layouts/SwitchLayout';
 import { STATE_GLYPH, STATE_LABEL } from './palette';
+import { countPorts, faceplateSummaryLine, SNMP_MISSING_HINT } from './summary';
 import ApLayout, { AP_H, AP_W } from './layouts/ApLayout';
 import { ControllerLayout, FirewallLayout, RouterLayout, APPL_H, APPL_W } from './layouts/AppliancesLayout';
 import ModularLayout, { CH_W, chassisHeight } from './layouts/ModularLayout';
@@ -126,14 +127,9 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
   }, [device, selectedPortId, activeMember, selectedRadioId]);
 
   const ports = allPorts(device);
-  const counts = ports.reduce<Record<string, number>>((acc, p) => {
-    acc[p.state] = (acc[p.state] ?? 0) + 1;
-    return acc;
-  }, {});
-  const summary = (['up', 'down', 'warning', 'fault', 'disabled'] as const)
-    .filter((s) => counts[s])
-    .map((s) => `${counts[s]} ${STATE_LABEL[s].toLowerCase()}`)
-    .join(', ');
+  const counts = countPorts(ports);
+  const summary = faceplateSummaryLine(counts, device.snmpAt);
+  const snmpHint = device.snmpMissing ? SNMP_MISSING_HINT : '';
 
   const stackMembers = device.form_factor === 'switch-stack' ? device.members ?? [] : [];
   const selectedRadio = (device.radios ?? []).find((r) => r.id === selectedRadioId) ?? null;
@@ -142,7 +138,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
     acc[p.state] = (acc[p.state] ?? 0) + 1;
     return acc;
   }, {});
-  const memberSummary = (['up', 'down', 'warning', 'fault', 'disabled'] as const)
+  const memberSummary = (['up', 'down', 'warning', 'fault', 'disabled', 'unknown'] as const)
     .filter((s) => memberCounts[s])
     .map((s) => `${memberCounts[s]} ${STATE_LABEL[s].toLowerCase()}`)
     .join(' · ');
@@ -153,7 +149,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         <svg
           viewBox={`0 0 ${vbW} ${vbH}`}
           role="group"
-          aria-label={`${device.role} faceplate, ${ports.length} ports: ${summary}. Use Tab to move between ports and Enter to open the port graph.`}
+          aria-label={`${device.role} faceplate, ${ports.length} ports: ${summary}${snmpHint ? `. ${snmpHint}` : ''}. Use Tab to move between ports and Enter to open the port graph.`}
           className={`block h-auto ${stackMembers.length > 0 ? 'min-w-0 flex-1' : 'w-full'} ${compact ? 'max-h-24' : ''}`}
           preserveAspectRatio="xMidYMid meet"
         >
@@ -250,7 +246,8 @@ export function FaceplateLegend() {
           ['down', 'var(--down)'],
           ['warning', 'var(--warning)'],
           ['fault', 'var(--destructive)'],
-          ['disabled', 'var(--info)'],
+          ['disabled', 'var(--disabled)'],
+          ['unknown', 'var(--unknown)'],
         ] as const
       ).map(([s, color]) => (
         <li key={`legend-${s}`} className="flex items-center gap-1.5">

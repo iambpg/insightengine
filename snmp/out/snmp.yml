@@ -6440,3 +6440,167 @@ modules:
         labelname: ifName
         oid: 1.3.6.1.2.1.31.1.1.1.1
         type: DisplayString
+
+  cisco_cdp:
+    walk:
+    - 1.3.6.1.4.1.9.9.23.1.2.1.1.4
+    - 1.3.6.1.4.1.9.9.23.1.2.1.1.6
+    - 1.3.6.1.4.1.9.9.23.1.2.1.1.7
+    - 1.3.6.1.4.1.9.9.23.1.2.1.1.8
+    metrics:
+    - name: cdpCacheAddress
+      oid: 1.3.6.1.4.1.9.9.23.1.2.1.1.4
+      type: OctetString
+      help: The (first) network-layer address of the device as reported in the Address
+        TLV of the most recently received CDP message - 1.3.6.1.4.1.9.9.23.1.2.1.1.4
+      indexes:
+      - labelname: cdpCacheIfIndex
+        type: gauge
+      - labelname: cdpCacheDeviceIndex
+        type: gauge
+    - name: cdpCacheDeviceId
+      oid: 1.3.6.1.4.1.9.9.23.1.2.1.1.6
+      type: DisplayString
+      help: The Device-ID string as reported in the most recent CDP message - 1.3.6.1.4.1.9.9.23.1.2.1.1.6
+      indexes:
+      - labelname: cdpCacheIfIndex
+        type: gauge
+      - labelname: cdpCacheDeviceIndex
+        type: gauge
+    - name: cdpCacheDevicePort
+      oid: 1.3.6.1.4.1.9.9.23.1.2.1.1.7
+      type: DisplayString
+      help: The Port-ID string as reported in the most recent CDP message - 1.3.6.1.4.1.9.9.23.1.2.1.1.7
+      indexes:
+      - labelname: cdpCacheIfIndex
+        type: gauge
+      - labelname: cdpCacheDeviceIndex
+        type: gauge
+    - name: cdpCachePlatform
+      oid: 1.3.6.1.4.1.9.9.23.1.2.1.1.8
+      type: DisplayString
+      help: The Device's Hardware Platform as reported in the most recent CDP message
+        - 1.3.6.1.4.1.9.9.23.1.2.1.1.8
+      indexes:
+      - labelname: cdpCacheIfIndex
+        type: gauge
+      - labelname: cdpCacheDeviceIndex
+        type: gauge
+  lldp:
+    walk:
+    - 1.0.8802.1.1.2.1.3.7.1.3
+    - 1.0.8802.1.1.2.1.4.1.1.7
+    - 1.0.8802.1.1.2.1.4.1.1.8
+    - 1.0.8802.1.1.2.1.4.1.1.9
+    - 1.0.8802.1.1.2.1.4.2.1.4
+    metrics:
+    - name: lldpLocPortId
+      oid: 1.0.8802.1.1.2.1.3.7.1.3
+      type: DisplayString
+      help: The string value used to identify the port component associated with a
+        given port in the local system. - 1.0.8802.1.1.2.1.3.7.1.3
+      indexes:
+      - labelname: lldpLocPortNum
+        type: gauge
+    - name: lldpRemPortId
+      oid: 1.0.8802.1.1.2.1.4.1.1.7
+      type: DisplayString
+      help: The string value used to identify the port component associated with the
+        remote system. - 1.0.8802.1.1.2.1.4.1.1.7
+      indexes:
+      - labelname: lldpRemTimeMark
+        type: gauge
+      - labelname: lldpRemLocalPortNum
+        type: gauge
+      - labelname: lldpRemIndex
+        type: gauge
+    - name: lldpRemPortDesc
+      oid: 1.0.8802.1.1.2.1.4.1.1.8
+      type: DisplayString
+      help: The string value used to identify the description of the given port associated
+        with the remote system. - 1.0.8802.1.1.2.1.4.1.1.8
+      indexes:
+      - labelname: lldpRemTimeMark
+        type: gauge
+      - labelname: lldpRemLocalPortNum
+        type: gauge
+      - labelname: lldpRemIndex
+        type: gauge
+    - name: lldpRemSysName
+      oid: 1.0.8802.1.1.2.1.4.1.1.9
+      type: DisplayString
+      help: The string value used to identify the system name of the remote system.
+        - 1.0.8802.1.1.2.1.4.1.1.9
+      indexes:
+      - labelname: lldpRemTimeMark
+        type: gauge
+      - labelname: lldpRemLocalPortNum
+        type: gauge
+      - labelname: lldpRemIndex
+        type: gauge
+    - name: lldpRemManAddrIfId
+      oid: 1.0.8802.1.1.2.1.4.2.1.4
+      type: gauge
+      help: The integer value used to identify the interface number regarding the
+        management address component associated with the remote system. - 1.0.8802.1.1.2.1.4.2.1.4
+      indexes:
+      - labelname: lldpRemTimeMark
+        type: gauge
+      - labelname: lldpRemLocalPortNum
+        type: gauge
+      - labelname: lldpRemIndex
+        type: gauge
+      - labelname: lldpRemManAddrSubtype
+        type: gauge
+        enum_values:
+          0: other
+          1: ipV4
+          2: ipV6
+          3: nsap
+          4: hdlc
+          5: bbn1822
+          6: all802
+          7: e163
+          8: e164
+          9: f69
+          10: x121
+          11: ipx
+          12: appleTalk
+          13: decnetIV
+          14: banyanVines
+          15: e164withNsap
+          16: dns
+          17: distinguishedName
+          18: asNumber
+          19: xtpOverIpv4
+          20: xtpOverIpv6
+          21: xtpNativeModeXTP
+          22: fibreChannelWWPN
+          23: fibreChannelWWNN
+          24: gwid
+          25: afi
+          26: mplsTpSectionEndpointIdentifier
+          27: mplsTpLspEndpointIdentifier
+          28: mplsTpPseudowireEndpointIdentifier
+          29: mtipmultitopologyipversion4
+          30: mtipv6multitopologyipversion6
+          31: bgpSfc
+          16384: eigrpCommonServiceFamily
+          16385: eigrpIpv4ServiceFamily
+          16386: eigrpIpv6ServiceFamily
+          16387: lispCanonicalAddressFormat
+          16388: bgpLs
+          16389: fortyeightBitMac
+          16390: sixtyfourBitMac
+          16391: oui
+          16392: mac24
+          16393: mac40
+          16394: ipv664
+          16395: rBridgePortID
+          16396: trillNickname
+          16397: universallyUniqueIdentifier
+          16398: routingPolicyAfi
+          16399: mplsNamespaces
+          65535: reserved
+      - labelname: lldpRemManAddr
+        type: OctetString

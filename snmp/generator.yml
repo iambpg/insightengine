@@ -32,6 +32,29 @@ modules:
     walk: [ciscoMemoryPoolTable]
   cisco_pro:
     walk: [cpmCPUTotalTable]
+  # CDP neighbours. Index is cdpCacheIfIndex (the IF-MIB ifIndex) plus cdpCacheDeviceIndex.
+  cisco_cdp:
+    walk:
+      - cdpCacheDeviceId
+      - cdpCacheDevicePort
+      - cdpCacheAddress
+      - cdpCachePlatform
+    overrides:
+      cdpCacheAddress:
+        type: OctetString
+  # LLDP neighbours. lldpRemManAddr is an index of lldpRemManAddrIfId.
+  lldp:
+    walk:
+      - lldpRemSysName
+      - lldpRemPortId
+      - lldpRemPortDesc
+      - lldpRemManAddrIfId
+      - lldpLocPortId
+    overrides:
+      lldpRemPortId:
+        type: DisplayString
+      lldpLocPortId:
+        type: DisplayString
   cisco_wlc_universal:
     walk: [bsnAPTable, bsnApIfTable]
   # Fortinet. FORTINET-FORTIGATE-MIB / FORTINET-CORE-MIB must be in snmp/mibs.

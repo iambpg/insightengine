@@ -1320,6 +1320,9 @@ services:
       NETDISCO_DB_DEPLOY_ARGS: ${NETDISCO_DB_DEPLOY_ARGS:-}
       # Netdisco reads $DANCER_ENVDIR/deployment.yml (not ~/environments).
       DANCER_ENVDIR: /home/netdisco/nd-site-local
+      # The image default NETDISCO_DOMAIN=discover would replace domain_suffix
+      # in the rendered deployment.yml. Empty leaves that list in charge.
+      NETDISCO_DOMAIN: ""
     depends_on:
       # required: false so a Netdisco failure warns instead of failing
       # `docker compose up` for the rest of the project. The role aligner

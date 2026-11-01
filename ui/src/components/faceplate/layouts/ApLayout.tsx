@@ -45,7 +45,7 @@ export default function ApLayout({ ports, radios, apState, uid, selectedId, onHo
         <circle cx={75} cy={73} r={22} fill="var(--secondary)" stroke="var(--input)" />
         <circle cx={75} cy={73} r={8} fill="var(--input)" />
         <text x={75} y={156} textAnchor="middle" fontSize={6.4} fill={c.fill} fontFamily="var(--font-mono)">
-          {apState === 'up' ? '● Up' : apState === 'warning' ? '▲ Warning' : apState === 'fault' ? '✕ Fault' : apState === 'disabled' ? '▬ Disabled' : '○ Offline'}
+          {apState === 'up' ? '● Up' : apState === 'warning' ? '▲ Warning' : apState === 'fault' ? '✕ Fault' : apState === 'disabled' ? '▬ Disabled' : apState === 'unknown' ? '? Unknown' : '○ Offline'}
         </text>
       </g>
 

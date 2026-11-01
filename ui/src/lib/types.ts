@@ -1,4 +1,4 @@
-export type PortState = 'up' | 'down' | 'warning' | 'fault' | 'disabled';
+export type PortState = 'up' | 'down' | 'warning' | 'fault' | 'disabled' | 'unknown';
 export type PortType = 'RJ45' | 'SFP' | 'SFP+' | 'QSFP' | 'MGMT' | 'CONSOLE' | 'USB';
 export type DeviceHealth = 'healthy' | 'warning' | 'critical' | 'unreachable';
 
@@ -9,6 +9,7 @@ export interface PortNeighbour {
   device: string;
   port: string;
   deviceId?: string;
+  source?: string;
 }
 
 export interface PortInfo {
@@ -19,6 +20,8 @@ export interface PortInfo {
   state: PortState;
   utilisation: number;
   errors: number;
+  inBps?: number;
+  outBps?: number;
   neighbour?: PortNeighbour;
   poe?: boolean;
   label?: string;
@@ -69,6 +72,8 @@ export interface FaceplateDevice {
   modules?: ChassisModule[];
   radios?: RadioInfo[];
   apState?: PortState;
+  snmpAt?: string;
+  snmpMissing?: boolean;
   moduleSlotFilled?: boolean;
   model?: string;
   modelName?: string;
@@ -177,6 +182,7 @@ export interface DeviceNeighbor {
   remotePort: string;
   remoteAddress: string;
   protocol: string;
+  source?: string;
 }
 
 export interface DeviceBackup {
@@ -231,6 +237,7 @@ export interface DeviceDetailData {
   interfaces?: DeviceInterfaceRow[];
   addresses?: DeviceAddressRow[];
   neighbors?: DeviceNeighbor[];
+  neighborNote?: string;
   backup?: DeviceBackup;
   history?: SeriesPoint[];
   sources?: DeviceSource[];

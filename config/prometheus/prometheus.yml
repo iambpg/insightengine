@@ -172,7 +172,7 @@ scrape_configs:
     sample_limit: 20000
     metrics_path: /snmp
     params:
-      module: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
@@ -217,7 +217,7 @@ scrape_configs:
     sample_limit: 50000
     metrics_path: /snmp
     params:
-      module: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
@@ -230,7 +230,7 @@ scrape_configs:
     sample_limit: 50000
     metrics_path: /snmp
     params:
-      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, system]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, system, cisco_cdp, lldp]
       auth: [ie_snmp_v2]
     http_sd_configs:
       - <<: *netbox_sd

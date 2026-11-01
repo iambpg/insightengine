@@ -13,6 +13,15 @@ interface Props {
   top: number;
 }
 
+function fmtBps(bps: number | undefined): string {
+  if (bps === undefined || Number.isNaN(bps)) return '—';
+  const abs = Math.abs(bps);
+  if (abs >= 1e9) return `${(bps / 1e9).toFixed(2)} Gbps`;
+  if (abs >= 1e6) return `${(bps / 1e6).toFixed(2)} Mbps`;
+  if (abs >= 1e3) return `${(bps / 1e3).toFixed(1)} kbps`;
+  return `${Math.round(bps)} bps`;
+}
+
 export default function PortTooltip({ port, left, top }: Props) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
 
@@ -38,8 +47,16 @@ export default function PortTooltip({ port, left, top }: Props) {
       </div>
       <dl className="mt-2 space-y-1.5 text-xs">
         <div className="flex justify-between">
-          <dt className="text-down">Type / speed</dt>
-          <dd className="font-mono-data">{port.type} · {port.speed}</dd>
+          <dt className="text-down">Speed</dt>
+          <dd className="font-mono-data">{port.speed}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-down">In</dt>
+          <dd className="font-mono-data">{fmtBps(port.inBps)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-down">Out</dt>
+          <dd className="font-mono-data">{fmtBps(port.outBps)}</dd>
         </div>
         <div>
           <div className="mb-1 flex justify-between">
@@ -56,7 +73,7 @@ export default function PortTooltip({ port, left, top }: Props) {
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-down">Neighbour</dt>
-          <dd className="truncate text-right font-mono-data">{port.neighbour ? `${port.neighbour.device} · ${port.neighbour.port}` : 'none seen'}</dd>
+          <dd className="truncate text-right font-mono-data">{port.neighbour ? `${port.neighbour.device} · ${port.neighbour.port}${port.neighbour.source ? ` · ${port.neighbour.source}` : ''}` : 'none seen'}</dd>
         </div>
       </dl>
       <p className="mt-2 border-t border-navy-3 pt-1.5 text-[10px] text-down">Click to open port graph</p>

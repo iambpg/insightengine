@@ -777,7 +777,7 @@ def test_resolve_id_name_ip_status_netdisco_and_paging(stack, monkeypatch):
     assert paged_body["comparison"]["netbox"]["portCount"] == 201
     assert paged_body["faceplate"]["form_factor"] == "modular-chassis"
 
-    def fake_find(_url, key):
+    def fake_find(_url, key, suffixes=None):
         if key not in ("10.9.9.9", "nd-orphan"):
             return None
         ports = [
