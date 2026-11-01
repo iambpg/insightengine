@@ -1,10 +1,14 @@
 # Device discovery matches the real stack's NetBox plugin
 # (/api/plugins/lists/prometheus-devices/), reached through the internal Caddy
 # listener so TLS is checked with the CA mounted at /etc/ie-certs/ca.crt
-# (not under the read-only /etc/prometheus tree). Refresh is 5m, so a new active
-# device with a primary IP shows up within the 5-10 minute window.
+# (not under the read-only /etc/prometheus tree). ICMP jobs refresh every 5m,
+# so a new active device shows up within about 5-10 minutes. SNMP jobs refresh
+# every 1m. Their URLs carry an ie_sd query parameter, which ie-config changes
+# when the auth map changes and then POSTs http://prometheus:9090/-/reload.
+# A reload does not re-fetch HTTP SD unless that config changed, and a failed
+# refresh keeps the previous targets, including __param_auth.
 # Module and auth come from the job, then from __meta_netbox_snmp_* when the
-# plugin set them (role / manufacturer / platform).
+# plugin set them (role / manufacturer / platform). NetBox ignores ie_sd.
 global:
   scrape_interval: 60s
   scrape_timeout: 30s
@@ -176,7 +180,8 @@ scrape_configs:
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-switch
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-switch&ie_sd=0
+        refresh_interval: 1m
     relabel_configs: &snmp_relabels
       - source_labels: [__address__]
         target_label: __param_target
@@ -221,7 +226,8 @@ scrape_configs:
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=core-switch
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=core-switch&ie_sd=0
+        refresh_interval: 1m
     relabel_configs: *snmp_relabels
 
   - job_name: snmp-distribution-switches
@@ -234,7 +240,8 @@ scrape_configs:
       auth: [ie_snmp_v2]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=distribution-switch
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=distribution-switch&ie_sd=0
+        refresh_interval: 1m
     relabel_configs: *snmp_relabels
 
   - job_name: snmp-fortigate-sdwan-devices
@@ -246,7 +253,8 @@ scrape_configs:
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=sdwan
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=sdwan&ie_sd=0
+        refresh_interval: 1m
     relabel_configs: *snmp_relabels
 
   - job_name: snmp-fortigate-hub-devices
@@ -258,7 +266,8 @@ scrape_configs:
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=hub
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=hub&ie_sd=0
+        refresh_interval: 1m
     relabel_configs: *snmp_relabels
 
   - job_name: snmp-fortigate-core-fw-devices
@@ -270,7 +279,8 @@ scrape_configs:
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=core-firewall
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=core-firewall&ie_sd=0
+        refresh_interval: 1m
     relabel_configs: *snmp_relabels
 
   - job_name: snmp-cisco-wlc
@@ -283,7 +293,8 @@ scrape_configs:
       auth: [ie_wlc_v2]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller&ie_sd=0
+        refresh_interval: 1m
     relabel_configs: *snmp_relabels
 
   - job_name: snmp-other
@@ -295,7 +306,8 @@ scrape_configs:
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
-        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active
+        url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&ie_sd=0
+        refresh_interval: 1m
     relabel_configs:
       - source_labels: [__meta_netbox_role]
         regex: access-switch|core-switch|distribution-switch|sdwan|hub|wireless-controller|core-firewall

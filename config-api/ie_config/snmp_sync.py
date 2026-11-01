@@ -6,9 +6,11 @@ names (hashes), never communities or passphrases.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import re
 import socket
 import urllib.error
 import urllib.parse
@@ -173,11 +175,18 @@ def grouped_profiles(rows: list[dict]) -> list[dict]:
     return list(groups.values())
 
 
+def auth_map_generation(mapping: dict) -> str:
+    """Stable token for the SNMP HTTP SD URLs. Addresses and auth names only."""
+    blob = yaml.safe_dump(mapping, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()[:12]
+
+
 def write_outputs(directory: str, base_snmp_yml: str, rows: list[dict]) -> dict:
     """Write the auth map (no secrets) and the runtime exporter file (secrets, mode 0600)."""
     os.makedirs(directory, exist_ok=True)
     mapping = auth_map_from_rows(rows)
     map_path = os.path.join(directory, AUTH_MAP_NAME)
+    changed = load_auth_map(map_path) != mapping
     _atomic_bytes(map_path, yaml.safe_dump(mapping, sort_keys=True).encode(), 0o644)
     groups = grouped_profiles(rows)
     extra = {}
@@ -201,7 +210,13 @@ def write_outputs(directory: str, base_snmp_yml: str, rows: list[dict]) -> dict:
         json.dumps({"groups": assignments}).encode(),
         0o600,
     )
-    return {"devices": len(rows), "profiles": len(groups), "mapped": len(mapping)}
+    return {
+        "devices": len(rows),
+        "profiles": len(groups),
+        "mapped": len(mapping),
+        "auth_map_changed": changed,
+        "auth_map_generation": auth_map_generation(mapping),
+    }
 
 
 def netdisco_yaml_entries(groups: list[dict]) -> str:
@@ -255,16 +270,78 @@ def reload_exporters(urls: list[str], opener: Callable | None = None) -> list[st
     return ok
 
 
-def default_exporter_urls() -> list[str]:
+def host_resolves(host: str) -> bool:
+    """False only when DNS says the name does not exist.
+
+    A temporary resolver failure keeps the URL, so a blip does not skip a
+    reload. Missing names (the scale-profile exporters, when that profile is
+    off) are not failures.
+    """
+    if not host:
+        return False
+    try:
+        socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        missing = {socket.EAI_NONAME}
+        nodata = getattr(socket, "EAI_NODATA", None)
+        if nodata is not None:
+            missing.add(nodata)
+        if exc.errno in missing:
+            return False
+        log.debug("snmp exporter dns lookup failed for %s: %s", host, exc.__class__.__name__)
+        return True
+    except OSError as exc:
+        log.debug("snmp exporter dns lookup failed for %s: %s", host, exc.__class__.__name__)
+        return True
+    return True
+
+
+def _replica_urls() -> list[str]:
+    """Exporters 1-4 unless SNMP_EXPORTER_REPLICAS names a smaller or larger set.
+
+    The scrape-lb Caddyfile lists only 1 and 2. Its entrypoint adds 3 and 4
+    when those names resolve, so the static file is not the list to reload.
+    """
+    count = 4
+    raw = os.environ.get("SNMP_EXPORTER_REPLICAS", "").strip()
+    if raw:
+        try:
+            parsed = int(raw)
+        except ValueError:
+            parsed = 0
+        if 1 <= parsed <= 16:
+            count = parsed
+        else:
+            log.warning("SNMP_EXPORTER_REPLICAS is invalid; trying exporters 1-4")
+    return ["http://snmp-exporter-%d:9116" % i for i in range(1, count + 1)]
+
+
+def default_exporter_urls(resolve: Callable[[str], bool] | None = None) -> list[str]:
+    """Reload targets that exist. SNMP_EXPORTER_RELOAD_URLS replaces the default list.
+
+    Names that do not resolve are skipped at debug. Setups that run exporters
+    3 and 4 still get a reload, because those names resolve when the scale
+    profile is up.
+    """
     raw = os.environ.get("SNMP_EXPORTER_RELOAD_URLS", "")
     if raw.strip():
-        return [part.strip() for part in raw.split(",") if part.strip()]
-    return [
-        "http://snmp-exporter-1:9116",
-        "http://snmp-exporter-2:9116",
-        "http://snmp-exporter-3:9116",
-        "http://snmp-exporter-4:9116",
-    ]
+        urls = [part.strip() for part in raw.split(",") if part.strip()]
+    else:
+        urls = _replica_urls()
+    resolve = resolve or host_resolves
+    kept = []
+    for url in urls:
+        host = urllib.parse.urlparse(url).hostname or ""
+        try:
+            exists = bool(host) and bool(resolve(host))
+        except Exception as exc:
+            log.debug("snmp exporter resolve failed for %s: %s", url, exc.__class__.__name__)
+            exists = True
+        if not exists:
+            log.debug("snmp exporter %s does not resolve; skipping reload", url)
+            continue
+        kept.append(url)
+    return kept
 
 
 def exporter_probe(host: str, auth: str, port: int = 161, urls: list[str] | None = None, opener: Callable | None = None) -> int:
@@ -554,7 +631,95 @@ def test_device(settings, device_id: int) -> dict:
     return result
 
 
-def sync_snmp(settings, discovery=None, get_json: Callable[[str], Any] | None = None) -> dict:
+# Matches the ie_sd query token on SNMP http_sd URLs. ICMP jobs do not carry it.
+_IE_SD_RE = re.compile(r"([?&]ie_sd=)([0-9a-fA-F]+)")
+
+
+def prometheus_config_path(settings) -> str:
+    root = getattr(settings, "config_root", "") or "."
+    return os.path.join(root, "config", "prometheus", "prometheus.yml")
+
+
+def bump_http_sd_generation(text: str, generation: str) -> str | None:
+    """Replace every ie_sd token. None when the file has no token to change.
+
+    Prometheus compares HTTP SD configs with reflect.DeepEqual and keeps the
+    running provider when they match, so POST /-/reload alone does not fetch
+    again. Changing the URL makes the next reload start a new provider, which
+    fetches immediately. A failed fetch would otherwise keep the previous
+    __param_auth until the process is restarted.
+    """
+    if not re.fullmatch(r"[0-9a-fA-F]{1,32}", generation or ""):
+        raise ValueError("generation")
+    if _IE_SD_RE.search(text) is None:
+        return None
+    return _IE_SD_RE.sub(lambda match: match.group(1) + generation, text)
+
+
+def reload_prometheus(url: str, opener: Callable | None = None) -> bool:
+    """POST /-/reload on the in-network Prometheus (not the public Caddy port).
+
+    prometheus:9090 has --web.enable-lifecycle and no basic auth. The public
+    Caddy site in front of Prometheus does require basic auth; this does not
+    call that site. Failures are logged and swallowed.
+    """
+    opener = opener or urllib.request.urlopen
+    target = url.rstrip("/") + "/-/reload"
+    request = urllib.request.Request(target, data=b"", method="POST")
+    try:
+        with opener(request, timeout=5) as resp:
+            if getattr(resp, "status", 200) >= 300:
+                log.warning("prometheus reload failed for %s: status %s", target, getattr(resp, "status", ""))
+                return False
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        log.warning("prometheus reload failed for %s: %s", target, exc.__class__.__name__)
+        return False
+    return True
+
+
+def refresh_prometheus_http_sd(settings, generation: str, opener: Callable | None = None) -> bool:
+    """Point SNMP http_sd at a new ie_sd value and reload Prometheus.
+
+    Idempotent for a given generation: rewriting the same token is a no-op,
+    and a reload of an already-loaded config does not restart discovery.
+    Returns False on any skip or failure. Never raises.
+    """
+    path = prometheus_config_path(settings)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError as exc:
+        log.warning("prometheus http_sd refresh: cannot read config: %s", exc.__class__.__name__)
+        return False
+    try:
+        updated = bump_http_sd_generation(text, generation)
+    except ValueError:
+        log.warning("prometheus http_sd refresh: bad generation")
+        return False
+    if updated is None:
+        log.warning("prometheus http_sd refresh: ie_sd token missing; reload would not rediscover")
+        return False
+    if updated != text:
+        try:
+            mode = os.stat(path).st_mode & 0o777
+            _atomic_bytes(path, updated.encode(), mode or 0o644)
+        except OSError as exc:
+            log.warning("prometheus http_sd refresh: cannot write config: %s", exc.__class__.__name__)
+            return False
+    base = (getattr(settings, "prometheus_url", "") or "http://prometheus:9090").rstrip("/")
+    if not reload_prometheus(base, opener):
+        return False
+    log.info("prometheus http_sd refresh generation=%s", generation)
+    return True
+
+
+def sync_snmp(
+    settings,
+    discovery=None,
+    get_json: Callable[[str], Any] | None = None,
+    opener: Callable | None = None,
+    resolve: Callable[[str], bool] | None = None,
+) -> dict:
     """Pull rendered contexts and refresh generated files. Raises on NetBox failure."""
     directory = snmp_dir(settings)
     if get_json is None:
@@ -569,8 +734,15 @@ def sync_snmp(settings, discovery=None, get_json: Callable[[str], Any] | None = 
     summary = write_outputs(directory, base, rows)
     if discovery is not None:
         discovery.render_deployment()
-    reload_exporters(default_exporter_urls())
-    log.info("snmp sync devices=%s profiles=%s mapped=%s", summary["devices"], summary["profiles"], summary["mapped"])
+    reload_exporters(default_exporter_urls(resolve), opener)
+    if summary.get("auth_map_changed"):
+        # The auth file is already on disk. Bump ie_sd first so the reload
+        # starts new HTTP SD providers, which fetch that file immediately.
+        refresh_prometheus_http_sd(settings, summary["auth_map_generation"], opener)
+    log.info(
+        "snmp sync devices=%s profiles=%s mapped=%s auth_map_changed=%s",
+        summary["devices"], summary["profiles"], summary["mapped"], summary["auth_map_changed"],
+    )
     return summary
 
 

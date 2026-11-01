@@ -13,7 +13,8 @@ When a device's rendered context has no `monitoring_snmp` object, Prometheus and
 ie-config reads each active device with the service token, hashes the resolved profile, and:
 
 - writes `data/snmp/auth-by-ip.yml` (addresses and auth names only) for the NetBox `prometheus-devices` HTTP SD source, which sets `__meta_netbox_snmp_auth`; Prometheus already copies that label to `__param_auth`
-- writes `data/snmp/snmp.runtime.yml` (mode 0600) with one `auths:` entry per distinct profile (only the generated auths; the exporters layer it over the committed `snmp.yml`, see `config/snmp/snmp-exporter-run.sh`) and reloads the snmp-exporters via `POST /-/reload`
+- writes `data/snmp/snmp.runtime.yml` (mode 0600) with one `auths:` entry per distinct profile (only the generated auths; the exporters layer it over the committed `snmp.yml`, see `config/snmp/snmp-exporter-run.sh`) and reloads the snmp-exporters that resolve on the Docker network via `POST /-/reload`
+- when that auth map's contents change, rewrites the `ie_sd` token on the SNMP HTTP SD URLs in `config/prometheus/prometheus.yml` and POSTs `http://prometheus:9090/-/reload`, so Prometheus fetches the new `__meta_netbox_snmp_auth` immediately
 - adds Netdisco `device_auth` entries with `only:` set to those addresses, ahead of the `.env` fallback entry
 
 A sync runs every 5 minutes and right after a save through Settings → SNMP. A context edited directly in NetBox is picked up at the next pass. The "test device" action does a v2c GET from ie-config; for v3 it asks an exporter to scrape the device's `system` module with the generated auth, so a v3 profile saved less than a few seconds ago can answer `auth_not_loaded` until the sync has finished.
@@ -35,7 +36,7 @@ In both modes `data/snmp/profiles.json` (mode 0600) keeps a copy of the secrets 
 
 NetBox deep-merges the config contexts that match a device, so keys from a lower-weight context survive under a higher-weight one (a `{"profile": "x"}` context over a full v3 context still contains `version`, and the full profile wins). Give every `monitoring_snmp` context the same shape and use the weight only to pick the winner.
 
-Generated files that hold secrets, all mode 0600 and root-owned: `data/snmp/profiles.json`, `data/snmp/assignments.json` (the input for the Netdisco `device_auth` rendering), `data/snmp/snmp.runtime.yml`. `data/snmp/auth-by-ip.yml` (0644) holds only IP to auth names. A device whose `monitoring_snmp` fails validation is logged by device id (never by value), skipped in the generated files, and keeps the `.env` fallback; the sync of every other device carries on. Prometheus reads the http_sd list every 5 minutes, so a removed or renamed auth can answer `400` for up to that long.
+Generated files that hold secrets, all mode 0600 and root-owned: `data/snmp/profiles.json`, `data/snmp/assignments.json` (the input for the Netdisco `device_auth` rendering), `data/snmp/snmp.runtime.yml`. `data/snmp/auth-by-ip.yml` (0644) holds only IP to auth names. A device whose `monitoring_snmp` fails validation is logged by device id (never by value), skipped in the generated files, and keeps the `.env` fallback; the sync of every other device carries on. SNMP http_sd jobs refresh every minute. When the auth map changes, the sync also reloads Prometheus with a new `ie_sd` URL token, because a reload of an unchanged config does not re-fetch HTTP SD and a failed refresh keeps the previous `__param_auth`. A removed or renamed auth can still answer `400` until that reload or the next successful refresh.
 
 The Settings API never returns a community or passphrase. Saving a profile sends those fields once. Leaving them blank on a later save keeps the stored value. They are not written to logs.
 
