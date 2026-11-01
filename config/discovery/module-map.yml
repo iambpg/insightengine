@@ -6,13 +6,13 @@ default_module: if_mib
 default_auth: ntt_snmpv3_auth
 by_role:
   access-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
     auth: ntt_snmpv3_auth
   core-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
     auth: ntt_snmpv3_auth
   distribution-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, system]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, system, cisco_cdp, lldp]
     auth: ie_snmp_v2
   sdwan:
     modules: [if_mib_fortigate, fortigate, fortigate_bandwidth]

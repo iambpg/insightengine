@@ -6,6 +6,8 @@
 # schedule keys are the Netdisco worker names. The scheduler container also runs
 # discover/macsuck/arpnip for each prefix in scan-prefixes.txt.
 
+# domain_suffix is inserted by ie-config from HOSTNAME_STRIP_SUFFIXES (or
+# sync.yml hostname_strip_suffixes). Do not add a second domain_suffix key here.
 # SNMP timing comes from Settings → Netdisco → sync.yml (ie-config substitutes these).
 # snmptimeout is microseconds (1000000 = 1 second). snmp_try_slow_connect false
 # skips Netdisco's second, slow pass over addresses that did not answer.

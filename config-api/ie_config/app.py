@@ -823,7 +823,8 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     def unapproved(request: Request):
         user, _csrf = user_of(request)
         require_reader(user)
-        return [unapproved_for_ui(row) for row in discovery.list_unapproved()]
+        suffixes = discovery.hostname_suffixes()
+        return [unapproved_for_ui(row, suffixes) for row in discovery.list_unapproved()]
 
     @app.post("/api/v1/discovery/{cid}/approve")
     async def approve(cid: int, request: Request):
@@ -868,6 +869,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
             # unapproved list never call this.
             created = NetBoxWriter(settings.netbox_url, headers).approve_device(
                 candidate, guess, discovery.read_sync_settings(), load_device_aliases(discovery.alias_path()),
+                discovery.hostname_suffixes(),
             )
         except Exception as exc:
             _audit(sf, user, "discovery-approve", client_ip(request), "failed", "netdisco", "", "", exc.__class__.__name__)

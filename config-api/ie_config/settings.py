@@ -55,6 +55,7 @@ class Settings:
     lockout_minutes: int = 15
     session_hours: int = 12
     oxidized_url: str = "http://oxidized:8888"
+    hostname_strip_suffixes: str = ""
     device_cli_secret_dir: str = ""
     env_file: str = ""
     vault_reveal_seconds: int = 300
@@ -87,6 +88,7 @@ class Settings:
             fleet_cache_seconds=float(os.environ.get("FLEET_CACHE_SECONDS", "8") or "8"),
             alert_webhook_token_file=os.environ.get("ALERT_WEBHOOK_TOKEN_FILE", ""),
             oxidized_url=os.environ.get("OXIDIZED_URL", "http://oxidized:8888").rstrip("/"),
+            hostname_strip_suffixes=os.environ.get("HOSTNAME_STRIP_SUFFIXES", ""),
             device_cli_secret_dir=os.environ.get(
                 "DEVICE_CLI_SECRET_DIR", os.path.join(root, "secrets", "device-cli")
             ),

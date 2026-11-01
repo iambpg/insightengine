@@ -20,6 +20,7 @@ import yaml
 from sqlalchemy import select
 
 from .db import DiscoveryCandidate, DiscoveryScan, utcnow
+from .hostnames import effective_suffixes, inject_domain_suffix, strip_hostname
 
 _CIDR = re.compile(r"^[0-9]{1,3}(?:\.[0-9]{1,3}){3}/[0-9]{1,2}$")
 
@@ -334,6 +335,9 @@ class Discovery:
     def deployment_template_path(self) -> str:
         return os.path.join(self.config_root, "config", "netdisco", "deployment.yml")
 
+    def hostname_suffixes(self) -> list[str]:
+        return effective_suffixes(self.settings, self.read_sync_settings())
+
     def read_sync_settings(self) -> dict:
         data = load_yaml(self.sync_settings_path(), {})
         if not isinstance(data, dict):
@@ -475,6 +479,7 @@ class Discovery:
         env["SNMP_RETRIES"] = str(retries)
         env["SNMP_TRY_SLOW"] = "true" if slow in (True, "true", "yes", "on", 1, "1") else "false"
         rendered = render_template(text, env, _RENDER_VARS)
+        rendered = inject_domain_suffix(rendered, self.hostname_suffixes())
         rendered = self._splice_snmp_profiles(rendered)
         out = self.settings.netdisco_out_dir
         os.makedirs(out, exist_ok=True)
@@ -619,10 +624,11 @@ class Discovery:
                     continue
                 guess = guess_device(row.get("sysobjectid") or "", row.get("sysdescr") or "", mapping)
                 site = site_for_ip(ip, prefixes)
+                short_name = strip_hostname(row.get("name") or "", self.hostname_suffixes()) or ip
                 if existing is None:
                     db.add(DiscoveryCandidate(
                         ip=ip,
-                        name=row.get("name") or ip,
+                        name=short_name,
                         sysdescr=row.get("sysdescr") or "",
                         sysobjectid=row.get("sysobjectid") or "",
                         vendor=row.get("vendor") or guess["manufacturer"],
@@ -636,6 +642,8 @@ class Discovery:
                     added += 1
                 elif existing.status == "pending":
                     existing.last_seen = utcnow()
+                    if short_name:
+                        existing.name = short_name
                     existing.sysdescr = row.get("sysdescr") or existing.sysdescr
                     existing.vendor = row.get("vendor") or existing.vendor
                     existing.model = row.get("model") or existing.model
@@ -837,9 +845,9 @@ def _scan_public(row: DiscoveryScan) -> dict:
     return body
 
 
-def unapproved_for_ui(row: dict) -> dict:
+def unapproved_for_ui(row: dict, suffixes: list[str] | None = None) -> dict:
     """Shape GET /api/v1/discovery/unapproved the way the Not in NetBox screen reads it."""
-    name = str(row.get("name") or "")
+    name = strip_hostname(str(row.get("name") or ""), suffixes)
     suggested = {}
     if row.get("role"):
         suggested["role"] = row["role"]
@@ -1008,7 +1016,7 @@ class NetBoxWriter:
                 return ranked[0]
         return None
 
-    def approve_device(self, candidate: dict, guess: dict, sync_settings: dict, aliases: dict | None = None) -> dict:
+    def approve_device(self, candidate: dict, guess: dict, sync_settings: dict, aliases: dict | None = None, suffixes: list[str] | None = None) -> dict:
         # The UI sends names ("Access switch", "Test Site"); NetBox slugs are lower-case with dashes.
         site_name = (candidate.get("site") or sync_settings.get("default_site_slug") or "discovered").strip()
         site_slug = _slug(site_name)
@@ -1042,7 +1050,10 @@ class NetBoxWriter:
                 "manufacturer": manufacturer["id"],
             })
             platform_id = platform.get("id")
-        name = candidate.get("name") or ("discovered-%s" % candidate["ip"].replace(".", "-"))
+        name = strip_hostname(
+            candidate.get("name") or ("discovered-%s" % candidate["ip"].replace(".", "-")),
+            suffixes,
+        ) or ("discovered-%s" % candidate["ip"].replace(".", "-"))
         device_body = {
             "name": name[:64],
             "device_type": dtype["id"],

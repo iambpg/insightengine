@@ -266,6 +266,37 @@ def test_approve_creates_interface_then_ip_then_primary_and_rolls_back(tmp_path)
         server.shutdown()
 
 
+def test_rendered_deployment_writes_domain_suffix_from_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOSTNAME_STRIP_SUFFIXES", ".pnp.co.za, example.net")
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    discovery.render_deployment()
+    text = (Path(settings.netdisco_out_dir) / "deployment.yml").read_text(encoding="utf-8")
+    assert "domain_suffix:" in text
+    assert "- '.pnp.co.za'" in text
+    assert "- '.example.net'" in text
+    assert text.index("domain_suffix:") < text.index("snmptimeout:")
+
+
+def test_approve_strips_the_domain_suffix_from_the_netbox_name(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOSTNAME_STRIP_SUFFIXES", ".pnp.co.za")
+    server = _server()
+    try:
+        base = "http://127.0.0.1:%s" % server.server_address[1]
+        writer = NetBoxWriter(base, {"Authorization": "Bearer nbt_citoken12345.secret"})
+        writer.approve_device(
+            {"ip": "10.129.32.16", "name": "wc18.cc30-claremont-1rsw01.pnp.co.za", "vendor": "Cisco", "model": "WS-C2960-24PC-L", "site": "Claremont"},
+            {"role": "access-switch"},
+            {},
+            suffixes=[".pnp.co.za"],
+        )
+        posted = json.loads(next(call[3] for call in server.calls if call[0] == "POST" and call[1].startswith("/api/dcim/devices")))
+        assert posted["name"] == "wc18.cc30-claremont-1rsw01"
+    finally:
+        server.shutdown()
+
+
 def test_rendered_deployment_is_readable_by_netdisco(tmp_path):
     settings = _settings(tmp_path, "http://127.0.0.1:9")
     factory, _engine = make_session_factory(settings.database_url)

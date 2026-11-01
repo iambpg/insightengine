@@ -7,6 +7,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
+import { countPorts, faceplateSummaryLine, SNMP_MISSING_HINT } from '@/components/faceplate/summary';
 import { api } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
@@ -241,10 +242,10 @@ export default function DeviceDetailView() {
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <FaceplateLegend />
-              <p className="text-xs text-muted-foreground">
-                <span className="font-mono-data">{allPorts.length}</span> ports · {allPorts.filter((p) => p.state === 'up').length} up ·{' '}
-                {allPorts.filter((p) => p.state === 'warning').length} warning · {allPorts.filter((p) => p.state === 'fault').length} fault
-              </p>
+              <div className="text-xs text-muted-foreground">
+                <p data-testid="faceplate-summary">{faceplateSummaryLine(countPorts(allPorts), device?.faceplate.snmpAt)}</p>
+                {device?.faceplate.snmpMissing ? <p className="mt-1">{SNMP_MISSING_HINT}</p> : null}
+              </div>
             </div>
             {selected && (
               <div className="slide-in-right mt-3">
@@ -350,13 +351,17 @@ function Inventory({ device }: { device: DeviceDetailData }) {
         </div>
         <div>
           <h2 className="text-sm font-semibold">Neighbours</h2>
+          {device.neighborNote ? (
+            <p className="mt-1 text-sm text-muted-foreground">{device.neighborNote}</p>
+          ) : null}
           {(device.neighbors ?? []).length === 0 ? (
-            <p className="mt-1 text-sm text-muted-foreground">No Netdisco LLDP or CDP neighbours were returned.</p>
+            device.neighborNote ? null : <p className="mt-1 text-sm text-muted-foreground">No Netdisco LLDP or CDP neighbours were returned.</p>
           ) : (
             <ul className="mt-2 space-y-1 font-mono-data text-xs">
               {(device.neighbors ?? []).map((row) => (
-                <li key={`${row.localPort}-${row.remoteName}-${row.remotePort}`}>
+                <li key={`${row.localPort}-${row.remoteName}-${row.remotePort}-${row.source || ''}`}>
                   {row.localPort} → {row.remoteName || row.remoteAddress || 'unknown'} {row.remotePort}
+                  {row.source ? <span className="text-muted-foreground"> · {row.source}</span> : null}
                 </li>
               ))}
             </ul>

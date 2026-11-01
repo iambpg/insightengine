@@ -14,6 +14,7 @@ const STATE_TEXT: Record<string, string> = {
   warning: 'Link up with warnings, check utilisation or errors',
   fault: 'Port fault, link unstable or failed',
   disabled: 'Administratively disabled',
+  unknown: 'No SNMP oper state for this port yet',
 };
 
 function hashNum(s: string): number {

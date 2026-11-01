@@ -19,3 +19,7 @@ presweep_timeout_seconds: 0.4
 presweep_parallel: 64
 default_site_slug: discovered
 default_role_slug: access-switch
+# DNS suffixes removed from Netdisco and CDP/LLDP names before they are shown
+# or written to NetBox. Leading dots are optional. HOSTNAME_STRIP_SUFFIXES in
+# the environment overrides this list. Example: ['.pnp.co.za']
+hostname_strip_suffixes: []

@@ -37,6 +37,12 @@ If the probe cannot run and `ping` exists, the scheduler falls back to `netdisco
 
 Edit them in Settings → Netdisco → `sync.yml`. ie-config re-renders `deployment.yml` on the next poll. Netdisco reads that file because `DANCER_ENVDIR` is `/home/netdisco/nd-site-local`. The rendered file is mode 600 and owned by uid 901 (the image user); if chown is not permitted it is mode 644 so the process can still open it.
 
+## Hostnames
+
+`HOSTNAME_STRIP_SUFFIXES` (comma-separated, default empty) lists DNS suffixes to remove from the end of a name. `.pnp.co.za` is an example for one network, not a built-in default. The same list is written to Netdisco `domain_suffix` in the rendered `deployment.yml`, so Netdisco's own UI shortens those names. When the environment variable is empty, `hostname_strip_suffixes` in Settings → Netdisco → `sync.yml` is used instead.
+
+InsightEngine applies that list when it shows a Netdisco name (neighbours, a Netdisco-only device, and Not in NetBox), when it approves a device into NetBox, and when it matches a Netdisco name to a NetBox hostname. CDP and LLDP device ids also lose a trailing `(SERIAL)`. `wc18.cc30-claremont-1rsw01.pnp.co.za` is shown as `wc18.cc30-claremont-1rsw01`.
+
 ## Approve
 
 The approve form loads roles, sites, and platforms from `GET /api/v1/discovery/catalog` (cached for a minute). Mock mode still uses the demo lists.
