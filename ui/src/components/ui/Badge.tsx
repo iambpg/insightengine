@@ -38,6 +38,15 @@ const HEALTH_META: Record<DeviceHealth, { tone: Tone; icon: string; label: strin
   unreachable: { tone: 'neutral', icon: 'SignalSlashIcon', label: 'Unreachable' },
 };
 
+export function StatusBadge({ status }: { status?: string }) {
+  const value = (status || '').trim();
+  if (!value) return null;
+  const key = value.toLowerCase();
+  const tone: Tone = key === 'active' ? 'success' : key === 'offline' || key === 'failed' || key === 'netdisco-only' ? 'warning' : 'neutral';
+  const label = key === 'netdisco-only' ? 'Netdisco only' : value;
+  return <Badge tone={tone}>{label}</Badge>;
+}
+
 export function HealthBadge({ health }: { health: DeviceHealth }) {
   const m = HEALTH_META[health];
   return (

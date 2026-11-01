@@ -116,7 +116,8 @@ export default function CommandPalette({ open, onClose }: { open: boolean; onClo
 
   const go = (e: Entry) => {
     onClose();
-    router.push(e.href);
+    const href = !mock && (e.href === '/device-detail' || e.href.startsWith('/device-detail?form=')) ? '/' : e.href;
+    router.push(href);
   };
 
   return (

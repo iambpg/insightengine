@@ -11,52 +11,14 @@ import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
-import type { DeviceDetailData, DeviceHealth, DeviceRow, PortInfo, SiteRow } from '@/lib/types';
-import DeviceArt, { ArtDefs, type DeviceKind } from '@/app/topology/components/DeviceArt';
+import type { DeviceDetailData, DeviceHealth, DeviceRow, SiteRow } from '@/lib/types';
+import DeviceArt, { ArtDefs } from '@/app/topology/components/DeviceArt';
 import TopologySiteList from '@/app/topology/components/TopologySiteList';
-
-interface TopoNode {
-  id: string;
-  label: string;
-  sub: string;
-  kind: DeviceKind;
-  health: DeviceHealth;
-  x: number;
-  y: number;
-  current?: boolean;
-  href?: string;
-}
-
-interface TopoLink {
-  id: string;
-  from: string;
-  to: string;
-  label: string;
-  state: 'up' | 'warning' | 'fault';
-}
+import { buildDeviceTopology, buildSiteTopology, deviceNodeHref, type TopoLink, type TopoNode } from '@/app/topology/components/topologyLinks';
 
 const FORMS = Object.keys(FACEPLATE_SAMPLES);
 const NODE_W = 128;
 const NODE_H = 40;
-
-const KIND_FORM: Partial<Record<DeviceKind, string>> = {
-  switch: 'access-switch-48',
-  stack: 'switch-stack',
-  firewall: 'firewall',
-  router: 'branch-router',
-  controller: 'wireless-controller',
-  ap: 'ceiling-ap',
-  chassis: 'modular-chassis',
-};
-
-function hrefForKind(kind: DeviceKind): string | undefined {
-  const f = KIND_FORM[kind];
-  return f && FORMS.includes(f) ? `/device-detail?form=${f}` : undefined;
-}
-
-function hrefForForm(form: string, kind: DeviceKind): string | undefined {
-  return FORMS.includes(form) ? `/device-detail?form=${form}` : hrefForKind(kind);
-}
 
 const STATE_STROKE: Record<TopoLink['state'], string> = {
   up: 'var(--success)',
@@ -70,131 +32,6 @@ const HEALTH_STROKE: Record<DeviceHealth, string> = {
   critical: 'var(--destructive)',
   unreachable: 'var(--muted-foreground)',
 };
-
-function kindFor(role: string, name = ''): DeviceKind {
-  const r = role.toLowerCase();
-  const n = name.toLowerCase();
-  if (r.includes('firewall') || n.startsWith('fw')) return 'firewall';
-  if (r.includes('router') || n.startsWith('rtr')) return 'router';
-  if (r.includes('access point') || n.startsWith('ap')) return 'ap';
-  if (r.includes('wireless') || n.startsWith('wlc')) return 'controller';
-  if (r.includes('stack') || n.startsWith('stk')) return 'stack';
-  if (r.includes('chassis') || n.startsWith('chs')) return 'chassis';
-  if (n.startsWith('isp') || n.startsWith('wan')) return 'cloud';
-  return 'switch';
-}
-
-function portsOf(d: DeviceDetailData): PortInfo[] {
-  const f = d.faceplate;
-  if (f.members) return f.members.flatMap((m) => m.ports);
-  if (f.modules) return f.modules.flatMap((m) => m.ports);
-  return f.ports ?? [];
-}
-
-function buildDeviceTopology(d: DeviceDetailData) {
-  const neighbours = new Map<string, { port: string; local: string; state: TopoLink['state'] }>();
-  portsOf(d).forEach((p) => {
-    if (p.neighbour && !neighbours.has(p.neighbour.device)) {
-      neighbours.set(p.neighbour.device, {
-        port: p.neighbour.port,
-        local: p.name,
-        state: p.state === 'fault' ? 'fault' : p.state === 'warning' ? 'warning' : 'up',
-      });
-    }
-  });
-  const list = Array.from(neighbours.entries()).slice(0, 6);
-  const W = 900;
-  const H = 380;
-  const nodes: TopoNode[] = [
-    { id: 'self', label: d.hostname, sub: d.mgmtIp, kind: kindFor(d.role, d.hostname), health: d.health, x: W / 2, y: H / 2, current: true, href: hrefForForm(d.faceplate.form_factor, kindFor(d.role, d.hostname)) },
-  ];
-  const links: TopoLink[] = [];
-  list.forEach(([name, info], i) => {
-    const angle = (Math.PI * 2 * i) / Math.max(list.length, 1) - Math.PI / 2;
-    nodes.push({
-      id: `n-${name}`,
-      label: name,
-      sub: info.port,
-      kind: kindFor('', name),
-      health: info.state === 'fault' ? 'critical' : info.state === 'warning' ? 'warning' : 'healthy',
-      x: W / 2 + Math.cos(angle) * 320,
-      y: H / 2 + Math.sin(angle) * 140,
-      href: hrefForKind(kindFor('', name)),
-    });
-    links.push({ id: `l-${name}`, from: 'self', to: `n-${name}`, label: `${info.local} ↔ ${info.port}`, state: info.state });
-  });
-  return { nodes, links, W, H };
-}
-
-function stateOf(h: DeviceHealth): TopoLink['state'] {
-  return h === 'critical' || h === 'unreachable' ? 'fault' : h === 'warning' ? 'warning' : 'up';
-}
-
-function buildSiteTopology(devices: DeviceRow[], currentHost?: string) {
-  const W = 900;
-  const find = (k: DeviceKind) => devices.filter((d) => kindFor(d.role, d.hostname) === k);
-  const fw = find('firewall')[0];
-  const rtr = find('router')[0];
-  const wlc = find('controller')[0];
-  const aps = find('ap');
-  const stacks = find('stack');
-  const switches = find('switch');
-  const lower = [...stacks, ...switches];
-
-  const nodes: TopoNode[] = [];
-  const links: TopoLink[] = [];
-  const mk = (d: DeviceRow, x: number, y: number, sub?: string): TopoNode => ({
-    id: d.id,
-    label: d.hostname,
-    sub: sub ?? d.mgmtIp,
-    kind: kindFor(d.role, d.hostname),
-    health: d.health,
-    x,
-    y,
-    current: currentHost ? d.hostname === currentHost : false,
-    href: hrefForForm(d.formFactor, kindFor(d.role, d.hostname)),
-  });
-
-  nodes.push({ id: 'wan', label: 'ISP uplink', sub: 'WAN', kind: 'cloud', health: 'healthy', x: W / 2, y: 40 });
-  let edgeId = 'wan';
-  let y = 40;
-  if (rtr) {
-    y += 85;
-    nodes.push(mk(rtr, W / 2, y));
-    links.push({ id: 'e-wan-rtr', from: 'wan', to: rtr.id, label: 'WAN', state: stateOf(rtr.health) });
-    edgeId = rtr.id;
-  }
-  if (fw) {
-    y += 85;
-    nodes.push(mk(fw, W / 2, y));
-    links.push({ id: 'e-fw', from: edgeId, to: fw.id, label: 'Te0/1', state: stateOf(fw.health) });
-    edgeId = fw.id;
-  }
-  const coreY = y + 95;
-  const distId = edgeId;
-  const rowY = coreY;
-  const lowerNodes = [...lower.slice(0, 4)];
-  const sideItems: DeviceRow[] = [];
-  if (wlc) sideItems.push(wlc);
-  const total = lowerNodes.length + sideItems.length;
-  const gap = total > 0 ? Math.min(210, (W - 160) / Math.max(total, 1)) : 0;
-  const startX = W / 2 - ((total - 1) * gap) / 2;
-  [...lowerNodes, ...sideItems].forEach((d, i) => {
-    nodes.push(mk(d, startX + i * gap, rowY));
-    links.push({ id: `e-${d.id}`, from: distId, to: d.id, label: `Te1/0/${i + 1}`, state: stateOf(d.health) });
-  });
-  const apY = rowY + 95;
-  const apList = aps.slice(0, 4);
-  const apGap = apList.length > 0 ? Math.min(180, (W - 160) / apList.length) : 0;
-  const apStart = W / 2 - ((apList.length - 1) * apGap) / 2;
-  const apParent = wlc ? wlc.id : lowerNodes[0]?.id ?? distId;
-  apList.forEach((d, i) => {
-    nodes.push(mk(d, apStart + i * apGap, apY));
-    links.push({ id: `e-${d.id}`, from: apParent, to: d.id, label: `Gi1/0/${i + 10}`, state: stateOf(d.health) });
-  });
-  const H = (apList.length > 0 ? apY : rowY) + 60;
-  return { nodes, links, W, H };
-}
 
 function Diagram({ nodes, links, W, H, title }: { nodes: TopoNode[]; links: TopoLink[]; W: number; H: number; title: string }) {
   const [hover, setHover] = useState<string | null>(null);
@@ -357,14 +194,15 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
     };
   }, [deviceKey, reload]);
 
-  const devTopo = useMemo(() => (device ? buildDeviceTopology(device) : null), [device]);
+  const live = !isMockMode();
+  const devTopo = useMemo(() => (device ? buildDeviceTopology(device, siteDevices ?? [], live) : null), [device, siteDevices, live]);
   const siteTopo = useMemo(() => {
     if (!device || !siteDevices) return null;
     const merged: DeviceRow[] = siteDevices.map((s) => ({ ...s }));
-    const idx = merged.findIndex((s) => s.formFactor === form);
-    if (idx >= 0) merged[idx] = { ...merged[idx], hostname: device.hostname, mgmtIp: device.mgmtIp, health: device.health };
-    return buildSiteTopology(merged, device.hostname);
-  }, [device, siteDevices, form]);
+    const idx = merged.findIndex((s) => (device.id ? s.id === device.id : s.formFactor === form));
+    if (idx >= 0) merged[idx] = { ...merged[idx], hostname: device.hostname, mgmtIp: device.mgmtIp, health: device.health, formFactor: device.faceplate.form_factor };
+    return buildSiteTopology(merged, live, device.hostname);
+  }, [device, siteDevices, form, live]);
 
   if (error) {
     return <div className="px-3 sm:px-4"><ErrorBox text={error} onRetry={() => setReload((n) => n + 1)} /></div>;
@@ -375,7 +213,7 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
         <Link href="/" className="hover:text-foreground hover:underline">Devices</Link>
         <Icon name="ChevronRightIcon" size={12} />
-        <Link href={isMockMode() ? `/device-detail?form=${form}` : `/device-detail?id=${encodeURIComponent(device?.id || deviceKey)}&form=${form}`} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
+        <Link href={deviceNodeHref(!isMockMode(), device?.id || deviceKey, form) || '/'} className="font-mono-data hover:text-foreground hover:underline">{device?.hostname ?? '…'}</Link>
         <Icon name="ChevronRightIcon" size={12} />
         <span className="text-foreground">Topology</span>
       </nav>
@@ -390,7 +228,7 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
               <span className="font-mono-data text-xs text-muted-foreground">Serial {device.serialMasked}</span>
             </div>
             <Link
-              href={isMockMode() ? `/device-detail?form=${form}` : `/device-detail?id=${encodeURIComponent(device?.id || deviceKey)}&form=${form}`}
+              href={deviceNodeHref(!isMockMode(), device?.id || deviceKey, form) || '/'}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
             >
               <Icon name="ArrowLeftIcon" size={16} />Back to device
@@ -466,7 +304,7 @@ function SiteTopologyPage({ site, onBack }: { site: SiteRow; onBack: () => void 
     };
   }, [site.id, reload]);
 
-  const topo = useMemo(() => (devices ? buildSiteTopology(devices) : null), [devices]);
+  const topo = useMemo(() => (devices ? buildSiteTopology(devices, !isMockMode()) : null), [devices]);
 
   return (
     <div className="space-y-3 px-3 sm:px-4">
@@ -523,8 +361,8 @@ export default function TopologyView() {
   const id = searchParams?.get('id');
   const [site, setSite] = useState<SiteRow | null>(null);
 
-  if (!isMockMode() && id) return <DeviceTopologyPage form={form ?? 'switch-stack'} deviceKey={id} />;
-  if (form) return <DeviceTopologyPage form={form} deviceKey={form} />;
+  if (!isMockMode() && id) return <DeviceTopologyPage form={form ?? 'generic'} deviceKey={id} />;
+  if (isMockMode() && form) return <DeviceTopologyPage form={form} deviceKey={form} />;
   if (site) return <SiteTopologyPage site={site} onBack={() => setSite(null)} />;
   return (
     <div className="px-3 sm:px-4">

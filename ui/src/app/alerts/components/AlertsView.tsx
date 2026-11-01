@@ -378,7 +378,7 @@ export default function AlertsView() {
                               <p className="truncate text-xs text-muted-foreground" title={a.detail}>{a.detail}</p>
                             </td>
                             <td className="px-3 py-2.5">
-                              <Link href={devicePath(a.deviceHostname, a.formFactor)} className="font-mono-data text-xs font-semibold hover:text-primary hover:underline">
+                              <Link href={devicePath(a.deviceId || a.deviceHostname, a.formFactor)} className="font-mono-data text-xs font-semibold hover:text-primary hover:underline">
                                 {a.deviceHostname}
                               </Link>
                             </td>

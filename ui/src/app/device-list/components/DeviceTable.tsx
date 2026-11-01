@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import EmptyState from '@/components/ui/EmptyState';
-import { HealthBadge } from '@/components/ui/Badge';
+import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { devicePath } from '@/lib/apiMode';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import type { DeviceRow } from '@/lib/types';
@@ -120,9 +120,12 @@ export default function DeviceTable({ rows, error, onRetry, visible, selected, o
                 {show('health') && <td className="px-3 py-2.5"><HealthBadge health={r.health} /></td>}
                 {show('hostname') && (
                   <td className="relative px-3 py-2.5" onMouseEnter={() => setHoverId(r.id)} onMouseLeave={() => setHoverId(null)}>
-                    <Link href={devicePath(r.id, r.formFactor)} className="font-mono-data font-semibold text-foreground underline-offset-2 hover:text-primary hover:underline">
-                      {r.hostname}
-                    </Link>
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <Link href={devicePath(r.id, r.formFactor)} className="font-mono-data font-semibold text-foreground underline-offset-2 hover:text-primary hover:underline">
+                        {r.hostname}
+                      </Link>
+                      <StatusBadge status={r.status} />
+                    </span>
                     {hoverId === r.id && <HoverPreview row={r} />}
                   </td>
                 )}

@@ -3,7 +3,7 @@
 import React from 'react';
 
 export type DeviceKind =
-  | 'switch' |'stack' |'ap' |'firewall' |'router' |'controller' |'chassis' |'cloud';
+  | 'switch' |'stack' |'ap' |'firewall' |'router' |'controller' |'chassis' |'cloud' |'generic';
 
 interface DeviceArtProps {
   kind: DeviceKind;
@@ -179,6 +179,18 @@ export default function DeviceArt({ kind, x, y, w = 128, h = 40 }: DeviceArtProp
             ))}
             <rect x={w - 28} y="5" width="18" height={h - 4} rx="1.5" fill="#1e293b" stroke="#475569" strokeWidth="0.6" />
             <text x={w - 26} y="14" fontSize="4.5" fill="#38bdf8" fontFamily="monospace">SUP</text>
+          </g>
+        );
+      }
+      case 'generic': {
+        return (
+          <g>
+            <Rack w={w} h={h} gradId="art-metal" />
+            <rect x="10" y="6" width="34" height="8" rx="1" fill="#0b1220" />
+            <text x="12" y="12" fontSize="5" fill="#94a3b8" fontFamily="monospace">DEVICE</text>
+            <Led x={50} y={10} color="#94a3b8" />
+            <PortRow x={10} y={20} count={8} gap={8} />
+            <PortRow x={10} y={28} count={4} gap={8} />
           </g>
         );
       }

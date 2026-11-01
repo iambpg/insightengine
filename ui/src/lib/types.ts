@@ -8,6 +8,7 @@ export type FormFactor =
 export interface PortNeighbour {
   device: string;
   port: string;
+  deviceId?: string;
 }
 
 export interface PortInfo {
@@ -89,6 +90,7 @@ export interface DeviceRow {
   uptime: string;
   lastPoll: string;
   formFactor: FormFactor;
+  status?: string;
 }
 
 export interface SiteRow {
@@ -191,6 +193,21 @@ export interface DeviceSource {
   detail: string;
 }
 
+export interface InventorySide {
+  vendor: string;
+  model: string;
+  serial: string;
+  os: string;
+  portCount: number;
+}
+
+export interface SourceComparison {
+  netbox: InventorySide;
+  netdisco: InventorySide;
+  faceplateSource: 'netbox' | 'netdisco' | 'prometheus' | 'none' | string;
+  differ: boolean;
+}
+
 export interface DeviceDetailData {
   id: string;
   hostname: string;
@@ -200,6 +217,8 @@ export interface DeviceDetailData {
   mgmtIp: string;
   modelFamily: string;
   health: DeviceHealth;
+  status?: string;
+  netdiscoOnly?: boolean;
   uptime: string;
   lastPoll: string;
   firmware: string;
@@ -215,6 +234,7 @@ export interface DeviceDetailData {
   backup?: DeviceBackup;
   history?: SeriesPoint[];
   sources?: DeviceSource[];
+  comparison?: SourceComparison;
 }
 
 export interface LauncherApp {
@@ -277,6 +297,7 @@ export interface AlertItem {
   site: string;
   siteId: string;
   deviceHostname: string;
+  deviceId?: string;
   formFactor: FormFactor;
   category: string;
   raisedAt: string;
