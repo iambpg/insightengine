@@ -352,13 +352,48 @@ def test_queued_scan_is_finished_after_the_scheduler(tmp_path):
     discovery = Discovery(settings, factory, settings.config_root)
     (tmp_path / "nd").mkdir()
     created = discovery.queue_manual_scan("prefix", "10.2.0.0/24")
+    other = discovery.queue_manual_scan("prefix", "10.3.0.0/24")
     assert created["status"] == "queued"
+    # A global stamp must not close every queued scan.
+    (tmp_path / "nd" / "scan-finished").write_text("2099-01-01T00:00:00Z\n", encoding="utf-8")
+    assert discovery.note_scans_finished() == 0
     stamp = "2099-01-01T00:00:00Z"
-    (tmp_path / "nd" / "scan-finished").write_text(stamp + "\n", encoding="utf-8")
+    done = tmp_path / "nd" / "scan-done"
+    done.mkdir()
+    (done / created["id"]).write_text(stamp + "\nfinished\nNetdisco finished that probe.\n", encoding="utf-8")
     assert discovery.note_scans_finished() == 1
-    rows = discovery.list_scans()
-    assert rows[0]["status"] == "finished"
-    assert rows[0]["finishedAt"] == stamp
+    rows = {row["id"]: row for row in discovery.list_scans()}
+    assert rows[created["id"]]["status"] == "finished"
+    assert rows[created["id"]]["finishedAt"] == stamp
+    assert rows[other["id"]]["status"] == "queued"
+
+
+def test_single_ip_scan_does_not_raise_scan_now(tmp_path):
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    (tmp_path / "nd").mkdir()
+    created = discovery.queue_manual_scan("ip", "10.9.9.9")
+    text = (tmp_path / "nd" / "scan-once.txt").read_text(encoding="utf-8")
+    assert text.startswith(created["id"] + " ")
+    assert "10.9.9.9/32" in text
+    assert not (tmp_path / "nd" / "scan-now").exists()
+
+
+def test_backend_restarts_only_when_deployment_changes(tmp_path):
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    calls = []
+    discovery.restart_backend = lambda: calls.append("restart") or True
+    discovery.render_deployment()
+    assert calls == ["restart"]
+    discovery.render_deployment()
+    assert calls == ["restart"]
+    template = tmp_path / "config" / "netdisco" / "deployment.yml"
+    template.write_text("device_auth:\n  - tag: default\n    community: other\n", encoding="utf-8")
+    discovery.render_deployment()
+    assert calls == ["restart", "restart"]
 
 
 def test_bearer_header_for_v2_token(tmp_path):
@@ -372,3 +407,202 @@ def test_bearer_header_for_v2_token(tmp_path):
     settings_v1 = Settings(**{**settings.__dict__, "netbox_token_file": str(v1)})
     other = Discovery(settings_v1, factory, settings.config_root)
     assert other.netbox_headers()["Authorization"].startswith("Token ")
+
+
+def _ready(discovery, monkeypatch):
+    monkeypatch.setenv("SNMP_V2_COMMUNITY", "s3cret-community")
+    discovery._snmp_sync = lambda: None
+    discovery.restart_backend = lambda: False
+
+
+def test_snmp_precheck_hides_the_community_and_names_the_profile(tmp_path, monkeypatch):
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    _ready(discovery, monkeypatch)
+    seen = []
+
+    def probe(profile, host, auth):
+        seen.append((host, auth, profile.get("community")))
+        return {"ok": False, "error": "timeout", "leak": profile.get("community")}
+
+    failed = discovery.snmp_precheck("10.9.9.9", probe=probe)
+    assert failed["ok"] is False
+    assert "s3cret-community" not in failed["message"]
+    assert "timed out" in failed["message"]
+    assert seen and seen[0][2] == "s3cret-community"
+
+    def ok_probe(profile, host, auth):
+        return {"ok": True, "version": "2c"}
+
+    reached = discovery.snmp_precheck("10.9.9.9", probe=ok_probe)
+    assert reached == {
+        "ok": True,
+        "profile": "default",
+        "message": "SNMP reachable via profile default",
+    }
+
+
+def test_device_job_dedupes_and_maps_netdisco_status(tmp_path, monkeypatch):
+    from ie_config.netdisco_jobs import MemoryAdmin, map_admin_status
+
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    _ready(discovery, monkeypatch)
+    jobs = MemoryAdmin()
+    jobs.neighbours["10.1.1.8"] = ["10.1.1.9", "not-an-ip"]
+
+    assert map_admin_status("queued", None, "") == "queued"
+    assert map_admin_status("queued", "t", "backend") == "running"
+    assert map_admin_status("done", "t", "backend") == "done"
+    assert map_admin_status("error", "t", "") == "error"
+    assert map_admin_status("info", None, "") == "error"
+
+    failed = discovery.start_device_discover(
+        "10.1.1.8",
+        neighbours=True,
+        probe=lambda profile, host, auth: {"ok": False, "error": "timeout"},
+        jobs=jobs,
+    )
+    assert failed["status"] == "error"
+    assert "s3cret-community" not in failed["message"]
+    assert jobs.rows == []
+
+    created = discovery.start_device_discover(
+        "10.1.1.8",
+        neighbours=True,
+        probe=lambda profile, host, auth: {"ok": True},
+        jobs=jobs,
+    )
+    assert created["status"] == "queued"
+    assert created["steps"][0]["message"] == "SNMP reachable via profile default"
+    assert [step["name"] for step in created["steps"][:4]] == ["snmp", "discover", "macsuck", "arpnip"]
+    again = discovery.start_device_discover(
+        "10.1.1.8",
+        neighbours=True,
+        probe=lambda profile, host, auth: {"ok": True},
+        jobs=jobs,
+    )
+    assert again["id"] == created["id"]
+    assert len([row for row in jobs.rows if row["action"] == "discover"]) == 1
+
+    jobs.set_state(jobs.rows[0]["id"], "queued", started="now", backend="worker")
+    running = discovery.device_job_status(int(created["id"]), jobs=jobs)
+    assert running["status"] == "running"
+    assert running["steps"][1]["status"] == "running"
+
+    jobs.set_state(jobs.rows[0]["id"], "error", log="discover failed: could not SNMP connect", started="now", finished="done", backend="worker")
+    errored = discovery.device_job_status(int(created["id"]), jobs=jobs)
+    assert errored["status"] == "error"
+    assert errored["message"] == "discover failed: could not SNMP connect"
+    assert "s3cret-community" not in errored["message"]
+    assert all(step["status"] == "error" for step in errored["steps"] if step["name"] in ("macsuck", "arpnip"))
+
+    jobs2 = MemoryAdmin()
+    jobs2.neighbours["10.2.2.2"] = ["10.2.2.3"]
+    fresh = discovery.start_device_discover(
+        "10.2.2.2",
+        neighbours=True,
+        probe=lambda profile, host, auth: {"ok": True},
+        jobs=jobs2,
+    )
+    jobs2.set_state(jobs2.rows[0]["id"], "done", log="Successful discover for new device", started="now", finished="done", backend="worker")
+    mid = discovery.device_job_status(int(fresh["id"]), jobs=jobs2)
+    assert mid["status"] == "running"
+    actions = [row["action"] for row in jobs2.rows]
+    assert actions.count("discover") == 2  # device plus one neighbour
+    assert "macsuck" in actions and "arpnip" in actions
+    for row in jobs2.rows:
+        if row["raw_status"] != "done":
+            jobs2.set_state(row["id"], "done", log="ok", started="now", finished="done", backend="worker")
+    done = discovery.device_job_status(int(fresh["id"]), jobs=jobs2)
+    assert done["status"] == "done"
+    assert any(step.get("ip") == "10.2.2.3" for step in done["steps"])
+    assert "not-an-ip" not in str(done)
+
+
+def test_skipped_macsuck_does_not_stay_queued(tmp_path, monkeypatch):
+    from ie_config.netdisco_jobs import MemoryAdmin
+
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    _ready(discovery, monkeypatch)
+    jobs = MemoryAdmin()
+    jobs.skipped = {"10.4.4.4": ["macsuck", "arpnip"]}
+    created = discovery.start_device_discover(
+        "10.4.4.4",
+        probe=lambda profile, host, auth: {"ok": True},
+        jobs=jobs,
+    )
+    jobs.set_state(jobs.rows[0]["id"], "done", log="Successful discover for new device", started="now", finished="done", backend="worker")
+    done = discovery.device_job_status(int(created["id"]), jobs=jobs)
+    assert done["status"] == "done", done
+    assert "skipped macsuck" in done["steps"][2]["message"]
+    assert "skipped arpnip" in done["steps"][3]["message"]
+
+
+def test_scheduler_runs_scan_once_before_prefixes(tmp_path):
+    import os
+    import subprocess
+
+    script = ROOT / "scripts" / "netdisco-scheduler.sh"
+    work = tmp_path / "sched"
+    bindir = work / "bin"
+    bindir.mkdir(parents=True)
+    log = work / "log"
+    (bindir / "perl").write_text(
+        "#!/bin/sh\n"
+        "echo \"presweep $2\" >> \"$LOG\"\n"
+        "if [ \"${DROP:-}\" = 1 ]; then exit 0; fi\n"
+        "case \"$2\" in\n"
+        "  */32) printf '%s\\n' \"${2%/32}\" ;;\n"
+        "  *) printf '%s\\n' \"$(printf '%s' \"$2\" | sed 's/\\.0\\/[0-9]*$/.1/')\" ;;\n"
+        "esac\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    (bindir / "netdisco-do").write_text(
+        "#!/bin/sh\n"
+        "echo \"netdisco-do $*\" >> \"$LOG\"\n"
+        "if [ \"${FAIL_ACTION:-}\" = \"$1\" ]; then exit 3; fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    os.chmod(bindir / "perl", 0o755)
+    os.chmod(bindir / "netdisco-do", 0o755)
+    (work / "presweep.pl").write_text("", encoding="utf-8")
+    (work / "scan-once.txt").write_text("7 10.9.9.9/32\n", encoding="utf-8")
+    (work / "scan-prefixes.txt").write_text("10.2.0.0/24\n", encoding="utf-8")
+    (work / "scan-now").write_text("now\n", encoding="utf-8")
+    env = os.environ.copy()
+    env["PATH"] = str(bindir) + os.pathsep + env.get("PATH", "")
+    env["NETDISCO_LOCAL_DIR"] = str(work)
+    env["PRESWEEP_BIN"] = str(work / "presweep.pl")
+    env["LOG"] = str(log)
+    result = subprocess.run(["sh", str(script), "--once"], env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert lines.index("presweep 10.9.9.9/32") < lines.index("presweep 10.2.0.0/24")
+    assert "netdisco-do discover -d 10.9.9.9" in lines
+    assert not (work / "scan-now").exists()
+    done = (work / "scan-done" / "7").read_text(encoding="utf-8")
+    assert "finished" in done
+
+    env["DROP"] = "1"
+    (work / "scan-once.txt").write_text("8 10.8.8.8/32\n", encoding="utf-8")
+    (work / "scan-prefixes.txt").unlink()
+    dropped = subprocess.run(["sh", str(script), "--once"], env=env, capture_output=True, text=True, check=False)
+    assert dropped.returncode == 0, dropped.stderr
+    assert "presweep dropped 10.8.8.8/32" in dropped.stderr
+    failed = (work / "scan-done" / "8").read_text(encoding="utf-8")
+    assert failed.splitlines()[1] == "failed"
+
+    env.pop("DROP")
+    env["FAIL_ACTION"] = "discover"
+    (work / "scan-once.txt").write_text("9 10.7.7.7/32\n", encoding="utf-8")
+    broken = subprocess.run(["sh", str(script), "--once"], env=env, capture_output=True, text=True, check=False)
+    assert broken.returncode == 0, broken.stderr
+    assert "netdisco-do discover failed for 10.7.7.7" in broken.stderr
+    assert (work / "scan-done" / "9").read_text(encoding="utf-8").splitlines()[1] == "failed"

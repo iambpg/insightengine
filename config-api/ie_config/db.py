@@ -70,6 +70,23 @@ class DiscoveryScan(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class DiscoveryDeviceJob(Base):
+    """One typed-IP discover. Netdisco job ids live here; the admin table is theirs."""
+
+    __tablename__ = "discovery_device_jobs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ip: Mapped[str] = mapped_column(String(64), index=True)
+    neighbours: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    message: Mapped[str] = mapped_column(Text, default="")
+    discover_job: Mapped[int] = mapped_column(Integer, default=0)
+    macsuck_job: Mapped[int] = mapped_column(Integer, default=0)
+    arpnip_job: Mapped[int] = mapped_column(Integer, default=0)
+    detail: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DiscoveryCandidate(Base):
     __tablename__ = "discovery_candidates"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -47,8 +47,10 @@ Auth for the GET routes is any signed-in role. Acknowledge is forbidden for Read
 | `POST /alerts/acknowledge` `{ ids }` | `POST /api/v2/silences` | `{ ids, ok }`. Matchers are the alert's labels. Already silenced ids are returned without a second silence |
 | `POST /alerts/webhook` | none stored | `{ ok, received }`. Alertmanager remains the source of truth, so this does not insert alerts. If `ALERT_WEBHOOK_TOKEN` or `ALERT_WEBHOOK_TOKEN_FILE` is set, the request must send `Authorization: Bearer`. The sample in `ui/src/lib/mock/catalog.ts` points at `http://ie-config-ntt:8080/api/v1/alerts/webhook`; the settings Webhook tab is not wired to this route |
 | `GET /discovery/unapproved` | ie-config `discovery_candidates` | UI shape: `id` string, `hostname`, `sysName`, `suggested.role`, `suggested.site`. Empty array when nothing is pending |
-| `POST /discovery/scan` `{ target, value }` | appends a CIDR to `scan-once.txt` and touches `scan-now` | `{ id, target, value, status: "queued", startedAt, message }`. `ip` is queued as a `/32`. The Netdisco scheduler walks `scan-once.txt` and deletes it. Status stays `queued`; ie-config cannot see when Netdisco finishes |
-| `GET /discovery/scans` | `discovery_scans` table | Newest 20. Empty array on a fresh install |
+| `POST /discovery/scan` `{ target, value }` | appends `<id> <cidr>` to `scan-once.txt`. A prefix also touches `scan-now`. An address does not | `{ id, target, value, status: "queued", startedAt, message }`. The scheduler runs `scan-once` before the prefix walk and writes `scan-done/<id>` |
+| `POST /discovery/device` `{ ip, neighbours? }` | SNMP check, then a Netdisco `admin` discover job. macsuck and arpnip are queued when discover finishes | `{ id, ip, status, message, steps }`. `status` is `queued`, `running`, `done` or `error`. Same reader roles as the other discovery routes |
+| `GET /discovery/device/{id}` | Netdisco `admin` row for that job, or the latest job when `{id}` is an address | Same shape. `steps` includes SNMP, discover, macsuck and arpnip, plus neighbour discovers when requested |
+| `GET /discovery/scans` | `discovery_scans` table | Newest 20. A row finishes only when its own `scan-done/<id>` file is newer than `startedAt` |
 | `POST /discovery/{id}/approve` | existing NetBox create | `{ ok, id, device }`. `id` is a string |
 | `POST /discovery/{id}/reject` | existing status update | `{ ok, id }` |
 | `GET /settings/overview` | Docker proxy inspect + reload state | Adds `generatedAt`, `lastReloadAt` and `lastError` next to the previous `lastReload` field |

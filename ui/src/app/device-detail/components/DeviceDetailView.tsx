@@ -2,17 +2,21 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import Icon from '@/components/ui/AppIcon';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
 import { countPorts, faceplateSummaryLine, SNMP_MISSING_HINT } from '@/components/faceplate/summary';
+import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
+import { isApiError } from '@/lib/apiError';
 import { isMockMode } from '@/lib/apiMode';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
+import type { DeviceDiscoveryJob } from '@/lib/contract';
 import type { DeviceDetailData, PortInfo, SourceComparison } from '@/lib/types';
 import IssuesPanel from './IssuesPanel';
 import HealthChecks from './HealthChecks';
@@ -50,6 +54,12 @@ export default function DeviceDetailView() {
   const [rerun, setRerun] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [missingId, setMissingId] = useState(false);
+  const [postedDiscovery, setPostedDiscovery] = useState<DeviceDiscoveryJob | null>(null);
+  const [rediscovering, setRediscovering] = useState(false);
+  const discoveryJob = usePolledDeviceDiscovery(postedDiscovery, {
+    onError: (job) => toast.error(job.message || 'Rediscover failed.'),
+    onDone: () => toast.success('Rediscover finished.'),
+  });
 
   const mockKey = pickedForm || (isFaceplateKey(formQuery) ? formQuery : '') || 'switch-stack';
   const deviceKey = live ? id : mockKey;
@@ -138,6 +148,24 @@ export default function DeviceDetailView() {
             <div className="flex flex-col items-stretch gap-2">
               <button
                 type="button"
+                disabled={rediscovering || !device.mgmtIp}
+                onClick={() => {
+                  setRediscovering(true);
+                  api
+                    .discoverDevice(device.mgmtIp, false)
+                    .then(setPostedDiscovery)
+                    .catch((error) => {
+                      toast.error(isApiError(error) ? error.message : 'Rediscover failed.');
+                    })
+                    .finally(() => setRediscovering(false));
+                }}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+              >
+                <Icon name="MagnifyingGlassIcon" size={16} />
+                {rediscovering ? 'Rediscovering…' : 'Rediscover'}
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setRerun(true);
                   setTimeout(() => setRerun(false), 1100);
@@ -169,6 +197,9 @@ export default function DeviceDetailView() {
                 <Icon name="ShareIcon" size={16} />
                 Topology
               </Link>
+            </div>
+            <div className="basis-full">
+              <DeviceDiscoveryStatus job={discoveryJob} />
             </div>
           </div>
         ) : (

@@ -10,7 +10,7 @@ ie-config polls NetBox about once a minute (`prefix_poll_seconds` in `config/dis
 
 Removing a prefix rewrites the file (the scheduler stops walking it) and deletes still-pending candidates whose address was inside that prefix and is not inside a remaining one. Approved and rejected rows are kept. The next queue refresh will not put those pending rows back.
 
-After each scheduler pass the scheduler writes `scan-finished`. ie-config refreshes the queue on the same one-minute loop, after the prefix sync, so a device Netdisco just stored shows up on this cycle.
+After each one-shot target the scheduler writes `scan-done/<scan id>` for that scan only. ie-config refreshes the queue on the same one-minute loop, after the prefix sync, so a device Netdisco just stored shows up on this cycle. A single address is discovered through `POST /api/v1/discovery/device`, which inserts a Netdisco `admin` job instead of waiting on the prefix walk.
 
 ## Pre-sweep
 
@@ -53,7 +53,7 @@ Display names ("Access switch", "Test Site") are slugified. The manufacturer com
 
 NetBox requires the IP to be assigned to an interface before it can be the primary address. Approve creates the device, then the interface, then the IP on that interface, then sets `primary_ip4`. If any step after the device fails, the device is deleted so it does not appear in `/api/v1/devices`. A Netdisco family string such as `37xxStack` is matched to a library device type through `config/discovery/device-type-aliases.yml` (Settings → Netdisco). A stub type is created only when nothing in the library matches.
 
-`GET /api/v1/discovery/scans` moves a row from `queued` to `finished` after the scheduler writes `scan-finished` later than the row was created.
+`GET /api/v1/discovery/scans` moves a row from `queued` to `finished` or `failed` when `scan-done/<id>` was written after that scan started. One finished walk does not close the others.
 
 Oxidized's default device filter is `status=active`, so an approved device and a device added by hand are both backed up. See `docs/upgrade.md`.
 

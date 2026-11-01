@@ -9,10 +9,11 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { isMockMode } from '@/lib/apiMode';
 import Modal from '@/components/ui/Modal';
 import { TableSkeleton } from '@/components/ui/Skeleton';
+import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isApiError } from '@/lib/apiError';
-import type { DiscoveryCatalog, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
+import type { DeviceDiscoveryJob, DiscoveryCatalog, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
 
 const EMPTY_CATALOG: DiscoveryCatalog = { roles: [], sites: [], platforms: [] };
 
@@ -37,7 +38,21 @@ export default function NotInNetBoxView() {
   const [catalog, setCatalog] = useState<DiscoveryCatalog>(EMPTY_CATALOG);
   const [target, setTarget] = useState<'ip' | 'prefix'>('ip');
   const [scanValue, setScanValue] = useState('');
+  const [neighbours, setNeighbours] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [posted, setPosted] = useState<DeviceDiscoveryJob | null>(null);
+  const [highlightIp, setHighlightIp] = useState<string | null>(null);
+  const discoveryJob = usePolledDeviceDiscovery(posted, {
+    onDone: (job) => {
+      setHighlightIp(job.ip);
+      api
+        .listDiscovered()
+        .then(setItems)
+        .catch(() => undefined);
+      toast.success('Discovery finished. If the device is not in NetBox, it is in this list.');
+    },
+    onError: (job) => toast.error(job.message || 'Discovery failed.'),
+  });
 
   const load = () => {
     setItems(null);
@@ -188,12 +203,16 @@ export default function NotInNetBoxView() {
   const discover = async () => {
     setScanning(true);
     try {
-      const scan = await api.startScan(target, scanValue);
-      setScans((current) => [scan, ...(current ?? [])]);
-      setScanValue('');
-      toast.success(scan.message ?? 'Scan finished.');
-      const devices = await api.listDiscovered();
-      setItems(devices);
+      if (target === 'ip') {
+        const job = await api.discoverDevice(scanValue.trim(), neighbours);
+        setPosted(job);
+        setScanValue('');
+      } else {
+        const scan = await api.startScan(target, scanValue);
+        setScans((current) => [scan, ...(current ?? [])]);
+        setScanValue('');
+        toast.success(scan.message || 'Scan queued.');
+      }
     } catch (error) {
       toast.error(isApiError(error) ? error.message : 'The scan could not be started.');
     } finally {
@@ -230,9 +249,9 @@ export default function NotInNetBoxView() {
         className="rounded-md border border-border bg-card p-4 shadow-card"
         aria-label="Discover"
       >
-        <h2 className="text-sm font-semibold">Discover</h2>
+        <h2 className="text-sm font-semibold">Discover device</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Enter an IP or prefix and press Discover. Scheduled scans still follow NetBox.
+          Enter an IP to discover that device, or a prefix to queue a walk. Scheduled scans still follow NetBox.
         </p>
         <form
           className="mt-3 flex flex-wrap items-end gap-2"
@@ -264,6 +283,16 @@ export default function NotInNetBoxView() {
               className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 font-mono-data text-sm"
             />
           </label>
+          {target === 'ip' ? (
+            <label className="flex h-9 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={neighbours}
+                onChange={(event) => setNeighbours(event.target.checked)}
+              />
+              Also discover CDP/LLDP neighbours
+            </label>
+          ) : null}
           <button
             type="submit"
             disabled={scanning || !scanValue.trim()}
@@ -273,6 +302,7 @@ export default function NotInNetBoxView() {
             {scanning ? 'Discovering…' : 'Discover'}
           </button>
         </form>
+        <DeviceDiscoveryStatus job={discoveryJob} />
         {scans && scans.length > 0 ? (
           <ul
             className="mt-3 divide-y divide-border rounded-md border border-border text-sm"
@@ -418,11 +448,13 @@ export default function NotInNetBoxView() {
               <tbody>
                 {rows.map((device) => {
                   const on = selected.includes(device.id);
+                  const fresh = highlightIp === device.ip;
                   const name = labelFor(device);
                   return (
                     <tr
                       key={device.id}
-                      className={`border-b border-border even:bg-muted/20 hover:bg-accent/10 ${on ? 'bg-accent/15' : ''}`}
+                      data-highlight={fresh ? 'new' : undefined}
+                      className={`border-b border-border even:bg-muted/20 hover:bg-accent/10 ${on ? 'bg-accent/15' : ''} ${fresh ? 'bg-accent/25 ring-1 ring-inset ring-accent' : ''}`}
                     >
                       <td className="px-4 py-2.5">
                         <input
@@ -451,7 +483,14 @@ export default function NotInNetBoxView() {
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2.5 font-mono-data text-xs">{device.ip}</td>
+                      <td className="px-3 py-2.5 font-mono-data text-xs">
+                        {device.ip}
+                        {fresh ? (
+                          <Badge tone="success" className="ml-2">
+                            New
+                          </Badge>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-2.5 text-muted-foreground">
                         {[device.vendor, device.model].filter(Boolean).join(' ') || '—'}
                       </td>

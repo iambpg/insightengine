@@ -217,6 +217,27 @@ export interface DiscoveryScan {
   message?: string;
 }
 
+export type DeviceJobStatus = 'queued' | 'running' | 'done' | 'error';
+
+export interface DeviceDiscoveryStep {
+  name: string;
+  status: DeviceJobStatus;
+  message?: string;
+  ip?: string;
+}
+
+/** POST /api/v1/discovery/device and GET /api/v1/discovery/device/{id}. */
+export interface DeviceDiscoveryJob {
+  id: string;
+  ip: string;
+  status: DeviceJobStatus;
+  message?: string;
+  neighbours?: boolean;
+  startedAt?: string;
+  finishedAt?: string;
+  steps: DeviceDiscoveryStep[];
+}
+
 export const GROUP_ORDER: AppGroup[] = [
   'metrics',
   'alerting',

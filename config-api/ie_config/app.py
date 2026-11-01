@@ -117,6 +117,15 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     reloader = Reloader(settings, sf, registry)
     discovery = Discovery(settings, sf, settings.config_root)
 
+    def _restart_netdisco() -> bool:
+        # Allow-listed restart. The proxy cannot exec netdisco-do (EXEC=0).
+        result = reloader.restart(["netdisco-backend-" + settings.client_slug])
+        if not result.get("ok"):
+            log.warning("netdisco-backend restart: %s", (result.get("output") or result.get("message") or "")[:300])
+        return bool(result.get("ok"))
+
+    discovery.restart_backend = _restart_netdisco
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         stop = threading.Event()
@@ -138,6 +147,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                     discovery.sync_prefixes()
                     discovery.refresh_unapproved()
                     discovery.note_scans_finished()
+                    discovery.advance_device_jobs()
                 except Exception as exc:
                     log.warning("discovery loop: %s", exc.__class__.__name__)
                 if time.time() - last_snmp >= 300:
@@ -910,6 +920,54 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
             raise ApiError(400, "invalid_scan", str(exc))
         _audit(sf, user, "discovery-scan", client_ip(request), "ok", "netdisco", "", "", body.get("target") or "")
         return created
+
+    @app.post("/api/v1/discovery/device")
+    async def discover_device(request: Request):
+        user, _csrf = user_of(request)
+        require_reader(user)
+        try:
+            body = await request.json()
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        neighbours = body.get("neighbours")
+        if neighbours is None:
+            neighbours = False
+        elif not isinstance(neighbours, bool):
+            raise ApiError(400, "invalid_scan", "neighbours must be true or false")
+        try:
+            created = discovery.start_device_discover(
+                body.get("ip") or "",
+                neighbours=neighbours,
+                username=(getattr(user, "email", "") or "insightengine")[:200],
+                userip=client_ip(request),
+            )
+        except ValueError as exc:
+            raise ApiError(400, "invalid_scan", str(exc))
+        except RuntimeError as exc:
+            log.warning("device discover failed: %s", exc.__class__.__name__)
+            raise ApiError(503, "netdisco_unavailable", "Netdisco is not available for device discovery")
+        result = "ok" if created.get("status") != "error" else "failed"
+        _audit(sf, user, "discovery-device", client_ip(request), result, "netdisco", "", "", created.get("ip") or "")
+        return created
+
+    @app.get("/api/v1/discovery/device/{job_id}")
+    def discover_device_status(job_id: str, request: Request):
+        user, _csrf = user_of(request)
+        require_reader(user)
+        try:
+            if job_id.isdigit():
+                found = discovery.device_job_status(int(job_id))
+            else:
+                found = discovery.device_job_by_ip(job_id)
+        except ValueError as exc:
+            raise ApiError(400, "invalid_scan", str(exc))
+        except RuntimeError:
+            raise ApiError(503, "netdisco_unavailable", "Netdisco is not available for device discovery")
+        if found is None:
+            raise ApiError(404, "not_found", "unknown discovery job")
+        return found
 
     mount_fleet(app, user_of)
 

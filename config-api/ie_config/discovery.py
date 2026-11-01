@@ -7,8 +7,10 @@ Nothing in this module creates a NetBox device except NetBoxWriter.approve_devic
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
+import logging
 import os
 import re
 import time
@@ -19,8 +21,10 @@ import httpx
 import yaml
 from sqlalchemy import select
 
-from .db import DiscoveryCandidate, DiscoveryScan, utcnow
+from .db import DiscoveryCandidate, DiscoveryDeviceJob, DiscoveryScan, utcnow
 from .hostnames import effective_suffixes, inject_domain_suffix, strip_hostname
+
+log = logging.getLogger("ie.discovery")
 
 _CIDR = re.compile(r"^[0-9]{1,3}(?:\.[0-9]{1,3}){3}/[0-9]{1,2}$")
 
@@ -497,6 +501,7 @@ class Discovery:
             os.chmod(tmp, 0o644)
         os.replace(tmp, path)
         self._write_presweep_env(sync)
+        self._maybe_reload_backend(path)
 
     def _splice_snmp_profiles(self, rendered: str) -> str:
         """Add per-profile device_auth before the .env fallback. No-op when nothing was resolved."""
@@ -695,7 +700,11 @@ class Discovery:
                 db.commit()
 
     def queue_manual_scan(self, target: str, value: str) -> dict:
-        """Queue one prefix or address for the Netdisco scheduler and remember it."""
+        """Queue one prefix or address for the Netdisco scheduler and remember it.
+
+        A single address is written to scan-once only. Touching scan-now would
+        make the scheduler walk every prefix before that address.
+        """
         kind = (target or "").strip()
         raw = (value or "").strip()
         if kind == "ip":
@@ -710,50 +719,430 @@ class Discovery:
             message = "Queued a Netdisco walk of that prefix. Devices that are not in NetBox will show up here after the next discovery refresh."
         else:
             raise ValueError("Target must be ip or prefix.")
-        out = self.settings.netdisco_out_dir
-        os.makedirs(out, exist_ok=True)
-        path = os.path.join(out, "scan-once.txt")
-        with open(path, "a", encoding="utf-8") as fh:
-            fh.write(cidr + "\n")
-        manual = os.path.join(out, "manual-targets.txt")
-        existing = _read_lines(manual)
-        if cidr not in existing:
-            _atomic_text(manual, "\n".join(existing + [cidr]) + "\n", 0o644)
-        self.request_scan()
         with self.sf() as db:
             row = DiscoveryScan(target=kind, value=raw, status="queued", message=message, started_at=utcnow())
             db.add(row)
             db.commit()
             db.refresh(row)
-            return _scan_public(row)
+            public = _scan_public(row)
+            scan_id = row.id
+        out = self.settings.netdisco_out_dir
+        os.makedirs(out, exist_ok=True)
+        path = os.path.join(out, "scan-once.txt")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("%s %s\n" % (scan_id, cidr))
+        self._remember_manual(cidr)
+        if kind == "prefix":
+            self.request_scan()
+        return public
+
+    def _remember_manual(self, cidr: str) -> None:
+        out = self.settings.netdisco_out_dir
+        os.makedirs(out, exist_ok=True)
+        manual = os.path.join(out, "manual-targets.txt")
+        existing = _read_lines(manual)
+        if cidr not in existing:
+            _atomic_text(manual, "\n".join(existing + [cidr]) + "\n", 0o644)
 
     def alias_path(self) -> str:
         return os.path.join(self.config_root, "config", "discovery", "device-type-aliases.yml")
 
-    def note_scans_finished(self) -> int:
-        """Mark queued scans finished once the scheduler has written scan-finished after they started."""
-        path = self._out("scan-finished")
+    def _maybe_reload_backend(self, path: str) -> None:
+        """Restart netdisco-backend when deployment.yml actually changed.
+
+        The backend parent watches DANCER_ENVDIR and restarts its worker when
+        that file changes, but inotify usually misses a write from another
+        container. The ie-config docker proxy allows restart and blocks exec,
+        so a restart is how new device_auth is loaded. Unchanged renders do
+        not restart the daemon.
+        """
         try:
-            with open(path, "r", encoding="utf-8") as fh:
-                stamp = _parse_stamp(fh.read())
+            with open(path, "rb") as fh:
+                digest = hashlib.sha256(fh.read()).hexdigest()
         except OSError:
+            return
+        stamp = self._out("deployment.applied")
+        previous = ""
+        try:
+            with open(stamp, "r", encoding="utf-8") as fh:
+                previous = fh.read().strip()
+        except OSError:
+            previous = ""
+        if previous == digest:
+            return
+        if self._reload_backend():
+            try:
+                _atomic_text(stamp, digest + "\n", 0o644)
+            except OSError:
+                pass
+
+    def _reload_backend(self) -> bool:
+        fn = getattr(self, "restart_backend", None)
+        if callable(fn):
+            try:
+                return bool(fn())
+            except Exception as exc:
+                log.warning("netdisco-backend restart failed: %s", exc.__class__.__name__)
+                return False
+        return self._restart_via_proxy()
+
+    def _restart_via_proxy(self) -> bool:
+        url = (self.settings.docker_proxy_url or "").rstrip("/")
+        slug = self.settings.client_slug or ""
+        if not url or not slug or slug == "unconfigured":
+            return False
+        name = "netdisco-backend-" + slug
+        try:
+            with httpx.Client(timeout=40.0) as client:
+                resp = client.post("%s/containers/%s/restart?t=20" % (url, name))
+            if resp.status_code in (200, 204):
+                log.info("restarted %s so it reloads device_auth", name)
+                return True
+            log.warning("netdisco-backend restart -> %s", resp.status_code)
+        except Exception as exc:
+            log.warning("netdisco-backend restart failed: %s", exc.__class__.__name__)
+        return False
+
+    def prepare_device_auth(self) -> None:
+        """Refresh SNMP assignments and rewrite deployment.yml before a discover."""
+        try:
+            sync = getattr(self, "_snmp_sync", None)
+            if sync is None:
+                from .snmp_sync import sync_snmp
+                sync_snmp(self.settings, self)
+            else:
+                sync()
+        except Exception as exc:
+            log.warning("snmp sync before device discover failed: %s", exc.__class__.__name__)
+        self.render_deployment()
+
+    def _env_snmp_candidates(self) -> list[dict]:
+        from .snmp_profiles import ENV_V2_AUTH, ENV_V3_AUTH, SnmpProfileError, validate_profile
+        env = os.environ
+        found = []
+        community = (env.get("SNMP_V2_COMMUNITY") or "").strip()
+        if community and community != "unset-placeholder":
+            try:
+                found.append({
+                    "label": "default",
+                    "auth": ENV_V2_AUTH,
+                    "profile": validate_profile({"version": "2c", "port": 161, "community": community}),
+                })
+            except SnmpProfileError:
+                pass
+        user = (env.get("SNMP_V3_USERNAME") or env.get("SNMP_V3_USER") or "").strip()
+        auth_pass = (env.get("SNMP_V3_AUTH_PASSWORD") or "").strip()
+        priv_pass = (env.get("SNMP_V3_PRIV_PASSWORD") or "").strip()
+        if user and user != "unset-placeholder" and auth_pass and auth_pass != "unset-placeholder":
+            raw = {
+                "version": "3",
+                "port": 161,
+                "security_name": user,
+                "security_level": "authPriv" if priv_pass and priv_pass != "unset-placeholder" else "authNoPriv",
+                "auth_protocol": "SHA",
+                "auth_passphrase": auth_pass,
+            }
+            if priv_pass and priv_pass != "unset-placeholder":
+                raw["priv_protocol"] = "AES"
+                raw["priv_passphrase"] = priv_pass
+            try:
+                found.append({
+                    "label": "default-v3",
+                    "auth": ENV_V3_AUTH,
+                    "profile": validate_profile(raw),
+                })
+            except SnmpProfileError:
+                pass
+        return found
+
+    def profiles_for_ip(self, ip: str) -> list[dict]:
+        """Profiles Netdisco would try for this address. Labels are auth names, never secrets."""
+        from .snmp_profiles import SnmpProfileError, validate_profile
+        from .snmp_sync import ASSIGNMENTS_NAME, read_json, snmp_dir
+        found = []
+        path = os.path.join(snmp_dir(self.settings), ASSIGNMENTS_NAME)
+        data = read_json(path, {})
+        groups = data.get("groups") if isinstance(data, dict) else None
+        for group in groups or []:
+            if not isinstance(group, dict):
+                continue
+            ips = [str(item).split("/")[0] for item in (group.get("ips") or [])]
+            if ip not in ips:
+                continue
+            raw = {key: value for key, value in group.items() if key not in ("auth", "ips", "source")}
+            try:
+                profile = validate_profile(raw)
+            except SnmpProfileError:
+                continue
+            label = str(group.get("auth") or "profile")
+            found.append({"label": label, "auth": label, "profile": profile})
+        found.extend(self._env_snmp_candidates())
+        return found
+
+    def snmp_precheck(self, ip: str, probe=None) -> dict:
+        """One quick SNMP get. The result names the profile and never includes a secret."""
+        from .snmp_sync import snmp_test
+        profiles = self.profiles_for_ip(ip)
+        if not profiles:
+            return {"ok": False, "profile": "", "message": "No SNMP credentials are configured."}
+
+        def default_probe(profile, host, auth):
+            return snmp_test(profile, host, auth=auth)
+
+        probe = probe or getattr(self, "_probe", None) or default_probe
+        errors = []
+        for item in profiles:
+            try:
+                result = probe(item["profile"], ip, item["auth"])
+            except Exception:
+                result = {"ok": False, "error": "error"}
+            if not isinstance(result, dict):
+                result = {"ok": False, "error": "error"}
+            if result.get("ok"):
+                return {
+                    "ok": True,
+                    "profile": item["label"],
+                    "message": "SNMP reachable via profile %s" % item["label"],
+                }
+            errors.append("%s: %s" % (item["label"], _snmp_error_text(result.get("error"))))
+        return {"ok": False, "profile": "", "message": "SNMP check failed. " + "; ".join(errors)}
+
+    def _admin(self, jobs=None):
+        if jobs is not None:
+            return jobs
+        injected = getattr(self, "_jobs", None)
+        if injected is not None:
+            return injected
+        url = self.settings.netdisco_database_url or ""
+        if not url:
+            return None
+        from .netdisco_jobs import NetdiscoAdmin
+        return NetdiscoAdmin(url)
+
+    def _active_device_job(self, ip: str) -> DiscoveryDeviceJob | None:
+        with self.sf() as db:
+            return db.scalar(
+                select(DiscoveryDeviceJob)
+                .where(DiscoveryDeviceJob.ip == ip)
+                .where(DiscoveryDeviceJob.status.in_(("queued", "running")))
+                .order_by(DiscoveryDeviceJob.id.desc())
+            )
+
+    def start_device_discover(self, ip: str, neighbours: bool = False, username: str = "insightengine", userip: str | None = None, probe=None, jobs=None) -> dict:
+        """SNMP-check one address, then queue Netdisco discover. macsuck and arpnip follow."""
+        addr = _ipv4_host(ip)
+        active = self._active_device_job(addr)
+        if active is not None:
+            return self.device_job_status(active.id, jobs=jobs)
+        self.prepare_device_auth()
+        checked = self.snmp_precheck(addr, probe=probe)
+        if not checked["ok"]:
+            return self._save_device_job(addr, neighbours, "error", checked["message"], {"snmp": {"status": "error", "message": checked["message"], "profile": ""}})
+        admin = self._admin(jobs)
+        if admin is None:
+            raise RuntimeError("netdisco database is not configured")
+        self._remember_manual(str(ipaddress.ip_network(addr + "/32", strict=False)))
+        queued = admin.enqueue(addr, "discover", username or "insightengine", _userip(userip))
+        detail = {"snmp": {"status": "done", "message": checked["message"], "profile": checked.get("profile") or ""}}
+        with self.sf() as db:
+            row = DiscoveryDeviceJob(
+                ip=addr,
+                neighbours=1 if neighbours else 0,
+                status="queued",
+                message=checked["message"],
+                discover_job=int(queued["id"]),
+                detail=json.dumps(detail),
+                started_at=utcnow(),
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            job_id = row.id
+        return self.device_job_status(job_id, jobs=admin)
+
+    def _save_device_job(self, ip: str, neighbours: bool, status: str, message: str, detail: dict) -> dict:
+        with self.sf() as db:
+            row = DiscoveryDeviceJob(
+                ip=ip,
+                neighbours=1 if neighbours else 0,
+                status=status,
+                message=message,
+                detail=json.dumps(detail),
+                started_at=utcnow(),
+                finished_at=utcnow() if status in ("done", "error") else None,
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return _device_public(row, _steps_from_detail(detail, status), status, message)
+
+    def device_job_status(self, job_id: int | None = None, ip: str | None = None, jobs=None) -> dict | None:
+        admin = self._admin(jobs)
+        with self.sf() as db:
+            row = None
+            if job_id:
+                row = db.get(DiscoveryDeviceJob, int(job_id))
+            elif ip:
+                addr = _ipv4_host(ip)
+                row = db.scalar(
+                    select(DiscoveryDeviceJob).where(DiscoveryDeviceJob.ip == addr).order_by(DiscoveryDeviceJob.id.desc())
+                )
+            if row is None:
+                return None
+            if row.status in ("done", "error") and row.finished_at is not None:
+                detail = _load_detail(row.detail)
+                saved = detail.get("final_steps")
+                if isinstance(saved, list) and saved:
+                    return _device_public(row, saved, row.status, row.message or "")
+            body, refresh = self._advance(db, row, admin)
+            db.commit()
+        if refresh:
+            try:
+                self.refresh_unapproved()
+            except Exception as exc:
+                log.warning("refresh after discover failed: %s", exc.__class__.__name__)
+        return body
+
+    def device_job_by_ip(self, ip: str, jobs=None) -> dict | None:
+        return self.device_job_status(ip=ip, jobs=jobs)
+
+    def advance_device_jobs(self) -> int:
+        """Move queued device jobs forward. Called from the discovery loop and from GET."""
+        admin = self._admin()
+        if admin is None:
             return 0
-        if stamp is None:
+        with self.sf() as db:
+            ids = [
+                row.id for row in db.scalars(
+                    select(DiscoveryDeviceJob).where(DiscoveryDeviceJob.status.in_(("queued", "running")))
+                ).all()
+            ]
+        moved = 0
+        for job_id in ids:
+            try:
+                before = None
+                with self.sf() as db:
+                    row = db.get(DiscoveryDeviceJob, job_id)
+                    before = row.status if row else None
+                current = self.device_job_status(job_id, jobs=admin)
+                if current and current.get("status") != before:
+                    moved += 1
+            except Exception as exc:
+                log.warning("device job %s: %s", job_id, exc.__class__.__name__)
+        return moved
+
+    def _advance(self, db, row: DiscoveryDeviceJob, admin) -> tuple[dict, bool]:
+        detail = _load_detail(row.detail)
+        snmp = detail.get("snmp") if isinstance(detail.get("snmp"), dict) else {}
+        snmp_status = snmp.get("status") or "done"
+        snmp_message = str(snmp.get("message") or "")
+        steps = [{"name": "snmp", "status": snmp_status, "message": snmp_message}]
+        if snmp_status == "error":
+            steps.extend([
+                {"name": "discover", "status": "error", "message": "Not started."},
+                {"name": "macsuck", "status": "error", "message": "Not started."},
+                {"name": "arpnip", "status": "error", "message": "Not started."},
+            ])
+            row.status = "error"
+            row.message = snmp_message or "SNMP check failed."
+            if row.finished_at is None:
+                row.finished_at = utcnow()
+            detail["final_steps"] = steps
+            row.detail = json.dumps(detail)
+            return _device_public(row, steps, "error", row.message), False
+        if admin is None:
+            raise RuntimeError("netdisco database is not configured")
+        discover = _step_from_admin(admin, row.discover_job, "discover")
+        if discover["status"] == "done" and not row.macsuck_job:
+            mac = admin.enqueue(row.ip, "macsuck", "insightengine", None)
+            arp = admin.enqueue(row.ip, "arpnip", "insightengine", None)
+            row.macsuck_job = int(mac["id"])
+            row.arpnip_job = int(arp["id"])
+        if discover["status"] == "done":
+            if row.macsuck_job:
+                admin.release_skipped(row.ip, "macsuck")
+            if row.arpnip_job:
+                admin.release_skipped(row.ip, "arpnip")
+        if discover["status"] == "done" and row.neighbours and not detail.get("neighbours_enqueued"):
+            neighbour_jobs = []
+            for raw_ip in admin.neighbour_ips(row.ip):
+                try:
+                    nip = _ipv4_host(raw_ip)
+                except ValueError:
+                    continue
+                if nip == row.ip:
+                    continue
+                queued = admin.enqueue(nip, "discover", "insightengine", None)
+                neighbour_jobs.append({"ip": nip, "id": int(queued["id"])})
+                self._remember_manual(str(ipaddress.ip_network(nip + "/32", strict=False)))
+            detail["neighbours_enqueued"] = True
+            detail["neighbour_jobs"] = neighbour_jobs
+        if discover["status"] == "error":
+            macsuck = {"name": "macsuck", "status": "error", "message": "Not started because discover failed."}
+            arpnip = {"name": "arpnip", "status": "error", "message": "Not started because discover failed."}
+        else:
+            waiting = discover["status"] != "done"
+            macsuck = _step_from_admin(admin, row.macsuck_job, "macsuck", waiting=waiting)
+            arpnip = _step_from_admin(admin, row.arpnip_job, "arpnip", waiting=waiting)
+        steps.extend([discover, macsuck, arpnip])
+        for item in detail.get("neighbour_jobs") or []:
+            if not isinstance(item, dict):
+                continue
+            step = _step_from_admin(admin, int(item.get("id") or 0), "neighbour")
+            nip = str(item.get("ip") or "")
+            step["ip"] = nip
+            if nip:
+                step["message"] = (nip + (": " + step["message"] if step.get("message") else "")).strip()
+            steps.append(step)
+        status = _overall(steps)
+        message = _summary(steps) or row.message or ""
+        was_open = row.finished_at is None
+        row.status = status
+        row.message = message
+        if status in ("done", "error") and row.finished_at is None:
+            row.finished_at = utcnow()
+            detail["final_steps"] = steps
+        row.detail = json.dumps(detail)
+        return _device_public(row, steps, status, message), status == "done" and was_open
+
+    def note_scans_finished(self) -> int:
+        """Mark each queued scan from its own scan-done file.
+
+        A global scan-finished stamp used to mark every queued scan finished
+        when any walk ended, including ones that found nothing.
+        """
+        done_dir = self._out("scan-done")
+        if not os.path.isdir(done_dir):
             return 0
         updated = 0
         with self.sf() as db:
             rows = db.scalars(select(DiscoveryScan).where(DiscoveryScan.status == "queued")).all()
             for row in rows:
-                started = row.started_at
-                if started is None:
+                path = os.path.join(done_dir, str(row.id))
+                if not os.path.isfile(path):
                     continue
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        lines = fh.read().splitlines()
+                except OSError:
+                    continue
+                stamp = _parse_stamp(lines[0] if lines else "")
+                if stamp is None or row.started_at is None:
+                    continue
+                started = row.started_at
                 if started.tzinfo is None:
                     started = started.replace(tzinfo=timezone.utc)
-                if started <= stamp:
-                    row.status = "finished"
-                    row.finished_at = stamp
-                    row.message = "Netdisco finished that probe. Devices that answered and are not in NetBox show up in this list."
-                    updated += 1
+                if started > stamp:
+                    continue
+                status = (lines[1] if len(lines) > 1 else "finished").strip()
+                if status not in ("finished", "failed"):
+                    status = "finished"
+                message = (lines[2] if len(lines) > 2 else "").strip()
+                row.status = status
+                row.finished_at = stamp
+                if message:
+                    row.message = message
+                updated += 1
             if updated:
                 db.commit()
         return updated
@@ -814,6 +1203,50 @@ class Discovery:
             return _public(row)
 
 
+_SNMP_ERRORS = {
+    "timeout": "no response (timed out)",
+    "empty": "empty response",
+    "bad_response": "response was not valid",
+    "exporter_unreachable": "SNMPv3 exporter could not be reached",
+    "auth_not_loaded": "SNMPv3 auth is not loaded yet",
+    "no_response": "no response",
+    "error": "no response",
+}
+_STEP_NAMES = ("snmp", "discover", "macsuck", "arpnip")
+
+
+def _snmp_error_text(code) -> str:
+    return _SNMP_ERRORS.get(str(code or "no_response"), "no response")
+
+
+def _overall(steps: list[dict]) -> str:
+    required = [step for step in steps if step.get("name") in _STEP_NAMES]
+    if any(step.get("status") == "error" for step in required):
+        return "error"
+    if required and all(step.get("status") == "done" for step in required):
+        return "done"
+    discover = next((step for step in required if step.get("name") == "discover"), None)
+    if discover and discover.get("status") == "queued":
+        return "queued"
+    if any(step.get("status") in ("running", "done") for step in required):
+        return "running"
+    return "queued"
+
+
+def _summary(steps: list[dict]) -> str:
+    for name in ("discover", "snmp", "macsuck", "arpnip"):
+        for step in steps:
+            if step.get("name") == name and step.get("status") == "error" and step.get("message"):
+                return str(step["message"])
+    for step in steps:
+        if step.get("status") == "running" and step.get("message"):
+            return str(step["message"])
+    for step in steps:
+        if step.get("name") == "snmp" and step.get("message"):
+            return str(step["message"])
+    return ""
+
+
 def _names(rows: list[dict]) -> list[str]:
     found = []
     for row in rows or []:
@@ -821,6 +1254,107 @@ def _names(rows: list[dict]) -> list[str]:
         if name and name not in found:
             found.append(name)
     return found
+
+
+def _ipv4_host(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw or "/" in raw:
+        raise ValueError("Enter an IPv4 address.")
+    try:
+        addr = ipaddress.ip_address(raw)
+    except ValueError:
+        raise ValueError("Enter an IPv4 address.")
+    if not isinstance(addr, ipaddress.IPv4Address):
+        raise ValueError("Enter an IPv4 address.")
+    return str(addr)
+
+
+def _userip(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        addr = ipaddress.ip_address(raw.split("%")[0])
+    except ValueError:
+        return None
+    if not isinstance(addr, ipaddress.IPv4Address):
+        return None
+    return str(addr)
+
+
+def _load_detail(text: str) -> dict:
+    try:
+        data = json.loads(text or "{}")
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _steps_from_detail(detail: dict, status: str) -> list[dict]:
+    snmp = detail.get("snmp") if isinstance(detail.get("snmp"), dict) else {}
+    snmp_status = snmp.get("status") or status
+    message = str(snmp.get("message") or "")
+    follow = "error" if snmp_status == "error" else "queued"
+    follow_message = "Not started." if snmp_status == "error" else ""
+    return [
+        {"name": "snmp", "status": snmp_status, "message": message},
+        {"name": "discover", "status": follow, "message": follow_message},
+        {"name": "macsuck", "status": follow, "message": follow_message},
+        {"name": "arpnip", "status": follow, "message": follow_message},
+    ]
+
+
+def _step_from_admin(admin, job_id: int, name: str, waiting: bool = False) -> dict:
+    if not job_id:
+        if waiting:
+            return {"name": name, "status": "queued", "message": "Waiting for discover to finish."}
+        return {"name": name, "status": "queued", "message": "Queued in Netdisco."}
+    try:
+        view = admin.fetch(int(job_id))
+    except Exception:
+        return {"name": name, "status": "running", "message": "Waiting for Netdisco."}
+    if view is None:
+        return {"name": name, "status": "error", "message": "Netdisco job was not found."}
+    message = view.get("log") or _step_label(name, view.get("status") or "queued")
+    return {"name": name, "status": view.get("status") or "queued", "message": message}
+
+
+def _step_label(name: str, status: str) -> str:
+    labels = {
+        ("discover", "queued"): "Queued in Netdisco.",
+        ("discover", "running"): "Discovering.",
+        ("discover", "done"): "Discover finished.",
+        ("discover", "error"): "Discover failed.",
+        ("macsuck", "queued"): "Queued in Netdisco.",
+        ("macsuck", "running"): "Collecting MAC addresses.",
+        ("macsuck", "done"): "MAC suck finished.",
+        ("macsuck", "error"): "MAC suck failed.",
+        ("arpnip", "queued"): "Queued in Netdisco.",
+        ("arpnip", "running"): "Collecting ARP.",
+        ("arpnip", "done"): "ARP collection finished.",
+        ("arpnip", "error"): "ARP collection failed.",
+        ("neighbour", "queued"): "Queued in Netdisco.",
+        ("neighbour", "running"): "Discovering neighbour.",
+        ("neighbour", "done"): "Neighbour discover finished.",
+        ("neighbour", "error"): "Neighbour discover failed.",
+    }
+    return labels.get((name, status), status)
+
+
+def _device_public(row: DiscoveryDeviceJob, steps: list[dict], status: str, message: str) -> dict:
+    body = {
+        "id": str(row.id),
+        "ip": row.ip,
+        "status": status,
+        "message": message or "",
+        "neighbours": bool(row.neighbours),
+        "startedAt": _iso(row.started_at) or "",
+        "steps": steps,
+    }
+    finished = _iso(row.finished_at)
+    if finished:
+        body["finishedAt"] = finished
+    return body
 
 
 def _scan_public(row: DiscoveryScan) -> dict:

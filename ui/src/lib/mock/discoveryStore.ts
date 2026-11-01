@@ -1,11 +1,13 @@
 import { ApiError } from '@/lib/apiError';
-import type { ApproveBody, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
+import type { ApproveBody, DeviceDiscoveryJob, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
 import { DISCOVERED_SEED } from '@/lib/mock/discoveredSeed';
 
 let devices: UnapprovedDevice[] = [];
 let scans: DiscoveryScan[] = [];
+let deviceJobs: DeviceDiscoveryJob[] = [];
 
 export function resetDiscoveryStore(): void {
+  deviceJobs = [];
   devices = DISCOVERED_SEED.map((device) => ({ ...device, suggested: { ...device.suggested } }));
   scans = [
     {
@@ -94,4 +96,47 @@ export function startScan(target: string, value: string): DiscoveryScan {
     ];
   }
   return scan;
+}
+
+export function discoverDevice(ip: string, neighbours = false): DeviceDiscoveryJob {
+  const trimmed = ip.trim();
+  if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(trimmed)) {
+    throw new ApiError(400, 'invalid_scan', 'Enter an IPv4 address.');
+  }
+  const now = new Date().toISOString();
+  const job: DeviceDiscoveryJob = {
+    id: `job-${deviceJobs.length + 1}`,
+    ip: trimmed,
+    status: 'done',
+    neighbours,
+    startedAt: now,
+    finishedAt: now,
+    message: 'SNMP reachable via profile default',
+    steps: [
+      { name: 'snmp', status: 'done', message: 'SNMP reachable via profile default' },
+      { name: 'discover', status: 'done', message: 'Discover finished.' },
+      { name: 'macsuck', status: 'done', message: 'MAC suck finished.' },
+      { name: 'arpnip', status: 'done', message: 'ARP collection finished.' },
+    ],
+  };
+  deviceJobs = [job, ...deviceJobs];
+  if (!devices.some((device) => device.ip === trimmed)) {
+    devices = [
+      {
+        id: `disc-${trimmed.split('.').join('-')}`,
+        ip: trimmed,
+        firstSeen: now,
+        lastSeen: now,
+        suggested: {},
+      },
+      ...devices,
+    ];
+  }
+  return { ...job, steps: job.steps.map((step) => ({ ...step })) };
+}
+
+export function getDeviceDiscovery(id: string): DeviceDiscoveryJob {
+  const job = deviceJobs.find((item) => item.id === id);
+  if (!job) throw new ApiError(404, 'not_found', 'unknown discovery job');
+  return { ...job, steps: job.steps.map((step) => ({ ...step })) };
 }

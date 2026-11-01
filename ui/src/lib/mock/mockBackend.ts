@@ -17,6 +17,8 @@ import type { AlertItem, DeviceDetailData, DeviceRow, SeriesPoint, SiteRow } fro
 import { mockLogin } from '@/lib/mock/mockAuth';
 import {
   approveUnapproved,
+  discoverDevice as beginDeviceDiscover,
+  getDeviceDiscovery as readDeviceDiscovery,
   listScans as scanList,
   listUnapproved,
   rejectUnapproved,
@@ -334,6 +336,16 @@ export async function listScans() {
 export async function startScan(target: 'prefix' | 'ip', value: string) {
   await delay(60);
   return beginScan(target, value);
+}
+
+export async function discoverDevice(ip: string, neighbours = false) {
+  await delay(40);
+  return beginDeviceDiscover(ip, neighbours);
+}
+
+export async function getDeviceDiscovery(id: string) {
+  await delay(20);
+  return readDeviceDiscovery(id);
 }
 
 export async function listLauncherApps() {
