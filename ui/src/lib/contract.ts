@@ -197,9 +197,15 @@ export interface ApproveBody {
 }
 
 /** GET /api/v1/discovery/catalog — live NetBox names for the approve form. */
+export interface DiscoveryRoleChoice {
+  name: string;
+  slug: string;
+}
+
 export interface DiscoveryCatalog {
   ok?: boolean;
   roles: string[];
+  roleChoices?: DiscoveryRoleChoice[];
   sites: string[];
   platforms: string[];
 }

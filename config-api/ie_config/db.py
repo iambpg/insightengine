@@ -105,6 +105,76 @@ class DiscoveryCandidate(Base):
     detail: Mapped[str] = mapped_column(Text, default="")
 
 
+class NetbridgeJob(Base):
+    """One sync, scan, or apply. Counts and errors only — never secret values."""
+
+    __tablename__ = "netbridge_jobs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(64), index=True)
+    actor: Mapped[str] = mapped_column(String(320), default="")
+    status: Mapped[str] = mapped_column(String(16), default="done", index=True)
+    counts: Mapped[str] = mapped_column(Text, default="")
+    errors: Mapped[str] = mapped_column(Text, default="")
+    detail: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NetbridgeConflict(Base):
+    __tablename__ = "netbridge_conflicts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    left_label: Mapped[str] = mapped_column(String(200), default="")
+    right_label: Mapped[str] = mapped_column(String(200), default="")
+    detail: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)  # open|resolved|ignored
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class NetbridgePreview(Base):
+    __tablename__ = "netbridge_previews"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(64), index=True)
+    actor: Mapped[str] = mapped_column(String(320), default="")
+    payload: Mapped[str] = mapped_column(Text, default="")
+    applied: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class NetbridgeAp(Base):
+    __tablename__ = "netbridge_aps"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    wlc: Mapped[str] = mapped_column(String(128), index=True, default="")
+    name: Mapped[str] = mapped_column(String(128), index=True, default="")
+    model: Mapped[str] = mapped_column(String(128), index=True, default="")
+    serial: Mapped[str] = mapped_column(String(128), default="")
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    neighbor: Mapped[str] = mapped_column(String(200), default="")
+    neighbor_port: Mapped[str] = mapped_column(String(128), default="")
+    platform: Mapped[str] = mapped_column(String(32), default="")
+    scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class NetbridgeEox(Base):
+    __tablename__ = "netbridge_eox"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_key: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), default="")
+    pid: Mapped[str] = mapped_column(String(128), default="", index=True)
+    serial: Mapped[str] = mapped_column(String(128), default="")
+    source: Mapped[str] = mapped_column(String(16), default="")
+    netbox_id: Mapped[str] = mapped_column(String(32), default="")
+    end_of_sale: Mapped[str] = mapped_column(String(32), default="")
+    end_of_sw_maintenance: Mapped[str] = mapped_column(String(32), default="")
+    end_of_security: Mapped[str] = mapped_column(String(32), default="")
+    last_date_of_support: Mapped[str] = mapped_column(String(32), default="")
+    migration_pid: Mapped[str] = mapped_column(String(128), default="")
+    bucket: Mapped[str] = mapped_column(String(16), default="unknown", index=True)
+    message: Mapped[str] = mapped_column(Text, default="")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 def make_engine(url: str):
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
     return create_engine(url, future=True, connect_args=connect_args)

@@ -23,6 +23,7 @@ import {
   listUnapproved,
   rejectUnapproved,
   resetDiscoveryStore,
+  setRoles,
   startScan as beginScan,
 } from '@/lib/mock/discoveryStore';
 import { readMockSetupState } from '@/lib/mock/setupState';
@@ -187,9 +188,86 @@ export async function listSiteDevices(siteId: string | number): Promise<DeviceRo
   return buildSiteDevices(mockSiteIndex(siteId));
 }
 
-export async function listDiscovered() {
+export async function listDiscovered(query?: { page?: number; pageSize?: number; q?: string }) {
   await delay(300);
-  return listUnapproved();
+  const rows = listUnapproved();
+  if (!query) return rows;
+  const needle = (query.q || '').trim().toLowerCase();
+  const filtered = needle
+    ? rows.filter((device) =>
+        [device.sysName, device.hostname, device.ip, device.vendor, device.model, device.suggested.role, device.suggested.site]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(needle)
+      )
+    : rows;
+  const size = query.pageSize || 25;
+  const page = query.page || 1;
+  const start = (page - 1) * size;
+  return { rows: filtered.slice(start, start + size), total: filtered.length, page, pageSize: size };
+}
+
+export async function setDeviceRoles(ids: string[], role: string) {
+  await delay(40);
+  return setRoles(ids, role);
+}
+
+export async function netbridgeGet(path: string) {
+  await delay(40);
+  if (path.startsWith('/open-count')) return { open: 2 };
+  if (path.startsWith('/summary')) {
+    return {
+      netdiscoDevices: 12,
+      netboxDevices: 9,
+      notInNetbox: 3,
+      stacksPending: 1,
+      apsPending: 4,
+      openConflicts: 2,
+      netdisco: { ok: true, message: '' },
+      eox: { configured: true, message: '' },
+      fortimanager: { configured: false, message: 'FortiManager URL and token are not configured. Add them in Settings → Vault.' },
+      jobs: [{ id: 1, kind: 'ap-scan', actor: 'admin@example.com', status: 'done', counts: { aps: 4 }, errors: [], startedAt: '2026-11-01T00:00:00Z', finishedAt: '2026-11-01T00:01:00Z', detail: '' }],
+    };
+  }
+  if (path.startsWith('/eox')) {
+    return {
+      configured: true,
+      message: '',
+      total: 1,
+      page: 1,
+      pageSize: 25,
+      counts: { past: 1, soon: 0, ok: 0, unknown: 0 },
+      rows: [{ id: 1, name: 'sw-old', pid: 'WS-C2960-24TC-L', serial: 'FOC1234', bucket: 'past', end_of_sale: '2018-10-31', end_of_sw_maintenance: '2019-10-31', end_of_security: '2020-10-31', last_date_of_support: '2023-10-31', migration_pid: 'C9200-24P', message: '', source: 'netbox' }],
+    };
+  }
+  if (path.startsWith('/conflicts')) {
+    return { total: 1, page: 1, pageSize: 25, rows: [{ id: 7, kind: 'serial', left: 'FOC1', right: 'FOC2', status: 'open', detail: {}, updatedAt: '2026-11-01T00:00:00Z' }] };
+  }
+  if (path.startsWith('/history')) {
+    return { total: 1, page: 1, pageSize: 25, rows: [{ id: 1, kind: 'stacks-preview', actor: 'admin@example.com', status: 'dry-run', counts: { changes: 2 }, errors: [], startedAt: '2026-11-01T00:00:00Z', finishedAt: '2026-11-01T00:00:00Z', detail: '' }] };
+  }
+  if (path.startsWith('/access-points')) {
+    return { total: 1, page: 1, pageSize: 25, models: [{ model: 'CW9164', count: 1 }], rows: [{ id: 3, name: 'ap-1', model: 'CW9164', serial: 'FGL1', ip: '10.1.1.5', wlc: 'wlc1', neighbor: 'sw1', neighborPort: 'Gi1/0/1', action: 'create', inNetbox: false }] };
+  }
+  if (path.startsWith('/fortimanager')) {
+    return { configured: false, message: 'FortiManager URL and token are not configured. Add them in Settings → Vault.', instances: [], rows: [], total: 0, page: 1, pageSize: 25 };
+  }
+  return { rows: [], total: 0, page: 1, pageSize: 25, message: '' };
+}
+
+export async function netbridgePost(path: string, body?: unknown) {
+  await delay(40);
+  if (path.endsWith('/preview')) {
+    return { previewId: 41, dryRun: true, changes: 1, rows: [{ name: 'example', action: 'create' }], message: 'Nothing is written until you confirm this preview.' };
+  }
+  if (path.endsWith('/apply')) {
+    const confirm = body && typeof body === 'object' && (body as { confirm?: boolean }).confirm === true;
+    if (!confirm) throw new (await import('@/lib/apiError')).ApiError(400, 'bad_body', 'confirm must be true');
+    return { ok: true, previewId: 41, counts: { created: 1, updated: 0, skipped: 0, errors: 0 }, errors: [] };
+  }
+  if (path.endsWith('/refresh')) return { ok: true, configured: true, message: 'Refreshed 1 Cisco device.', updated: 1 };
+  return { ok: true, message: 'Done.' };
 }
 
 const MOCK_ROLES = [

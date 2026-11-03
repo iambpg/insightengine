@@ -121,8 +121,31 @@ export async function listSiteDevices(siteId: string | number): Promise<DeviceRo
   return request(`${API}/sites/${encodeURIComponent(String(siteId))}/devices`);
 }
 
-export async function listDiscovered(): Promise<UnapprovedDevice[]> {
-  return request(`${API}/discovery/unapproved`);
+export async function listDiscovered(query?: { page?: number; pageSize?: number; q?: string }) {
+  if (!query) return request<UnapprovedDevice[]>(`${API}/discovery/unapproved`);
+  const params = new URLSearchParams({
+    page: String(query.page ?? 1),
+    page_size: String(query.pageSize ?? 25),
+    q: query.q ?? '',
+  });
+  return request<{ rows: UnapprovedDevice[]; total: number; page: number; pageSize: number }>(
+    `${API}/discovery/unapproved?${params}`
+  );
+}
+
+export async function setDeviceRoles(ids: string[], role: string) {
+  return request<{ ok: boolean; role: string; updated: string[] }>(`${API}/discovery/roles`, {
+    method: 'POST',
+    body: { ids, role },
+  });
+}
+
+export async function netbridgeGet(path: string) {
+  return request(`/api/v1/netbridge${path}`);
+}
+
+export async function netbridgePost(path: string, body?: unknown) {
+  return request(`/api/v1/netbridge${path}`, { method: 'POST', body: body ?? {} });
 }
 
 export async function discoveryCatalog(): Promise<DiscoveryCatalog> {

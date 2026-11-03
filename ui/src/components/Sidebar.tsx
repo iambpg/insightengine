@@ -32,9 +32,9 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'Inventory',
     items: [
       {
-        href: '/not-in-net-box',
-        label: 'Not in NetBox',
-        icon: 'QuestionMarkCircleIcon',
+        href: '/netbridge',
+        label: 'NetBridge',
+        icon: 'ArrowsRightLeftIcon',
       },
     ],
   },
@@ -67,12 +67,13 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
   useEffect(() => {
     let cancelled = false;
     api
-      .listDiscovered()
-      .then((rows) => {
-        if (!cancelled) setPending(rows.length);
+      .netbridgeGet('/open-count')
+      .then((body) => {
+        const count = Number((body as { open?: number })?.open || 0);
+        if (!cancelled) setPending(count);
       })
       .catch((cause) => {
-        reportLoadError(cause, 'discovered devices');
+        reportLoadError(cause, 'open conflicts');
         if (!cancelled) setPending(0);
       });
     return () => {
@@ -135,7 +136,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
             <ul className="space-y-0.5">
               {items.map((item) => {
                 const active = isActive(item.href);
-                const badge = item.href === '/not-in-net-box' ? pending : item.badge;
+                const badge = item.href === '/netbridge' ? pending : item.badge;
                 return (
                   <li key={`nav-${item.label}`} className="group relative">
                     <Link

@@ -130,9 +130,24 @@ export const api = {
     return (await backend()).listSiteDevices(siteId);
   },
 
-  // BACKEND: GET /api/v1/discovery/unapproved
-  async listDiscovered(): Promise<UnapprovedDevice[]> {
-    return (await backend()).listDiscovered();
+  // BACKEND: GET /api/v1/discovery/unapproved?page=&page_size=&q=
+  async listDiscovered(query?: { page?: number; pageSize?: number; q?: string }) {
+    return (await backend()).listDiscovered(query);
+  },
+
+  // BACKEND: POST /api/v1/discovery/roles  { ids, role }
+  async setDeviceRoles(ids: string[], role: string) {
+    return (await backend()).setDeviceRoles(ids, role);
+  },
+
+  // BACKEND: GET /api/v1/netbridge/...
+  async netbridgeGet(path: string) {
+    return (await backend()).netbridgeGet(path);
+  },
+
+  // BACKEND: POST /api/v1/netbridge/...
+  async netbridgePost(path: string, body?: unknown) {
+    return (await backend()).netbridgePost(path, body);
   },
 
   // BACKEND: GET /api/v1/discovery/catalog

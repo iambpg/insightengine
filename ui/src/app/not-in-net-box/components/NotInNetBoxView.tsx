@@ -8,12 +8,33 @@ import EmptyState from '@/components/ui/EmptyState';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { isMockMode } from '@/lib/apiMode';
 import Modal from '@/components/ui/Modal';
+import Pagination from '@/components/ui/Pagination';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isApiError } from '@/lib/apiError';
 import type { DeviceDiscoveryJob, DiscoveryCatalog, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
+
+type DiscoveredPage = { rows: UnapprovedDevice[]; total: number };
+
+function isPage(value: unknown): value is DiscoveredPage {
+  return !!value && typeof value === 'object' && Array.isArray((value as DiscoveredPage).rows);
+}
+
+function roleNames(catalog: DiscoveryCatalog, current?: string): string[] {
+  const fromChoices = (catalog.roleChoices ?? []).map((choice) => choice.name).filter(Boolean);
+  const names = fromChoices.length ? fromChoices : catalog.roles;
+  const selected = roleValue(catalog, current);
+  if (selected && !names.includes(selected)) return [selected, ...names];
+  return names;
+}
+
+function roleValue(catalog: DiscoveryCatalog, current?: string): string {
+  if (!current) return '';
+  const hit = (catalog.roleChoices ?? []).find((choice) => choice.name === current || choice.slug === current);
+  return hit?.name || current;
+}
 
 const EMPTY_CATALOG: DiscoveryCatalog = { roles: [], sites: [], platforms: [] };
 
@@ -23,8 +44,13 @@ function stamp(value: string): string {
   return date.toISOString().replace('T', ' ').slice(0, 16);
 }
 
-export default function NotInNetBoxView() {
+export default function NotInNetBoxView({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<UnapprovedDevice[] | null>(null);
+  const [serverPaged, setServerPaged] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [bulkRole, setBulkRole] = useState('');
   const [scans, setScans] = useState<DiscoveryScan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -47,19 +73,32 @@ export default function NotInNetBoxView() {
       setHighlightIp(job.ip);
       api
         .listDiscovered()
-        .then(setItems)
+        .then((data) => applyList(data))
         .catch(() => undefined);
       toast.success('Discovery finished. If the device is not in NetBox, it is in this list.');
     },
     onError: (job) => toast.error(job.message || 'Discovery failed.'),
   });
 
+  const applyList = (data: UnapprovedDevice[] | DiscoveredPage) => {
+    if (isPage(data) && !Array.isArray(data)) {
+      setServerPaged(true);
+      setItems(data.rows);
+      setTotal(data.total);
+      return;
+    }
+    const rows = data as UnapprovedDevice[];
+    setServerPaged(false);
+    setItems(rows);
+    setTotal(rows.length);
+  };
+
   const load = () => {
     setItems(null);
     setError(null);
-    Promise.all([api.listDiscovered(), api.listScans()])
+    Promise.all([api.listDiscovered({ page, pageSize, q: search }), api.listScans()])
       .then(([devices, recent]) => {
-        setItems(devices);
+        applyList(devices as UnapprovedDevice[] | DiscoveredPage);
         setScans(recent);
       })
       .catch((cause) => setError(reportLoadError(cause, 'discovered devices')));
@@ -90,10 +129,10 @@ export default function NotInNetBoxView() {
     let cancelled = false;
     setItems(null);
     setError(null);
-    Promise.all([api.listDiscovered(), api.listScans()])
+    Promise.all([api.listDiscovered({ page, pageSize, q: search }), api.listScans()])
       .then(([devices, recent]) => {
         if (cancelled) return;
-        setItems(devices);
+        applyList(devices as UnapprovedDevice[] | DiscoveredPage);
         setScans(recent);
       })
       .catch((cause) => {
@@ -102,12 +141,13 @@ export default function NotInNetBoxView() {
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [reload, page, pageSize, search]);
 
-  const rows = useMemo(() => {
+  const view = useMemo(() => {
     if (!items) return null;
+    if (serverPaged) return { rows: items, total };
     const needle = search.trim().toLowerCase();
-    return items.filter((device) => {
+    const filtered = items.filter((device) => {
       if (!needle) return true;
       const hay = [
         device.sysName,
@@ -123,7 +163,26 @@ export default function NotInNetBoxView() {
         .toLowerCase();
       return hay.includes(needle);
     });
-  }, [items, search]);
+    const start = (page - 1) * pageSize;
+    return { rows: filtered.slice(start, start + pageSize), total: filtered.length };
+  }, [items, search, serverPaged, total, page, pageSize]);
+  const rows = view?.rows ?? null;
+
+  const saveRole = async (ids: string[], role: string) => {
+    const chosen = role.trim();
+    if (!chosen || ids.length === 0) return;
+    setItems((current) =>
+      current?.map((device) =>
+        ids.includes(device.id) ? { ...device, suggested: { ...device.suggested, role: chosen } } : device
+      ) ?? current
+    );
+    try {
+      await api.setDeviceRoles(ids, chosen);
+    } catch (cause) {
+      toast.error(isApiError(cause) ? cause.message : 'The role was not saved.');
+      setReload((value) => value + 1);
+    }
+  };
 
   const allOn = !!rows && rows.length > 0 && rows.every((row) => selected.includes(row.id));
 
@@ -226,7 +285,11 @@ export default function NotInNetBoxView() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3 px-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Not in NetBox</h1>
+          {embedded ? (
+            <h2 className="text-lg font-semibold tracking-tight">Not in NetBox</h2>
+          ) : (
+            <h1 className="text-2xl font-semibold tracking-tight">Not in NetBox</h1>
+          )}
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Devices that discovery found on the network but that are not yet approved in the
             inventory. Approving creates the device in NetBox and starts monitoring it.
@@ -263,6 +326,7 @@ export default function NotInNetBoxView() {
           <label className="text-sm">
             <span className="text-muted-foreground">Target</span>
             <select
+              aria-label="Discover target"
               value={target}
               onChange={(event) => setTarget(event.target.value as 'ip' | 'prefix')}
               className="mt-1 block h-9 rounded-md border border-input bg-card px-2"
@@ -346,7 +410,10 @@ export default function NotInNetBoxView() {
             <input
               type="search"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
               placeholder="sysName, IP, vendor or site…"
               className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus:border-ring"
             />
@@ -377,6 +444,29 @@ export default function NotInNetBoxView() {
             >
               <Icon name="XMarkIcon" size={14} /> Reject selected
             </button>
+            <label className="flex items-center gap-2 text-xs">
+              <span>Set role</span>
+              <select
+                aria-label="Role for selected devices"
+                value={bulkRole}
+                onChange={(event) => setBulkRole(event.target.value)}
+                className="h-7 rounded-md border border-navy-3 bg-navy-2 px-2 text-primary-foreground"
+              >
+                <option value="">Choose a role</option>
+                {roleNames(catalog).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => saveRole(selected, bulkRole)}
+                className="rounded-md bg-cyan px-2 py-1 font-semibold text-navy"
+              >
+                Set role for selected
+              </button>
+            </label>
             <button
               type="button"
               onClick={() => setSelected([])}
@@ -498,8 +588,20 @@ export default function NotInNetBoxView() {
                         {device.platform ? <Badge tone="cyan">{device.platform}</Badge> : '—'}
                       </td>
                       <td className="px-3 py-2.5">{device.suggested.site ?? '—'}</td>
-                      <td className="px-3 py-2.5 text-muted-foreground">
-                        {device.suggested.role ?? '—'}
+                      <td className="px-3 py-2.5">
+                        <select
+                          aria-label={`Suggested role for ${name}`}
+                          value={roleValue(catalog, device.suggested.role)}
+                          onChange={(event) => saveRole([device.id], event.target.value)}
+                          className="h-8 max-w-[14rem] rounded-md border border-input bg-card px-2 text-sm"
+                        >
+                          <option value="">Select a role</option>
+                          {roleNames(catalog, device.suggested.role).map((option) => (
+                            <option key={`${device.id}-${option}`} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-3 py-2.5 font-mono-data text-xs text-muted-foreground">
                         {stamp(device.lastSeen)}
@@ -530,6 +632,19 @@ export default function NotInNetBoxView() {
             </table>
           </div>
         )}
+        {view && view.total > 0 ? (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={view.total}
+            noun="devices"
+            onPage={setPage}
+            onPageSize={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        ) : null}
       </section>
 
       <Modal

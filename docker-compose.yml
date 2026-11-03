@@ -523,7 +523,8 @@ services:
       - ./secrets/device-cli:/opt/insightengine/secrets/device-cli
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - ./config-api/apps.yml:/app/apps.yml:ro
-      # Read-only. The Vault lists these keys and does not write the file.
+      # Read-only. The Vault lists these keys and does not rewrite this file.
+      # NetBridge integration secrets saved in the UI go to data/vault/integrations.env.
       - ./.env:/opt/insightengine/.env:ro
       - netdisco-local:/var/lib/ie/netdisco-local
     secrets:

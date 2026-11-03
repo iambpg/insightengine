@@ -35,6 +35,10 @@ type VaultList = {
   readOnly: boolean;
   revealSeconds: number;
   groups: VaultGroup[];
+  integrations?: {
+    cisco?: { idSet?: boolean; secretSet?: boolean };
+    fortimanager?: { urlSet?: boolean; tokenSet?: boolean };
+  };
 };
 
 type Job = { key: string; action: 'reveal' | 'copy' };
@@ -147,6 +151,160 @@ function shownValue(entry: Entry, revealed: Record<string, string>): string {
 function endpointLabel(endpoint: Endpoint): string {
   if (endpoint.url) return endpoint.url;
   return `${endpoint.scheme} port ${endpoint.port}`;
+}
+
+function IntegrationSecrets({
+  integrations,
+}: {
+  integrations?: VaultList['integrations'];
+}) {
+  const [ciscoId, setCiscoId] = useState('');
+  const [ciscoSecret, setCiscoSecret] = useState('');
+  const [fmgUrl, setFmgUrl] = useState('');
+  const [fmgToken, setFmgToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [flags, setFlags] = useState(integrations);
+  useEffect(() => setFlags(integrations), [integrations]);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      if (isMockMode()) {
+        setCiscoId('');
+        setCiscoSecret('');
+        setFmgUrl('');
+        setFmgToken('');
+        toast.success('Saved. The values stay masked.');
+        return;
+      }
+      const body: Record<string, string> = {};
+      if (ciscoId) body.ciscoClientId = ciscoId;
+      if (ciscoSecret) body.ciscoClientSecret = ciscoSecret;
+      if (fmgUrl) body.fortimanagerUrl = fmgUrl;
+      if (fmgToken) body.fortimanagerToken = fmgToken;
+      const saved = await request<{ integrations?: VaultList['integrations'] }>('/api/v1/settings/vault/integrations', {
+        method: 'POST',
+        body,
+      });
+      setFlags(saved.integrations);
+      setCiscoId('');
+      setCiscoSecret('');
+      setFmgUrl('');
+      setFmgToken('');
+      toast.success('Saved. The values are not shown again.');
+    } catch (cause) {
+      toast.error(isApiError(cause) ? cause.message : 'The credentials were not saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = async (target: 'cisco' | 'fortimanager') => {
+    setBusy(true);
+    try {
+      if (isMockMode()) {
+        toast.success(target === 'cisco' ? 'Demo: Cisco token and EoX lookup succeeded.' : 'Demo: FortiManager answered.');
+        return;
+      }
+      const result = await request<{ ok?: boolean; message?: string }>('/api/v1/settings/vault/integrations/test', {
+        method: 'POST',
+        body: { target },
+      });
+      if (result.ok) toast.success(result.message || 'Connection succeeded.');
+      else toast.error(result.message || 'Connection failed.');
+    } catch (cause) {
+      toast.error(isApiError(cause) ? cause.message : 'Connection test failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const mask = (set?: boolean) => (set ? 'Saved — enter a new value to replace it' : 'Not set');
+
+  return (
+    <div className="space-y-4">
+      <section aria-label="Cisco Support API (EoX)" className="rounded-md border border-border bg-card p-4">
+        <h3 className="text-base font-semibold">Cisco Support API (EoX)</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Client id and secret for the Cisco EoX API. A blank field keeps the saved value. Values are never shown again.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">
+            Client ID
+            <input
+              type="password"
+              autoComplete="off"
+              aria-label="Cisco API client ID"
+              placeholder={mask(flags?.cisco?.idSet)}
+              value={ciscoId}
+              onChange={(event) => setCiscoId(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input px-2"
+            />
+          </label>
+          <label className="text-sm">
+            Client secret
+            <input
+              type="password"
+              autoComplete="new-password"
+              aria-label="Cisco API client secret"
+              placeholder={mask(flags?.cisco?.secretSet)}
+              value={ciscoSecret}
+              onChange={(event) => setCiscoSecret(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input px-2"
+            />
+          </label>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" disabled={busy} onClick={save} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+            Save Cisco credentials
+          </button>
+          <button type="button" disabled={busy} onClick={() => test('cisco')} className="rounded-md border border-border px-3 py-1.5 text-sm">
+            Test Cisco connection
+          </button>
+        </div>
+      </section>
+      <section aria-label="FortiManager" className="rounded-md border border-border bg-card p-4">
+        <h3 className="text-base font-semibold">FortiManager</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          URL and API token. A blank field keeps the saved value. Neither is shown again or written to the log.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">
+            URL
+            <input
+              type="password"
+              autoComplete="off"
+              aria-label="FortiManager URL"
+              placeholder={mask(flags?.fortimanager?.urlSet)}
+              value={fmgUrl}
+              onChange={(event) => setFmgUrl(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input px-2"
+            />
+          </label>
+          <label className="text-sm">
+            API token
+            <input
+              type="password"
+              autoComplete="new-password"
+              aria-label="FortiManager API token"
+              placeholder={mask(flags?.fortimanager?.tokenSet)}
+              value={fmgToken}
+              onChange={(event) => setFmgToken(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input px-2"
+            />
+          </label>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" disabled={busy} onClick={save} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+            Save FortiManager credentials
+          </button>
+          <button type="button" disabled={busy} onClick={() => test('fortimanager')} className="rounded-md border border-border px-3 py-1.5 text-sm">
+            Test FortiManager connection
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function keyCountLabel(count: number): string {
@@ -372,6 +530,8 @@ export default function VaultTab() {
           />
         </label>
       </div>
+
+      <IntegrationSecrets integrations={data?.integrations} />
 
       {!data && !error ? <p className="text-sm text-muted-foreground">Loading vault…</p> : null}
 
