@@ -69,3 +69,138 @@ modules:
   # Palo Alto. PAN-COMMON-MIB must be uploaded before this module will generate.
   paloalto_system:
     walk: [panSys]
+
+  # Health modules. Source of truth also in generator-health.yml.
+  # A full generator run rewrites snmp/out/snmp.yml; merge new modules
+  # instead of replacing if_mib, cisco_cdp, lldp and cisco_wlc_universal.
+  # Lookup-rich CISCO-ENVMON. The live module cisco_environ stays so existing
+  # jobs that name it keep working. New platform lists use cisco_env.
+  cisco_env:
+    walk:
+      - ciscoEnvMonTemperatureStatusDescr
+      - ciscoEnvMonTemperatureStatusValue
+      - ciscoEnvMonTemperatureStatusValueRev1
+      - ciscoEnvMonTemperatureState
+      - ciscoEnvMonFanStatusDescr
+      - ciscoEnvMonFanState
+      - ciscoEnvMonSupplyStatusDescr
+      - ciscoEnvMonSupplyState
+      - ciscoEnvMonSupplySource
+    lookups:
+      - source_indexes: [ciscoEnvMonTemperatureStatusIndex]
+        lookup: ciscoEnvMonTemperatureStatusDescr
+        drop_source_indexes: false
+      - source_indexes: [ciscoEnvMonFanStatusIndex]
+        lookup: ciscoEnvMonFanStatusDescr
+        drop_source_indexes: false
+      - source_indexes: [ciscoEnvMonSupplyStatusIndex]
+        lookup: ciscoEnvMonSupplyStatusDescr
+        drop_source_indexes: false
+
+  # IOS-XE / NX-OS / 9800 memory. Indexed by entPhysicalIndex + cempMemPoolIndex.
+  cisco_enhanced_mem:
+    walk:
+      - cempMemPoolName
+      - cempMemPoolUsed
+      - cempMemPoolFree
+      - cempMemPoolHCUsed
+      - cempMemPoolHCFree
+    lookups:
+      - source_indexes: [entPhysicalIndex, cempMemPoolIndex]
+        lookup: cempMemPoolName
+        drop_source_indexes: false
+
+  # Temperature (and other sensors) on IOS-XE, NX-OS and Catalyst 9800.
+  cisco_entity_sensor:
+    walk:
+      - entSensorType
+      - entSensorScale
+      - entSensorPrecision
+      - entSensorValue
+      - entSensorStatus
+    lookups:
+      - source_indexes: [entPhysicalIndex]
+        lookup: entPhysicalName
+        drop_source_indexes: false
+      - source_indexes: [entPhysicalIndex]
+        lookup: entPhysicalDescr
+        drop_source_indexes: false
+
+  # Fan trays and FRU power supplies. Names come from ENTITY-MIB.
+  cisco_fru:
+    walk:
+      - cefcFRUPowerOperStatus
+      - cefcFanTrayOperStatus
+    lookups:
+      - source_indexes: [entPhysicalIndex]
+        lookup: entPhysicalName
+        drop_source_indexes: false
+
+  # FortiGate sensors. fgSysMemUsage is also here so the module stands alone.
+  # The committed fortigate module already exports that scalar; the merge step
+  # drops it from fortinet_health when both would be scraped together.
+  fortinet_health:
+    walk:
+      - fgHwSensorEntName
+      - fgHwSensorEntValue
+      - fgHwSensorEntAlarmStatus
+      - fgSysMemUsage
+      - fgSysMemCapacity
+    lookups:
+      - source_indexes: [fgHwSensorEntIndex]
+        lookup: fgHwSensorEntName
+        drop_source_indexes: false
+    overrides:
+      fgHwSensorEntValue:
+        regex_extracts:
+          Number:
+            - regex: '([-+]?[0-9]*\.?[0-9]+)'
+              value: '$1'
+
+  # Palo Alto memory (HOST-RESOURCES), temperature/fan/PSU (ENTITY-SENSOR) and
+  # FRU power tables (PAN-ENTITY-EXT). entPhysicalName labels the sensors.
+  paloalto_health:
+    walk:
+      - hrStorageDescr
+      - hrStorageAllocationUnits
+      - hrStorageSize
+      - hrStorageUsed
+      - entPhySensorType
+      - entPhySensorScale
+      - entPhySensorPrecision
+      - entPhySensorValue
+      - entPhySensorOperStatus
+      - panEntryFanTrayPowerUsed
+      - panEntryPowerSupplyPowerCapacity
+    lookups:
+      - source_indexes: [hrStorageIndex]
+        lookup: hrStorageDescr
+        drop_source_indexes: false
+      - source_indexes: [entPhysicalIndex]
+        lookup: entPhysicalName
+        drop_source_indexes: false
+      - source_indexes: [entPhysicalIndex]
+        lookup: entPhysicalDescr
+        drop_source_indexes: false
+
+  # AireOS controller system stats and WLC-level counts. No AP table: per-AP
+  # rows are Telegraf. bsnGlobalDot11SystemMobileStations is the client total.
+  # Joined AP count is count() of the Telegraf bsnAPOperationStatus series.
+  cisco_wlc_aireos:
+    walk:
+      - agentCurrentCPUUtilization
+      - agentTotalMemory
+      - agentFreeMemory
+      - agentSwitchInfoPowerSupply1Present
+      - agentSwitchInfoPowerSupply1Operational
+      - agentSwitchInfoPowerSupply2Present
+      - agentSwitchInfoPowerSupply2Operational
+      - bsnGlobalDot11SystemMobileStations
+
+  # Catalyst 9800 controller summary. One scalar for joined APs. CPU, memory,
+  # fans, PSUs and temperature come from cisco_pro, cisco_enhanced_mem,
+  # cisco_entity_sensor and cisco_fru on the same scrape. Per-AP tables are
+  # not walked here (a single 9800 can hold ~5000 APs).
+  cisco_wlc_iosxe:
+    walk:
+      - cLApGlobalAPConnectCount

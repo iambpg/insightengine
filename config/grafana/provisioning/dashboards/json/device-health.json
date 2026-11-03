@@ -1,0 +1,120 @@
+{
+  "uid": "ie-device-health",
+  "title": "Device Health",
+  "tags": ["insightengine", "health"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "hostname",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "definition": "label_values(ie:device_memory_used_ratio, hostname)",
+        "query": {"query": "label_values(ie:device_memory_used_ratio, hostname)", "refId": "A"},
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Memory used",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 0.9}, {"color": "red", "value": 0.95}]}}},
+      "targets": [{"refId": "A", "expr": "max(ie:device_memory_used_ratio{hostname=~\"$hostname\"})"}]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Fans not ok",
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie:device_fan_ok{hostname=~\"$hostname\"} == 0) or vector(0)"}]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "PSUs not ok",
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie:device_psu_ok{hostname=~\"$hostname\"} == 0) or vector(0)"}]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Highest temperature",
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "celsius"}},
+      "targets": [{"refId": "A", "expr": "max(ie:device_temperature_celsius{hostname=~\"$hostname\"})"}]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Interface utilization",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}},
+      "targets": [{"refId": "A", "expr": "topk(10, ie:interface_utilization_ratio{hostname=~\"$hostname\"})", "legendFormat": "{{ifName}}"}]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Interface drops",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "pps"}},
+      "targets": [{"refId": "A", "expr": "topk(10, ie:interface_drops_rate{hostname=~\"$hostname\"})", "legendFormat": "{{ifName}}"}]
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "Wireless controllers and access points",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "collapsed": false
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Joined APs",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 15},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(ie:wlc_aps_joined)"}]
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Wireless clients",
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 15},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(ie:wlc_clients)"}]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Busiest AP radios (top 20)",
+      "description": "The full AP list is paged in the InsightEngine device page. This panel stays at 20 rows so a 5000-AP controller does not render every series.",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "topk(20, ie_wlc_radio_channel_util)", "format": "table", "instant": true}]
+    },
+    {
+      "id": 11,
+      "type": "text",
+      "title": "9800 scale",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 23},
+      "options": {
+        "mode": "markdown",
+        "content": "A Catalyst 9800 with about 5000 APs is polled by Telegraf in four staggered SNMP tables (status, clients, radio, channel). snmp-exporter only reads the controller scalar `cLApGlobalAPConnectCount` plus IOS-XE health MIBs. If a walk stays above two minutes, move that controller to gNMI. See docs/health-metrics.md."
+      }
+    }
+  ]
+}

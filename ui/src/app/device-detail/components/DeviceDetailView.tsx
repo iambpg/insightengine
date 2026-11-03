@@ -18,6 +18,8 @@ import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
 import type { DeviceDetailData, PortInfo, SourceComparison } from '@/lib/types';
+import AccessPointList from './AccessPointList';
+import HealthPanel from './HealthPanel';
 import IssuesPanel from './IssuesPanel';
 import HealthChecks from './HealthChecks';
 import HardwareHealth from './HardwareHealth';
@@ -225,6 +227,9 @@ export default function DeviceDetailView() {
           </div>
         </div>
       </section>
+
+      {device?.healthPanel ? <HealthPanel panel={device.healthPanel} /> : null}
+      {device?.healthPanel?.wlc ? <AccessPointList wlc={device.hostname} /> : null}
 
       {device && !isMockMode() ? <ComparisonPanel comparison={device.comparison} /> : null}
 

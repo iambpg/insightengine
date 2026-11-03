@@ -460,6 +460,48 @@ export function buildDeviceDetail(formKey: string): DeviceDetailData {
       { id: 'h5', name: 'Memory', kind: 'memory', status: health === 'healthy' ? 'ok' : 'warn', value: health === 'healthy' ? '52%' : '78%', detail: 'Used of 4 GB, threshold 85%' },
       { id: 'h6', name: 'Flash storage', kind: 'storage', status: 'ok', value: '38%', detail: 'Used of 8 GB, threshold 90%' },
     ],
+    healthPanel: healthPanelFor(form),
+  };
+}
+
+function healthPanelFor(form: string) {
+  const unsupported = (id: string, label: string) => ({
+    id, label, supported: false, status: 'unsupported' as const, value: 'not supported by this device', detail: 'not supported by this device',
+  });
+  if (form === 'ceiling-ap') {
+    return {
+      profile: 'ap',
+      profileLabel: 'Cisco access point',
+      groups: [unsupported('memory', 'Memory'), unsupported('fan', 'Fans'), unsupported('psu', 'Power supplies'), unsupported('temperature', 'Temperature')],
+      interfacesSupported: false,
+      interfaces: [],
+      interfacesNote: 'not supported by this device',
+      wlc: null,
+      accessPoint: {
+        note: 'This AP has no SNMP agent. Status, radios, channel utilization, clients and uptime are collected by Telegraf from its wireless controller.',
+        status: 'up',
+        clients: 18,
+        uptimeSeconds: 86400,
+        radios: [{ slot: '0', channel: 36, utilization: 0.22, clients: 11 }],
+      },
+    };
+  }
+  const memory = { id: 'memory', label: 'Memory', supported: true, status: 'ok' as const, value: '52%', detail: 'Used ratio' };
+  const fan = { id: 'fan', label: 'Fans', supported: true, status: 'ok' as const, value: 'All normal', detail: 'States: normal' };
+  const psu = { id: 'psu', label: 'Power supplies', supported: true, status: 'ok' as const, value: '2 reported', detail: 'States: normal, normal' };
+  const temp = { id: 'temperature', label: 'Temperature', supported: true, status: 'ok' as const, value: form === 'access-switch-24' ? 'normal' : '47°C', detail: form === 'access-switch-24' ? 'Status only. This platform often has no degree reading.' : 'Highest sensor' };
+  return {
+    profile: form === 'wireless-controller' ? 'iosxe-wlc' : 'iosxe',
+    profileLabel: form === 'wireless-controller' ? 'Cisco Catalyst 9800' : 'Cisco IOS-XE',
+    groups: [memory, fan, psu, temp],
+    interfacesSupported: true,
+    interfaces: [
+      { name: 'Te1/1/1', ifIndex: '49', utilization: 0.82, dropsRate: 0.4, errorsRate: 0, criticalPath: true },
+      { name: 'Gi1/0/1', ifIndex: '1', utilization: 0.12, dropsRate: 0, errorsRate: 0, criticalPath: false },
+    ],
+    interfacesNote: '',
+    wlc: form === 'wireless-controller' ? { joinedAps: 5000, clients: 18000, note: 'Controller system stats come from snmp-exporter. Per-AP rows come from Telegraf.' } : null,
+    accessPoint: null,
   };
 }
 
