@@ -341,6 +341,20 @@ export async function approveDevice(
   return approveUnapproved(id, body);
 }
 
+export async function approveAccessPoints(body: { accessPoints: { name: string; serial?: string }[] }) {
+  await delay(200);
+  return {
+    ok: true,
+    results: body.accessPoints.map((ap) => ({
+      name: ap.name,
+      wlc: '',
+      status: ap.serial === 'FGL000114' ? 'skipped' : 'created',
+      reason: ap.serial === 'FGL000114' ? 'Already in NetBox' : '',
+      deviceId: ap.serial === 'FGL000114' ? '9' : '42',
+    })),
+  };
+}
+
 export async function rejectDevice(id: string): Promise<{ id: string; ok: boolean }> {
   await delay(350);
   return rejectUnapproved(id);

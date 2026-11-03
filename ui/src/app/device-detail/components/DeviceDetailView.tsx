@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/AppIcon';
@@ -13,12 +13,15 @@ import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/De
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
 import { isMockMode } from '@/lib/apiMode';
+import { deviceHealthPath } from '@/lib/deviceHealthPath';
+import AddApDialog from '@/components/AddApDialog';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
-import type { DeviceDetailData, PortInfo, SourceComparison } from '@/lib/types';
+import type { DeviceDetailData, HealthCause, PortInfo, SourceComparison } from '@/lib/types';
 import AccessPointList from './AccessPointList';
+import HealthCauses, { type HealthFilter } from './HealthCauses';
 import HealthPanel from './HealthPanel';
 import IssuesPanel from './IssuesPanel';
 import HealthChecks from './HealthChecks';
@@ -58,6 +61,9 @@ export default function DeviceDetailView() {
   const [missingId, setMissingId] = useState(false);
   const [postedDiscovery, setPostedDiscovery] = useState<DeviceDiscoveryJob | null>(null);
   const [rediscovering, setRediscovering] = useState(false);
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>('all');
+  const [addAp, setAddAp] = useState(false);
+  const healthApplied = useRef('');
   const discoveryJob = usePolledDeviceDiscovery(postedDiscovery, {
     onError: (job) => toast.error(job.message || 'Rediscover failed.'),
     onDone: () => toast.success('Rediscover finished.'),
@@ -92,6 +98,52 @@ export default function DeviceDetailView() {
   const showMissing = ready && live && !id && missingId;
   const error = showMissing ? NEEDS_ID : loaded.error;
 
+  const tab = params.get('tab') ?? '';
+  const severityQuery = params.get('severity') ?? '';
+  useEffect(() => {
+    if (!device) return;
+    const key = `${device.id}|${tab}|${severityQuery}`;
+    if (healthApplied.current === key) return;
+    healthApplied.current = key;
+    if (tab !== 'health') return;
+    const next: HealthFilter = severityQuery === 'critical' || severityQuery === 'warning' || severityQuery === 'info' ? severityQuery : 'all';
+    setHealthFilter(next);
+    const section = document.getElementById('health');
+    if (section && typeof section.scrollIntoView === 'function') section.scrollIntoView({ block: 'start' });
+  }, [device, tab, severityQuery]);
+
+  const apDraft = useMemo(() => {
+    const point = device?.healthPanel?.accessPoint;
+    if (device?.inNetbox !== false || !point) return [];
+    return [{
+      name: point.name || device.hostname,
+      wlc: point.wlc,
+      model: point.model,
+      serial: point.serial,
+      ip: point.ip,
+      ios: point.ios,
+      location: point.location,
+      siteTag: point.siteTag,
+      suggestedSite: device.site && device.site !== '—' ? device.site : '',
+    }];
+  }, [device]);
+
+  const healthItems = useMemo<HealthCause[]>(() => {
+    if (!device) return [];
+    if (Array.isArray(device.healthItems)) return device.healthItems;
+    return (device.issues ?? []).map((issue) => ({
+      id: issue.id,
+      severity: issue.severity,
+      title: issue.title,
+      detail: issue.detail,
+      value: issue.target,
+      threshold: '—',
+      source: 'alertmanager',
+      since: issue.since,
+      target: issue.target,
+    }));
+  }, [device]);
+
   const allPorts = useMemo<PortInfo[]>(() => {
     if (!device) return [];
     const f = device.faceplate;
@@ -124,7 +176,7 @@ export default function DeviceDetailView() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="font-mono-data text-2xl font-semibold tracking-tight">{device.hostname}</h1>
-                <HealthBadge health={device.health} />
+                <HealthBadge health={device.health} href={deviceHealthPath(device.id || id, device.faceplate.form_factor, device.health)} />
                 <StatusBadge status={device.status} />
                 {device.faceplate.modelName && (
                   <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono-data text-xs font-semibold text-foreground">{device.faceplate.modelName}</span>
@@ -214,6 +266,16 @@ export default function DeviceDetailView() {
           </div>
         )}
       </header>
+
+      {device ? (
+        <HealthCauses items={healthItems} health={device.health} filter={healthFilter} onFilter={setHealthFilter} />
+      ) : null}
+      {apDraft.length > 0 ? (
+        <div className="px-4">
+          <button type="button" onClick={() => setAddAp(true)} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Add to NetBox</button>
+          <AddApDialog open={addAp} aps={apDraft} onClose={() => setAddAp(false)} onDone={() => undefined} />
+        </div>
+      ) : null}
 
       {/* issues + hardware health + health check */}
       <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Device status overview">

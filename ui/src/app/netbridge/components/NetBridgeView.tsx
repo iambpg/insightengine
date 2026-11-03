@@ -4,7 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import Pagination from '@/components/ui/Pagination';
 import Modal from '@/components/ui/Modal';
+import Link from 'next/link';
+import AddApDialog, { type ApDraft } from '@/components/AddApDialog';
 import { api } from '@/lib/apiClient';
+import { devicePath } from '@/lib/apiMode';
+import { accessPointId } from '@/lib/deviceHealthPath';
 import { isApiError } from '@/lib/apiError';
 import NotInNetBoxView from '@/app/not-in-net-box/components/NotInNetBoxView';
 import { allowOperate } from '@/lib/settings/access';
@@ -302,6 +306,7 @@ function AccessPoints({ canWrite }: { canWrite: boolean }) {
   const [data, setData] = useState<{ rows: Record<string, unknown>[]; total: number; models?: { model: string; count: number }[] } | null>(null);
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState<ApDraft[]>([]);
 
   const load = () => {
     api.netbridgeGet(`/access-points?page=${page}&page_size=${pageSize}&q=${encodeURIComponent(q)}&model=${encodeURIComponent(model)}`)
@@ -354,7 +359,24 @@ function AccessPoints({ canWrite }: { canWrite: boolean }) {
       <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
         <input aria-label="Search access points" value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Name, serial, IP, switch" className="h-9 min-w-[180px] flex-1 rounded-md border border-input px-3 text-sm" />
         {canWrite ? <button type="button" onClick={scan} disabled={busy} className="rounded-md border border-border px-3 py-1.5 text-sm">Scan controllers</button> : null}
-        {canWrite ? <button type="button" onClick={ask} disabled={busy || selected.length === 0} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Upload selected</button> : null}
+        {canWrite ? <button type="button" onClick={ask} disabled={busy || selected.length === 0} className="rounded-md border border-border px-3 py-1.5 text-sm">Upload selected</button> : null}
+        {canWrite ? (
+          <button
+            type="button"
+            disabled={selected.length === 0}
+            onClick={() => setAdding((data?.rows ?? []).filter((row) => selected.includes(Number(row.id)) && !row.inNetbox).map((row) => ({
+              name: String(row.name || ''),
+              wlc: String(row.wlc || ''),
+              model: String(row.model || ''),
+              serial: String(row.serial || ''),
+              ip: String(row.ip || ''),
+              suggestedSite: String(row.site || ''),
+            })))}
+            className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+          >
+            Add to NetBox
+          </button>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-2 px-3 py-2">
         <FilterButton label="All models" on={model === ''} onClick={() => { setModel(''); setPage(1); }} />
@@ -381,9 +403,21 @@ function AccessPoints({ canWrite }: { canWrite: boolean }) {
               return (
                 <tr key={id} className="border-b border-border">
                   <td className="px-3 py-2">
-                    <input type="checkbox" aria-label={`Select ${row.name}`} checked={on} onChange={() => setSelected(on ? selected.filter((item) => item !== id) : [...selected, id])} />
+                    <input type="checkbox" aria-label={`Select ${row.name}`} checked={on} disabled={Boolean(row.inNetbox)} onChange={() => setSelected(on ? selected.filter((item) => item !== id) : [...selected, id])} />
                   </td>
-                  <td className="px-3 py-2">{String(row.name || '')}</td>
+                  <td className="px-3 py-2">
+                    <Link href={devicePath(accessPointId(String(row.netboxId || ''), String(row.name || '')), 'ceiling-ap')} className="font-medium text-primary hover:underline">{String(row.name || '')}</Link>
+                    {row.inNetbox ? <span className="ml-2 text-xs text-muted-foreground">In NetBox</span> : canWrite ? (
+                      <button type="button" className="ml-2 text-xs font-semibold" onClick={() => setAdding([{
+                        name: String(row.name || ''),
+                        wlc: String(row.wlc || ''),
+                        model: String(row.model || ''),
+                        serial: String(row.serial || ''),
+                        ip: String(row.ip || ''),
+                        suggestedSite: String(row.site || ''),
+                      }])}>Add to NetBox</button>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2">{String(row.model || '')}</td>
                   <td className="px-3 py-2 font-mono-data text-xs">{String(row.serial || '')}</td>
                   <td className="px-3 py-2 font-mono-data text-xs">{String(row.ip || '')}</td>
@@ -395,6 +429,7 @@ function AccessPoints({ canWrite }: { canWrite: boolean }) {
         </table>
       </div>
       <Pagination page={page} pageSize={pageSize} total={data?.total ?? 0} noun="access points" onPage={setPage} onPageSize={(size) => { setPageSize(size); setPage(1); }} />
+      <AddApDialog open={adding.length > 0} aps={adding} onClose={() => setAdding([])} onDone={() => { setSelected([]); load(); }} />
       <Modal open={!!preview} onClose={() => !busy && setPreview(null)} title="Upload access points" description="NetBox devices are created for access points that are not already there. Existing devices are left as they are." footer={
         <>
           <button type="button" onClick={() => setPreview(null)} className="rounded-md border border-border px-3 py-1.5 text-sm">Cancel</button>

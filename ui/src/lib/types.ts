@@ -140,6 +140,19 @@ export interface IssueItem {
   target: string;
 }
 
+/** One cause of a device health badge. The badge is the worst of these items. */
+export interface HealthCause {
+  id: string;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  value: string;
+  threshold: string;
+  source: string;
+  since: string;
+  target: string;
+}
+
 export interface HealthCheck {
   id: string;
   name: string;
@@ -225,6 +238,9 @@ export interface AccessPointRow {
   neighborSwitch?: string;
   neighborPort?: string;
   netboxSite?: string;
+  inNetbox?: boolean;
+  netboxId?: string;
+  suggestedSite?: string;
   ssids?: AccessPointSsid[];
   rssiAvg?: number | null;
   snrAvg?: number | null;
@@ -244,6 +260,19 @@ export interface DeviceHealthPanel {
     clients: number | null;
     uptimeSeconds: number | null;
     radios: AccessPointRadio[];
+    name?: string;
+    wlc?: string;
+    model?: string;
+    serial?: string;
+    ip?: string;
+    mac?: string;
+    location?: string;
+    ios?: string;
+    mode?: string;
+    siteTag?: string;
+    neighborSwitch?: string;
+    neighborPort?: string;
+    ssids?: AccessPointSsid[];
   } | null;
 }
 
@@ -317,6 +346,8 @@ export interface DeviceDetailData {
   mgmtIp: string;
   modelFamily: string;
   health: DeviceHealth;
+  healthItems?: HealthCause[];
+  inNetbox?: boolean;
   status?: string;
   netdiscoOnly?: boolean;
   uptime: string;

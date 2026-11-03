@@ -1108,6 +1108,35 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         return found
 
     mount_fleet(app, user_of)
+
+    @app.post("/api/v1/access-points/approve")
+    async def approve_access_points(request: Request):
+        user, _csrf = user_of(request)
+        require_operator(user)
+        try:
+            body = await request.json()
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        service = getattr(app.state, "fleet", None)
+        if service is None:
+            from .fleet import FleetService
+            service = FleetService(settings)
+            app.state.fleet = service
+        try:
+            result = service.approve_access_points(body)
+        except ApiError as exc:
+            _audit(sf, user, "ap-approve", client_ip(request), "failed", "netbox", "", "", exc.code)
+            raise
+        for row in result.get("results") or []:
+            _audit(
+                sf, user, "ap-approve", client_ip(request),
+                row.get("status") or "failed", "netbox", "", "",
+                ("%s %s" % (row.get("name") or "", row.get("reason") or "")).strip()[:500],
+            )
+        return result
+
     mount_netbridge(app, user_of, _audit)
     mount_experience(app, user_of)
 

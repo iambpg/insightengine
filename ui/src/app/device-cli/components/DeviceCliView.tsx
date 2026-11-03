@@ -8,6 +8,7 @@ import { HealthBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { devicePath, isMockMode } from '@/lib/apiMode';
+import { deviceHealthPath } from '@/lib/deviceHealthPath';
 import { reportLoadError } from '@/lib/loadError';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
@@ -396,7 +397,7 @@ export default function DeviceCliView() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
-              <HealthBadge health={device.health} />
+              <HealthBadge health={device.health} href={deviceHealthPath(device.id || id, device.faceplate?.form_factor || form, device.health)} />
               <span className="font-mono-data text-xs text-muted-foreground">{device.mgmtIp} · {device.modelFamily}</span>
               <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${live && !cli?.credentialsConfigured ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${live && !cli?.credentialsConfigured ? 'bg-warning' : 'bg-success'}`} />

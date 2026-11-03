@@ -1,8 +1,9 @@
-"""Read-only fleet API for the customer UI.
+"""Fleet API for the customer UI.
 
 NetBox is the inventory (devices, sites, roles, regions). Prometheus holds
 reachability, interface counters and CPU/memory. Alertmanager holds alerts.
-Nothing here writes except alert acknowledge, which creates a silence.
+Writes are alert acknowledge (a silence) and adding a wireless access point
+to NetBox. Device health always comes from explain_health.
 
 A fresh NetBox with no devices, and empty Prometheus / Alertmanager, returns
 empty lists and zero counts. A down upstream is 502 with
@@ -28,13 +29,18 @@ import httpx
 from fastapi import Request
 
 from .errors import ApiError
+from .discovery import NetBoxWriter
 from .health import (
     aireos_psu_states,
     build_health_panel,
+    classify_health,
     classify_profile,
     critical_names_from_interfaces,
+    explain_health,
     mark_critical_interface,
+    match_access_point,
     page_rows,
+    suggest_ap_site,
 )
 from .hostnames import effective_suffixes, names_match, strip_device_label, strip_hostname, suffix_pattern
 from .ifnames import iface_match_keys
@@ -64,7 +70,6 @@ _MEMBER_RE = re.compile(r"^[A-Za-z]+(\d+)/")
 _SILENCE_HOURS = 24
 _PAGE_CAP = 40
 _ALERT_CAP = 5000
-_STALE_SECONDS = 30 * 60
 
 
 class UpstreamError(Exception):
@@ -531,20 +536,44 @@ def form_factor_for(role_slug: str, role_name: str, model: str) -> tuple[str, st
     return result["role"], result["form"]
 
 
-def classify_health(probe, snmp_up, last_age_s, ports_fault, ports_warn, ports_total) -> str:
-    if probe == 0:
-        return "unreachable"
-    if last_age_s is not None and last_age_s > _STALE_SECONDS:
-        return "unreachable"
-    if probe is None and snmp_up is None:
-        return "unreachable"
-    if snmp_up == 0 and probe != 1:
-        return "unreachable"
-    if (ports_fault or 0) > 0:
-        return "critical"
-    if (ports_warn or 0) > 0 or snmp_up == 0 or (probe == 1 and not ports_total and snmp_up is None):
-        return "warning"
-    return "healthy"
+def _alert_health(alert: dict) -> dict:
+    return {
+        "id": alert.get("id") or "",
+        "severity": alert.get("severity") or "warning",
+        "title": alert.get("title") or "Alert",
+        "detail": alert.get("detail") or "",
+        "status": alert.get("status") or "open",
+        "ageSeconds": int(alert.get("ageMinutes") or 0) * 60,
+        "target": alert.get("deviceHostname") or alert.get("category") or "device",
+        "deviceHostname": alert.get("deviceHostname") or "",
+    }
+
+
+def _row_health_snapshot(row: dict, alerts: list[dict]) -> dict:
+    age = row.get("last_age")
+    if age is not None and age >= 10**12:
+        age = None
+    snap = {
+        "probe": row.get("_probe"),
+        "snmpUp": row.get("_snmp"),
+        "lastAgeS": age,
+        "portsFault": row.get("portsFault") or 0,
+        "portsWarn": row.get("portsWarn") or 0,
+        "portsTotal": row.get("portsTotal") or 0,
+        "since": row.get("lastPoll") or "—",
+        "alerts": [_alert_health(alert) for alert in alerts or []],
+    }
+    if row.get("_cpu") is not None:
+        snap["cpu"] = row["_cpu"]
+    if row.get("_memory") is not None:
+        snap["memoryRatio"] = row["_memory"]
+    if row.get("_temp") is not None:
+        snap["tempC"] = row["_temp"]
+    if row.get("_fan_ok") is not None:
+        snap["fanOk"] = row["_fan_ok"]
+    if row.get("_psu_ok") is not None:
+        snap["psuOk"] = row["_psu_ok"]
+    return snap
 
 
 def worst_health(values: list[str]) -> str:
@@ -677,6 +706,23 @@ def _index_samples(samples: list[dict]) -> tuple[dict, dict]:
             by_host[host] = max(by_host.get(host, value), value) if host in by_host else value
         if ip:
             by_ip[ip] = max(by_ip.get(ip, value), value) if ip in by_ip else value
+    return by_host, by_ip
+
+
+def _index_min(samples: list[dict]) -> tuple[dict, dict]:
+    by_host: dict[str, float] = {}
+    by_ip: dict[str, float] = {}
+    for sample in samples or []:
+        metric = sample.get("metric") or {}
+        value = _sample_value(sample)
+        if value is None:
+            continue
+        host = str(metric.get("hostname") or metric.get("device") or "").strip().lower()
+        ip = str(metric.get("instance") or metric.get("ipv4") or "").split(":")[0].strip()
+        if host:
+            by_host[host] = value if host not in by_host else min(by_host[host], value)
+        if ip:
+            by_ip[ip] = value if ip not in by_ip else min(by_ip[ip], value)
     return by_host, by_ip
 
 
@@ -998,11 +1044,17 @@ class FleetService:
                 "max by (hostname, instance) (timestamp(ifHCInOctets)) "
                 'or max by (hostname, instance) (timestamp(up{hostname!=""}))'
             ),
+            "cpu": "max by (hostname, instance) (cpmCPUTotal5minRev or fgSysCpuUsage)",
+            "memory": "max by (hostname, instance) (ie:device_memory_used_ratio)",
+            "temp": "max by (hostname, instance) (ie:device_temperature_celsius)",
+            "fan_ok": "min by (hostname, instance) (ie:device_fan_ok)",
+            "psu_ok": "min by (hostname, instance) (ie:device_psu_ok)",
         }
         out = {"degraded": False}
         for key, query in queries.items():
+            index = _index_min if key in ("fan_ok", "psu_ok") else _index_samples
             try:
-                out[key] = _index_samples(self._prom(client, query))
+                out[key] = index(self._prom(client, query))
             except UpstreamError:
                 out["degraded"] = True
                 out[key] = ({}, {})
@@ -1077,9 +1129,6 @@ class FleetService:
             nd_hint = _index_hit(self._netdisco_index(), device.get("ip") or "", device.get("name") or "", self._suffixes())
             classified = classify_device(_netbox_facts(device), nd_hint)
             display, form = classified["role"], classified["form"]
-            health = classify_health(probe, snmp_up, age, ports_fault, ports_warn, ports_total)
-            if health == "unreachable":
-                ports_up = 0
             built.append({
                 "id": device["id"],
                 "hostname": host,
@@ -1089,21 +1138,53 @@ class FleetService:
                 "siteId": device["site_id"],
                 "mgmtIp": ip,
                 "modelFamily": device["model"] or device["platform"] or "—",
-                "health": health,
+                "health": "healthy",
                 "portsUp": ports_up,
                 "portsTotal": ports_total,
                 "portsWarn": ports_warn,
                 "portsFault": ports_fault,
-                "uptime": uptime_text if health != "unreachable" else "—",
+                "uptime": uptime_text,
                 "uptime_s": uptime_s,
                 "lastPoll": format_ago(age),
                 "last_age": age if age is not None else 10**12,
                 "formFactor": form,
                 "status": device.get("status") or "active",
                 "_device": device,
+                "_probe": probe,
+                "_snmp": snmp_up,
+                "_cpu": _lookup(prom.get("cpu") or ({}, {}), host, ip),
+                "_memory": _lookup(prom.get("memory") or ({}, {}), host, ip),
+                "_temp": _lookup(prom.get("temp") or ({}, {}), host, ip),
+                "_fan_ok": _lookup(prom.get("fan_ok") or ({}, {}), host, ip),
+                "_psu_ok": _lookup(prom.get("psu_ok") or ({}, {}), host, ip),
             })
+        self._apply_list_health(client, built, degraded)
         roles = sorted({row["role"] for row in built if row["role"]})
         return built, {"degraded": degraded, "roles": roles}, degraded
+
+    def _apply_list_health(self, client, built: list[dict], degraded: list[str]) -> None:
+        """Badge for every row from explain_health, including open alerts."""
+        alerts = []
+        try:
+            payload = self._alerts_raw(client)
+            if payload.get("degraded") and "alertmanager" not in degraded:
+                degraded.append("alertmanager")
+            alerts = self._project_alerts(payload, built)
+        except Exception:
+            log.warning("fleet health could not read alerts")
+            if "alertmanager" not in degraded:
+                degraded.append("alertmanager")
+        by_host: dict[str, list] = {}
+        for alert in alerts:
+            if alert.get("status") != "open":
+                continue
+            by_host.setdefault(str(alert.get("deviceHostname") or "").lower(), []).append(alert)
+        for row in built:
+            explained = explain_health(_row_health_snapshot(row, by_host.get(row["hostname"].lower(), [])))
+            row["health"] = explained["health"]
+            if explained["health"] == "unreachable":
+                row["portsUp"] = 0
+                row["uptime"] = "—"
 
     def _public_row(self, row: dict) -> dict:
         return {
@@ -1208,6 +1289,14 @@ class FleetService:
             with self._session() as client:
                 rows, _meta, degraded = self._decorated(client)
                 found = self._find_device(rows, key)
+                if found is None and not is_form_key(key) and not key.isdigit():
+                    ap = self._find_ap(key)
+                    if ap is not None:
+                        found = self._inventory_for_ap(rows, ap)
+                        if found is None:
+                            alerts = self._alerts_raw(client)
+                            detail = self._detail_from_ap(ap, rows, alerts)
+                            return self._with_degraded(detail, degraded)
                 if found is None:
                     # Form keys are faceplate samples, not devices. Do not pick a
                     # representative switch or firewall for them.
@@ -1247,9 +1336,259 @@ class FleetService:
             if "alertmanager" not in degraded:
                 degraded.append("alertmanager")
         detail.setdefault("sources", [])
-        for private in ("_snmp_neighbors", "_snmp_at", "_snmp_missing"):
+        self._finish_health(detail, found, alerts, rows)
+        for private in ("_snmp_neighbors", "_snmp_at", "_snmp_missing", "_health_inputs", "_ap"):
             detail.pop(private, None)
         return self._with_degraded(detail, degraded)
+
+    def _finish_health(self, detail: dict, found: dict, alerts: dict, rows: list[dict]) -> None:
+        """Recompute the badge from the same items the Health section lists."""
+        inputs = detail.get("_health_inputs") if isinstance(detail.get("_health_inputs"), dict) else {}
+        projected = []
+        try:
+            projected = [
+                alert for alert in self._project_alerts(alerts, rows)
+                if alert.get("status") == "open" and str(alert.get("deviceHostname") or "").lower() == str(found.get("hostname") or "").lower()
+            ]
+        except Exception:
+            log.warning("device health could not include alerts for %s", found.get("hostname"))
+        snap = _row_health_snapshot(found, projected)
+        if inputs.get("ports"):
+            snap["ports"] = inputs["ports"]
+        if inputs.get("cpu") is not None:
+            snap["cpu"] = inputs["cpu"]
+        if inputs.get("memoryPercent") is not None:
+            snap.pop("memoryRatio", None)
+            snap["memoryPercent"] = inputs["memoryPercent"]
+        if inputs.get("tempC") is not None:
+            snap["tempC"] = inputs["tempC"]
+        if inputs.get("fans"):
+            snap.pop("fanOk", None)
+            snap["fans"] = inputs["fans"]
+        if inputs.get("psus"):
+            snap.pop("psuOk", None)
+            snap["psus"] = inputs["psus"]
+        if inputs.get("apStatus"):
+            snap["apStatus"] = inputs["apStatus"]
+            snap["apName"] = inputs.get("apName") or found.get("hostname") or ""
+        if inputs.get("apDown"):
+            snap["apDown"] = inputs["apDown"]
+        if inputs.get("radios"):
+            snap["radios"] = inputs["radios"]
+        snap["since"] = inputs.get("since") or snap.get("since") or "—"
+        explained = explain_health(snap)
+        detail["health"] = explained["health"]
+        detail["healthItems"] = explained["items"]
+        ap = detail.get("_ap")
+        if isinstance(ap, dict):
+            panel = detail.get("healthPanel") if isinstance(detail.get("healthPanel"), dict) else {}
+            self._merge_ap_panel(panel, ap)
+            detail["healthPanel"] = panel
+            detail["inNetbox"] = True
+
+    def _inventory_for_ap(self, rows: list[dict], ap: dict) -> dict | None:
+        match = match_access_point(rows, ap)
+        if match is None:
+            return None
+        if match.get("hostname") and match.get("_device"):
+            return match
+        return self._find_device(rows, str(match.get("id") or match.get("name") or ""))
+
+    def _find_ap(self, key: str) -> dict | None:
+        text = unquote(key or "").strip()
+        if text.lower().startswith("ap:"):
+            text = text[3:].strip()
+        if not text:
+            return None
+        low = text.lower()
+        for row in self._ap_rows():
+            values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
+            if low in values:
+                return row
+        return None
+
+    def _ap_rows(self) -> list:
+        cached = self.cache.get("ap-snapshot")
+        if cached is None:
+            try:
+                self.list_access_points(page=1, page_size=1, q="", wlc="", site="", status="")
+            except Exception:
+                return []
+            cached = self.cache.get("ap-snapshot") or {}
+        return list((cached or {}).get("rows") or [])
+
+    def _ap_panel(self, ap: dict | None) -> dict | None:
+        if not ap:
+            return None
+        return {
+            "status": ap.get("status") or "",
+            "clients": ap.get("clients"),
+            "uptimeSeconds": ap.get("uptimeSeconds"),
+            "radios": list(ap.get("radios") or []),
+        }
+
+    def _merge_ap_panel(self, panel: dict, ap: dict) -> None:
+        block = dict(panel.get("accessPoint") or {})
+        block.update({
+            "name": ap.get("name") or block.get("name") or "",
+            "wlc": ap.get("wlc") or "",
+            "model": ap.get("model") or "",
+            "serial": ap.get("serial") or "",
+            "ip": ap.get("ip") or "",
+            "mac": ap.get("mac") or "",
+            "location": ap.get("location") or "",
+            "ios": ap.get("ios") or "",
+            "mode": ap.get("mode") or "",
+            "siteTag": ap.get("siteTag") or "",
+            "policyTag": ap.get("policyTag") or "",
+            "rfTag": ap.get("rfTag") or "",
+            "neighborSwitch": ap.get("neighborSwitch") or "",
+            "neighborPort": ap.get("neighborPort") or "",
+            "clients": ap.get("clients") if ap.get("clients") is not None else block.get("clients"),
+            "status": ap.get("status") or block.get("status") or "",
+            "radios": ap.get("radios") or block.get("radios") or [],
+            "ssids": ap.get("ssids") or [],
+            "uptimeSeconds": ap.get("uptimeSeconds") if ap.get("uptimeSeconds") is not None else block.get("uptimeSeconds"),
+        })
+        if not block.get("note"):
+            block["note"] = "Status, radios and clients come from the wireless controller."
+        panel["accessPoint"] = block
+
+    def _detail_from_ap(self, ap: dict, rows: list[dict], alerts: dict) -> dict:
+        name = str(ap.get("name") or "access-point")
+        projected = []
+        try:
+            projected = [
+                alert for alert in self._project_alerts(alerts, rows)
+                if alert.get("status") == "open" and str(alert.get("deviceHostname") or "").lower() == name.lower()
+            ]
+        except Exception:
+            projected = []
+        explained = explain_health({
+            "since": "—",
+            "apStatus": ap.get("status") or "",
+            "apName": name,
+            "radios": ap.get("radios") or [],
+            "alerts": [_alert_health(alert) for alert in projected],
+        })
+        panel = build_health_panel("ap", ap=self._ap_panel(ap))
+        self._merge_ap_panel(panel, ap)
+        neighbors = []
+        if ap.get("neighborSwitch"):
+            neighbors.append({
+                "localPort": "uplink",
+                "remoteName": ap.get("neighborSwitch") or "",
+                "remotePort": ap.get("neighborPort") or "",
+                "remoteAddress": "",
+                "protocol": "cdp",
+                "source": "wlc",
+            })
+        face = _faceplate("ceiling-ap", "Access point", name, ap.get("model") or "", [])
+        face["apState"] = "down" if str(ap.get("status") or "").lower() == "down" else "up"
+        seconds = ap.get("uptimeSeconds")
+        uptime = "—"
+        if isinstance(seconds, (int, float)) and seconds >= 0:
+            uptime, _ignored = format_uptime(float(seconds) * 100)
+        return {
+            "id": "ap:%s" % name,
+            "hostname": name,
+            "role": "Access point",
+            "site": ap.get("suggestedSite") or ap.get("netboxSite") or ap.get("site") or "—",
+            "siteId": "",
+            "mgmtIp": ap.get("ip") or "—",
+            "modelFamily": ap.get("model") or "Access point",
+            "health": explained["health"],
+            "healthItems": explained["items"],
+            "status": ap.get("status") or "active",
+            "inNetbox": False,
+            "uptime": uptime,
+            "lastPoll": "—",
+            "firmware": ap.get("ios") or "—",
+            "serialMasked": mask_serial(ap.get("serial") or ""),
+            "faceplate": face,
+            "issues": [_issue_from_alert(alert, index) for index, alert in enumerate(projected)],
+            "checks": [],
+            "hardware": [],
+            "healthPanel": panel,
+            "checkRunAt": _clock_stamp(self._now_dt()),
+            "neighbors": neighbors,
+            "neighborNote": "",
+            "interfaces": [],
+            "addresses": [],
+            "history": [],
+            "sources": [
+                {"name": "netbox", "ok": False, "detail": "Not in NetBox"},
+                {"name": "prometheus", "ok": True, "detail": "Wireless controller telemetry"},
+                {"name": "alertmanager", "ok": not bool(alerts.get("degraded")), "detail": ""},
+            ],
+        }
+
+    def approve_access_points(self, body: dict) -> dict:
+        """Create NetBox devices for wireless APs. Ones already present are skipped."""
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        points = body.get("accessPoints")
+        if not isinstance(points, list) or not points or len(points) > 100:
+            raise ApiError(400, "bad_body", "accessPoints must be 1 to 100 access points")
+        role = str(body.get("role") or "access-point").strip() or "access-point"
+        site = str(body.get("site") or "").strip()
+        if not site:
+            raise ApiError(400, "bad_body", "site is required")
+        platform = str(body.get("platform") or "").strip()
+        headers = netbox_headers(self.settings.netbox_token_file)
+        if not headers:
+            raise ApiError(503, "netbox_token", "NetBox API token is not configured")
+        try:
+            with self._session() as client:
+                devices = self._devices_raw(client)
+        except UpstreamError as exc:
+            raise _as_upstream(exc)
+        known = self._ap_rows()
+        writer = NetBoxWriter(self.settings.netbox_url, headers)
+        results = []
+        created_any = False
+        for raw in points:
+            if not isinstance(raw, dict) or not str(raw.get("name") or "").strip():
+                results.append({"name": "", "wlc": "", "status": "failed", "reason": "access point name is required", "deviceId": ""})
+                continue
+            ap = _posted_ap(raw, known)
+            chosen_site = str(raw.get("site") or site).strip() or site
+            match = match_access_point(devices, ap)
+            if match is not None:
+                results.append({
+                    "name": ap["name"],
+                    "wlc": ap.get("wlc") or "",
+                    "status": "skipped",
+                    "reason": "Already in NetBox",
+                    "deviceId": str(match.get("id") or ""),
+                })
+                continue
+            try:
+                made = writer.approve_access_point(ap, role=role, site=chosen_site, platform=platform)
+            except Exception:
+                log.warning("access point approve failed for %s", ap.get("name"))
+                results.append({
+                    "name": ap["name"],
+                    "wlc": ap.get("wlc") or "",
+                    "status": "failed",
+                    "reason": "NetBox did not accept the access point",
+                    "deviceId": "",
+                })
+                continue
+            created_any = True
+            device_id = str(made.get("device_id") or "")
+            devices.append({"id": device_id, "name": ap["name"], "serial": ap.get("serial") or "", "site_name": chosen_site})
+            results.append({
+                "name": ap["name"],
+                "wlc": ap.get("wlc") or "",
+                "status": "created",
+                "reason": "",
+                "deviceId": device_id,
+            })
+        if created_any:
+            self.cache.drop("nb-devices")
+            self.cache.drop("ap-snapshot")
+        return {"ok": all(row["status"] != "failed" for row in results), "results": results}
 
     def device_access(self, device_id: str) -> dict:
         """Hostname, management IP and platform. Used by the read-only CLI."""
@@ -1462,18 +1801,33 @@ class FleetService:
         fan_states = [_env_state(sample, "ciscoEnvMonFanState") or _env_state(sample, "cefcFanTrayOperStatus") for sample in cached.get("fans") or []]
         psu_states = [_env_state(sample, "ciscoEnvMonSupplyState") or _env_state(sample, "cefcFRUPowerOperStatus") for sample in cached.get("psus") or []]
         psu_states.extend(aireos_psu_states(cached.get("aireos_psu") or []))
+        fan_clean = [item for item in fan_states if item]
+        psu_clean = [item for item in psu_states if item]
+        ap_row = self._find_ap(row["hostname"]) if profile == "ap" else None
         health_panel = build_health_panel(
             profile,
             memory_ratio=None if mem is None else float(mem) / 100.0,
             memory_detail="Used percent",
-            fan_states=[item for item in fan_states if item],
-            psu_states=[item for item in psu_states if item],
+            fan_states=fan_clean,
+            psu_states=psu_clean,
             temp_c=cached.get("temp"),
             ports=cached.get("ports") or [],
             wlc_joined=cached.get("joined_aps"),
             wlc_clients=cached.get("wlc_clients"),
-            ap=self._ap_for_device(client, row["hostname"]) if profile == "ap" else None,
+            ap=self._ap_panel(ap_row) if ap_row else (self._ap_for_device(client, row["hostname"]) if profile == "ap" else None),
         )
+        if ap_row:
+            self._merge_ap_panel(health_panel, ap_row)
+        down_aps = None
+        if profile in ("aireos", "iosxe-wlc"):
+            try:
+                counted = self._prom(
+                    client,
+                    'count(ie_wlc_ap_oper_up{wlc="%s"} == 0)' % prom_escape(row["hostname"]),
+                )
+                down_aps = _first_value(counted)
+            except UpstreamError:
+                down_aps = None
         return {
             "id": row["id"],
             "hostname": row["hostname"],
@@ -1498,6 +1852,20 @@ class FleetService:
             "_snmp_at": cached.get("snmp_at") or "",
             "_snmp_missing": not bool(cached.get("has_if_mib")),
             "_snmp_neighbors": cached.get("neighbors") or [],
+            "_health_inputs": {
+                "ports": cached.get("ports") or [],
+                "cpu": cached.get("cpu"),
+                "memoryPercent": cached.get("mem"),
+                "tempC": cached.get("temp"),
+                "fans": fan_clean,
+                "psus": psu_clean,
+                "since": row.get("lastPoll") or "—",
+                "apStatus": (ap_row or {}).get("status") if ap_row else "",
+                "apName": row["hostname"],
+                "apDown": down_aps,
+                "radios": (ap_row or {}).get("radios") or [],
+            },
+            "_ap": ap_row,
         }
 
     def _load_ports(self, client, selector: str, hostname: str = "") -> dict:
@@ -2034,6 +2402,7 @@ class FleetService:
                     except UpstreamError:
                         devices = []
                     attach_netbox_sites(cached.get("rows") or [], devices)
+                    _annotate_access_points(cached.get("rows") or [], devices)
             except UpstreamError:
                 cached = {"rows": [], "degraded": True}
             self.cache.put("ap-snapshot", cached)
@@ -3118,6 +3487,45 @@ def _port_matcher(selector: str, port_id: str) -> str:
 
 def _metric_number(sample: dict):
     return _sample_value(sample)
+
+
+def _posted_ap(raw: dict, known: list[dict]) -> dict:
+    name = str(raw.get("name") or "").strip()
+    wlc = str(raw.get("wlc") or "").strip().lower()
+    found = None
+    for row in known or []:
+        if str(row.get("name") or "").lower() != name.lower():
+            continue
+        if wlc and wlc not in str(row.get("wlc") or "").lower():
+            continue
+        found = row
+        break
+    ap = dict(found or {})
+    for key in ("name", "wlc", "model", "serial", "ip", "ios", "location", "siteTag", "mac"):
+        if raw.get(key):
+            ap[key] = raw.get(key)
+    ap["name"] = name
+    if not ap.get("ios") and raw.get("sw_version"):
+        ap["ios"] = raw.get("sw_version")
+    return ap
+
+
+def _annotate_access_points(rows: list[dict], devices: list[dict]) -> None:
+    sites = []
+    seen = set()
+    for device in devices or []:
+        name = str(device.get("site_name") or device.get("site") or "").strip()
+        slug = str(device.get("site_slug") or "").strip()
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            sites.append({"name": name, "slug": slug})
+    for row in rows or []:
+        match = match_access_point(devices, row)
+        row["inNetbox"] = match is not None
+        row["netboxId"] = str(match.get("id") or "") if match else ""
+        if match and not row.get("netboxSite"):
+            row["netboxSite"] = str(match.get("site_name") or match.get("site") or "")
+        row["suggestedSite"] = suggest_ap_site(row, sites)
 
 
 def attach_netbox_sites(rows: list[dict], devices: list[dict]) -> list[dict]:

@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import type { DeviceHealth, PortState } from '@/lib/types';
 
@@ -47,12 +48,22 @@ export function StatusBadge({ status }: { status?: string }) {
   return <Badge tone={tone}>{label}</Badge>;
 }
 
-export function HealthBadge({ health }: { health: DeviceHealth }) {
-  const m = HEALTH_META[health];
-  return (
+export function HealthBadge({ health, href }: { health: DeviceHealth; href?: string }) {
+  const m = HEALTH_META[health] ?? HEALTH_META.healthy;
+  const badge = (
     <Badge tone={m.tone} icon={m.icon}>
       {m.label}
     </Badge>
+  );
+  if (!href) return badge;
+  return (
+    <Link
+      href={href}
+      className="inline-flex rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      aria-label={`${m.label}. Open health details`}
+    >
+      {badge}
+    </Link>
   );
 }
 

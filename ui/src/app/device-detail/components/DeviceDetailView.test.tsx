@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/apiError';
 import { api } from '@/lib/apiClient';
-import type { DeviceDetailData } from '@/lib/types';
+import type { DeviceDetailData, HealthCause } from '@/lib/types';
 import DeviceDetailView from './DeviceDetailView';
 
 const queryState = vi.hoisted(() => ({ value: '' }));
@@ -227,5 +227,19 @@ describe('DeviceDetailView client navigation', () => {
     await user.click(await screen.findByRole('button', { name: 'Rediscover' }));
     expect(api.discoverDevice).toHaveBeenCalledWith('10.1.0.2', false);
     expect((await screen.findAllByText('discover failed: could not SNMP connect')).length).toBeGreaterThan(0);
+  });
+
+  it('opens the health section filtered by the severity in the address bar', async () => {
+    queryState.value = 'id=42&tab=health&severity=warning';
+    const causes: HealthCause[] = [
+      { id: 'c', severity: 'critical', title: 'PSU failed', detail: 'dead', value: 'failed', threshold: 'normal', source: 'prometheus', since: '1h ago', target: 'psu' },
+      { id: 'w', severity: 'warning', title: 'CPU high', detail: 'busy', value: '83%', threshold: '80%', source: 'prometheus', since: '10m ago', target: 'cpu' },
+    ];
+    vi.mocked(api.getDevice).mockResolvedValue({ ...device('42', 'edge-42'), health: 'critical', healthItems: causes });
+    render(<DeviceDetailView />);
+    expect(await screen.findByRole('heading', { name: 'Health' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('PSU failed')).toBeNull());
+    expect(screen.getByText('CPU high')).toBeInTheDocument();
+    expect(screen.getByText('83%')).toBeInTheDocument();
   });
 });

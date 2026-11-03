@@ -225,6 +225,19 @@ def _slug(value: str) -> str:
     return s[:40] or "unknown"
 
 
+def _ipv4_address(value: str) -> str:
+    text = (value or "").strip().split("/")[0].strip()
+    parts = text.split(".")
+    if len(parts) != 4:
+        return ""
+    try:
+        if all(0 <= int(part) <= 255 and str(int(part)) == part for part in parts):
+            return text
+    except ValueError:
+        return ""
+    return ""
+
+
 def manufacturer_identity(vendor: str, guess: dict) -> tuple[str, str]:
     """Return (display name, slug) for a NetBox manufacturer.
 
@@ -1497,7 +1510,8 @@ def _iso(value) -> str | None:
 class NetBoxWriter:
     """Creates the objects an approved device needs. Methods are small so tests can fake the client.
 
-    approve_device is the only place a discovered device is written to NetBox.
+    approve_device writes a Netdisco candidate. approve_access_point writes one
+    wireless access point from controller telemetry. Both go through this class.
     """
 
     def __init__(self, base_url: str, headers: dict):
@@ -1654,6 +1668,114 @@ class NetBoxWriter:
             except Exception:
                 pass
             raise
+        return {
+            "device_id": device["id"],
+            "name": device.get("name") or name,
+            "role": role_slug,
+            "site": site_slug,
+            "platform": platform_slug,
+        }
+
+    def _ensure_text_field(self, name: str, label: str) -> None:
+        found = self._req("GET", "/api/extras/custom-fields/?name=%s" % quote(name, safe=""))
+        rows = found.get("results") or []
+        if any((row.get("name") or "") == name for row in rows):
+            return
+        self._req("POST", "/api/extras/custom-fields/", {
+            "name": name,
+            "label": label,
+            "type": "text",
+            "object_types": ["dcim.device"],
+            "required": False,
+        })
+
+    def approve_access_point(self, ap: dict, *, role: str, site: str, platform: str = "") -> dict:
+        """Create one Cisco access point. Manufacturer is Cisco. Caller skips APs already in NetBox."""
+        role_name = (role or "access-point").strip() or "access-point"
+        role_slug = _slug(role_name)
+        site_name = (site or "").strip() or "discovered"
+        site_slug = _slug(site_name)
+        model = (str(ap.get("model") or "").strip() or "Access Point")[:64]
+        name = (str(ap.get("name") or "").strip() or "access-point")[:64]
+        manufacturer = self.ensure("/api/dcim/manufacturers/", "cisco", {"name": "Cisco", "slug": "cisco"})
+        dtype = self.find_device_type(manufacturer["id"], model, {})
+        if dtype is None:
+            model_slug = _slug(model)[:40] or "access-point"
+            dtype = self.ensure("/api/dcim/device-types/", model_slug, {
+                "manufacturer": manufacturer["id"], "model": model, "slug": model_slug,
+            })
+        role_row = self.ensure("/api/dcim/device-roles/", role_slug, {
+            "name": role_name, "slug": role_slug, "color": "2196f3",
+        })
+        site_row = self.ensure("/api/dcim/sites/", site_slug, {
+            "name": site_name, "slug": site_slug, "status": "active",
+        })
+        version = str(ap.get("ios") or ap.get("sw_version") or platform or "").strip()
+        platform_id = None
+        platform_slug = ""
+        platform_name = version or (platform or "").strip()
+        if platform_name:
+            platform_slug = _slug(platform_name)[:50] or "ios-xe"
+            platform_row = self.ensure("/api/dcim/platforms/", platform_slug, {
+                "name": platform_name[:64],
+                "slug": platform_slug,
+                "manufacturer": manufacturer["id"],
+            })
+            platform_id = platform_row.get("id")
+        self._ensure_text_field("ie_sw_version", "Software version")
+        self._ensure_text_field("ie_parent_wlc", "Parent WLC")
+        custom = {}
+        if version:
+            custom["ie_sw_version"] = version[:64]
+        wlc = str(ap.get("wlc") or "").strip()
+        if wlc:
+            custom["ie_parent_wlc"] = wlc[:64]
+        device_body = {
+            "name": name,
+            "device_type": dtype["id"],
+            "role": role_row["id"],
+            "site": site_row["id"],
+            "status": "active",
+            "custom_fields": custom,
+        }
+        serial = str(ap.get("serial") or "").strip()
+        if serial:
+            device_body["serial"] = serial[:50]
+        if platform_id:
+            device_body["platform"] = platform_id
+        if wlc:
+            tag_slug = _slug("wlc-%s" % wlc)[:50]
+            if tag_slug:
+                try:
+                    self.ensure("/api/extras/tags/", tag_slug, {
+                        "name": ("WLC %s" % wlc)[:50],
+                        "slug": tag_slug,
+                        "color": "2196f3",
+                    })
+                    device_body["tags"] = [{"slug": tag_slug}]
+                except Exception:
+                    pass
+        device = self._req("POST", "/api/dcim/devices/", device_body)
+        address = _ipv4_address(str(ap.get("ip") or ""))
+        if address:
+            try:
+                iface = self._req("POST", "/api/dcim/interfaces/", {
+                    "device": device["id"], "name": "mgmt", "type": "virtual",
+                })
+                ip = self._req("POST", "/api/ipam/ip-addresses/", {
+                    "address": address + "/32",
+                    "status": "active",
+                    "assigned_object_type": "dcim.interface",
+                    "assigned_object_id": iface["id"],
+                    "description": "primary address from wireless controller",
+                })
+                self._req("PATCH", "/api/dcim/devices/%s/" % device["id"], {"primary_ip4": ip["id"]})
+            except Exception:
+                try:
+                    self._req("DELETE", "/api/dcim/devices/%s/" % device["id"])
+                except Exception:
+                    pass
+                raise
         return {
             "device_id": device["id"],
             "name": device.get("name") or name,

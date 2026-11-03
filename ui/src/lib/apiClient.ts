@@ -11,6 +11,8 @@ import type {
 import type { RangeKey } from '@/lib/mockData';
 import type {
   ActionResult,
+  AccessPointApproveBody,
+  AccessPointApproveResult,
   ApproveBody,
   AuditPage,
   AuditQuery,
@@ -173,6 +175,11 @@ export const api = {
   // BACKEND: POST /api/v1/discovery/{id}/approve
   async approveDevice(id: string, body: ApproveBody): Promise<{ id: string; ok: boolean }> {
     return (await backend()).approveDevice(id, body);
+  },
+
+  // BACKEND: POST /api/v1/access-points/approve
+  async approveAccessPoints(body: AccessPointApproveBody): Promise<AccessPointApproveResult> {
+    return (await backend()).approveAccessPoints(body);
   },
 
   // BACKEND: POST /api/v1/discovery/{id}/reject
