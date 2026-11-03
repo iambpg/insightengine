@@ -23,28 +23,45 @@ def load_map(path: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _join_modules(chosen: dict, mapping: dict, custom_auth: str) -> tuple[str, str]:
+    modules = chosen.get("modules") or chosen.get("module") or mapping.get("default_module") or "if_mib"
+    if isinstance(modules, list):
+        modules = ",".join(str(item) for item in modules if item)
+    auth = custom_auth or chosen.get("auth") or mapping.get("default_auth") or "ntt_snmpv3_auth"
+    return str(modules), auth
+
+
 def choose_module(role: str, manufacturer: str, platform: str, custom_module: str, custom_auth: str, mapping: dict) -> tuple[str, str]:
+    """Role+platform wins over platform, then manufacturer, then role.
+
+    Access points return the module name ``skip`` so Prometheus drops them.
+    They have no SNMP agent; Telegraf reads them through the controller.
+    """
+    default_auth = mapping.get("default_auth") or "ntt_snmpv3_auth"
     if custom_module:
-        return custom_module, custom_auth or (mapping.get("default_auth") or "ntt_snmpv3_auth")
+        return custom_module, custom_auth or default_auth
     by_platform = mapping.get("by_platform") or {}
     by_mfr = mapping.get("by_manufacturer") or {}
     by_role = mapping.get("by_role") or {}
+    by_role_platform = mapping.get("by_role_platform") or {}
+    role_entry = by_role.get(role) if role else None
+    if isinstance(role_entry, dict) and role_entry.get("skip_snmp"):
+        return "skip", custom_auth or role_entry.get("auth") or default_auth
     chosen = None
-    if platform and platform in by_platform:
+    combo = "%s/%s" % (role, platform) if role and platform else ""
+    if combo and combo in by_role_platform:
+        chosen = by_role_platform[combo]
+    elif platform and platform in by_platform:
         chosen = by_platform[platform]
     elif manufacturer and manufacturer in by_mfr:
         chosen = by_mfr[manufacturer]
-    elif role and role in by_role:
-        chosen = by_role[role]
+    elif isinstance(role_entry, dict):
+        chosen = role_entry
     if not chosen:
         modules = mapping.get("default_module") or "if_mib"
-        auth = custom_auth or mapping.get("default_auth") or "ntt_snmpv3_auth"
+        auth = custom_auth or default_auth
         return modules if isinstance(modules, str) else ",".join(modules), auth
-    modules = chosen.get("modules") or chosen.get("module") or "if_mib"
-    if isinstance(modules, list):
-        modules = ",".join(str(m) for m in modules)
-    auth = custom_auth or chosen.get("auth") or mapping.get("default_auth") or "ntt_snmpv3_auth"
-    return modules, auth
+    return _join_modules(chosen, mapping, custom_auth)
 
 
 def load_auth_map(path: str) -> dict:

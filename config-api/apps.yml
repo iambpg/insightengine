@@ -18,6 +18,7 @@ apps:
     files:
       - {id: prometheus.yml, path: config/prometheus/prometheus.yml, label: Prometheus configuration, language: yaml, editable: true, validator: promtool, has_secrets: false}
       - {id: alert-rules.yml, path: config/prometheus/alert-rules.yml, label: Alert rules, language: yaml, editable: true, validator: promtool-rules, has_secrets: false}
+      - {id: health-rules.yml, path: config/prometheus/health-rules.yml, label: Device health rules, language: yaml, editable: true, validator: promtool-rules, has_secrets: false}
       - {id: netbox.token, path: secrets/prometheus/netbox.token, label: NetBox API token, language: text, editable: false, secret_file: true, has_secrets: true, read_only_reason: "Secret file. Replace it with scripts/set-secret.sh prometheus/netbox.token. Contents are never returned."}
     actions:
       - {id: reload, label: Reload configuration, kind: reload, dangerous: false, roles: [Administrator, Engineer], http: [{method: POST, url: "http://prometheus:9090/-/reload"}]}
@@ -90,13 +91,14 @@ apps:
     group: metrics
     sensitive: false
     container: "telegraf-api-${CLIENT_SLUG}"
-    containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}"]
+    containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}", "telegraf-wlc-${CLIENT_SLUG}"]
     version: "${TELEGRAF_IMAGE}"
     files:
       - {id: api.conf, path: config/telegraf/api/telegraf.conf, label: API collector, language: toml, editable: true, validator: telegraf}
       - {id: host.conf, path: config/telegraf/host/telegraf.conf, label: Host metrics, language: toml, editable: true, validator: telegraf}
+      - {id: wlc.conf, path: config/telegraf/wlc/telegraf.conf, label: WLC access-point collector, language: toml, editable: true, validator: telegraf}
     actions:
-      - {id: restart, label: Restart Telegraf, kind: restart, dangerous: true, roles: [Administrator], containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}"]}
+      - {id: restart, label: Restart Telegraf, kind: restart, dangerous: true, roles: [Administrator], containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}", "telegraf-wlc-${CLIENT_SLUG}"]}
       - {id: validate-all, label: Validate Telegraf files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
 
   - id: grafana

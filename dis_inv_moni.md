@@ -145,7 +145,7 @@ Requirements for monitoring: status `active` + a primary IPv4. Optional device c
 
 - Prometheus reads targets from NetBox http_sd (`/api/plugins/lists/prometheus-devices/?status=active&role=<role>`). ICMP jobs refresh every 5m (allow **5–10 minutes** after adding a device). SNMP jobs refresh every 1m, and an auth-map change is pushed on the next sync.
 - Jobs per role: `icmp-*` (blackbox `icmp`) and `snmp-*` (access/core/distribution switches, fortigate sdwan/hub/core-fw, cisco-wlc), plus `icmp-other` / `snmp-other` catch-alls.
-- SNMP modules from `config/discovery/module-map.yml`: Cisco switch roles → `if_mib, cisco_environ, cisco_mem, cisco_pro`; FortiGate roles/manufacturer/platform `fortigate` → `if_mib_fortigate, fortigate, fortigate_bandwidth`; Palo Alto / platform `pan-os` → `if_mib`; `wireless-controller` → `cisco_wlc_universal`; default `if_mib`.
+- SNMP modules from `config/discovery/module-map.yml`. Unlabelled Cisco switch roles stay on `if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp`. Platform `ios-xe` / `nx-os` adds memory, entity-sensor and FRU modules. FortiGate adds `fortinet_health`. Palo Alto / `pan-os` uses `if_mib, paloalto_health`. AireOS WLCs use `cisco_wlc_aireos`; `wireless-controller/ios-xe` (Catalyst 9800) uses `cisco_wlc_iosxe` plus the IOS-XE health modules. Per-AP tables are Telegraf, not snmp-exporter. Access points are `skip`. See `docs/health-metrics.md`.
 - Verify:
   - Prometheus `:9090` → Status → Targets: device under `icmp-…` and `snmp-…`, state UP. Query `up{instance="<mgmt-ip>"}`.
   - Grafana `:3000` dashboards.

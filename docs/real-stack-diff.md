@@ -31,7 +31,7 @@ Source: the sanitized tree in `reference/ntt-real-stack/`. Nothing in that tree 
 | Telegraf | One combined config | Split api / host / syslog files. |
 | Caddy | Published exporter ports and a basic-auth hash | This bundle's setup/UI routing, plus `/api/v1`. The hash was not copied. |
 | Access-switch SNMP module | Job said `cisco_pr` | `snmp.yml` has `cisco_pro`. Jobs and the module map use `cisco_pro`. |
-| Palo Alto | No `paloalto_*` module in the live `snmp.yml` | `generator.yml` has a starter `paloalto_system` walk. Until it is generated, the module map uses `if_mib` for Palo Alto. |
+| Palo Alto | No `paloalto_*` module in the live `snmp.yml` | `paloalto_health` is generated (HOST-RESOURCES, ENTITY-SENSOR, PAN-ENTITY-EXT) and the module map requests it with `if_mib`. `paloalto_system` remains a starter walk. |
 | Syslog | Promtail is not what this engine runs | App id `promtail-or-syslog` is the Telegraf syslog collector, so the UI contract id still exists. |
 
 ## Catch-all jobs

@@ -78,6 +78,13 @@ def _prepare_prometheus(content: str, work: str, rules_text: str | None) -> str:
         rules_text = "groups: []\n"
     with open(rules_path, "w", encoding="utf-8") as fh:
         fh.write(rules_text)
+    # prometheus.yml also lists health-rules.yml. The settings check of
+    # prometheus.yml only receives alert-rules as the sibling, so write a
+    # valid empty file here. health-rules.yml is validated on its own.
+    health_path = os.path.join(work, "health-rules.yml")
+    if not os.path.isfile(health_path):
+        with open(health_path, "w", encoding="utf-8") as fh:
+            fh.write("groups: []\n")
     # certificates are not required for a syntax check; give promtool an empty file if referenced
     for cert_dir in ("certs", "ie-certs"):
         certs = os.path.join(work, cert_dir)

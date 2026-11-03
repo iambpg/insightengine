@@ -1,0 +1,261 @@
+# Normalized device health. Vendor metrics stay on their SNMP modules.
+# These names are what Grafana and the UI should query.
+groups:
+  - name: insightengine-health-recordings
+    interval: 60s
+    rules:
+      - record: ie:device_memory_used_ratio
+        expr: |
+          (
+            sum by (instance, hostname, device_role, site, job) (ciscoMemoryPoolUsed{ciscoMemoryPoolType="1"})
+            /
+            clamp_min(
+              sum by (instance, hostname, device_role, site, job) (ciscoMemoryPoolUsed{ciscoMemoryPoolType="1"})
+              +
+              sum by (instance, hostname, device_role, site, job) (ciscoMemoryPoolFree{ciscoMemoryPoolType="1"})
+            , 1)
+          )
+          or
+          (
+            sum by (instance, hostname, device_role, site, job) (cempMemPoolUsed)
+            /
+            clamp_min(
+              sum by (instance, hostname, device_role, site, job) (cempMemPoolUsed)
+              +
+              sum by (instance, hostname, device_role, site, job) (cempMemPoolFree)
+            , 1)
+          )
+          or
+          (fgSysMemUsage / 100)
+          or
+          (
+            sum by (instance, hostname, device_role, site, job) (
+              hrStorageUsed{hrStorageDescr=~"(?i).*(physical memory|dynamic memory).*"}
+              * on (instance, hrStorageIndex) hrStorageAllocationUnits
+            )
+            /
+            clamp_min(
+              sum by (instance, hostname, device_role, site, job) (
+                hrStorageSize{hrStorageDescr=~"(?i).*(physical memory|dynamic memory).*"}
+                * on (instance, hrStorageIndex) hrStorageAllocationUnits
+              )
+            , 1)
+          )
+          or
+          (1 - (agentFreeMemory / clamp_min(agentTotalMemory, 1)))
+
+      # 1 = ok or warning, 0 = failed. notPresent is left out.
+      - record: ie:device_fan_ok
+        expr: |
+          (
+            ((ciscoEnvMonFanState == 1) or (ciscoEnvMonFanState == 2))
+            or
+            (((ciscoEnvMonFanState == 3) or (ciscoEnvMonFanState == 4) or (ciscoEnvMonFanState == 6)) * 0)
+          )
+          or
+          (
+            ((cefcFanTrayOperStatus == 2) or (cefcFanTrayOperStatus == 4))
+            or
+            ((cefcFanTrayOperStatus == 3) * 0)
+          )
+          or
+          (
+            (fgHwSensorEntAlarmStatus{fgHwSensorEntName=~"(?i).*fan.*"} == 0)
+            or
+            ((fgHwSensorEntAlarmStatus{fgHwSensorEntName=~"(?i).*fan.*"} == 1) * 0)
+          )
+          or
+          (
+            (
+              (entPhySensorOperStatus == 1)
+              and on (instance, entPhysicalIndex) (entPhySensorType == 10)
+            )
+            or
+            (
+              ((entPhySensorOperStatus == 3) * 0)
+              and on (instance, entPhysicalIndex) (entPhySensorType == 10)
+            )
+          )
+
+      - record: ie:device_psu_ok
+        expr: |
+          (
+            ((ciscoEnvMonSupplyState == 1) or (ciscoEnvMonSupplyState == 2))
+            or
+            (((ciscoEnvMonSupplyState == 3) or (ciscoEnvMonSupplyState == 4) or (ciscoEnvMonSupplyState == 6)) * 0)
+          )
+          or
+          (
+            (cefcFRUPowerOperStatus == 2)
+            or
+            (
+              (
+                (cefcFRUPowerOperStatus == 8)
+                or (cefcFRUPowerOperStatus == 5)
+                or (cefcFRUPowerOperStatus == 6)
+                or (cefcFRUPowerOperStatus == 7)
+              ) * 0
+            )
+          )
+          or
+          (
+            (
+              (agentSwitchInfoPowerSupply1Operational == 1)
+              or ((agentSwitchInfoPowerSupply1Operational == 0) * 0)
+            )
+            and on (instance) (agentSwitchInfoPowerSupply1Present == 1)
+          )
+          or
+          (
+            (
+              (agentSwitchInfoPowerSupply2Operational == 1)
+              or ((agentSwitchInfoPowerSupply2Operational == 0) * 0)
+            )
+            and on (instance) (agentSwitchInfoPowerSupply2Present == 1)
+          )
+          or
+          (
+            (fgHwSensorEntAlarmStatus{fgHwSensorEntName=~"(?i).*(psu|power supply|power).*"} == 0)
+            or
+            ((fgHwSensorEntAlarmStatus{fgHwSensorEntName=~"(?i).*(psu|power supply|power).*"} == 1) * 0)
+          )
+
+      - record: ie:device_temperature_celsius
+        expr: |
+          (ciscoEnvMonTemperatureStatusValue > 0)
+          or
+          (ciscoEnvMonTemperatureStatusValueRev1 != 0)
+          or
+          (
+            entSensorValue
+            and on (instance, entPhysicalIndex) (entSensorType == 8)
+            and on (instance, entPhysicalIndex) (entSensorScale == 9)
+          )
+          or
+          (
+            entPhySensorValue
+            and on (instance, entPhysicalIndex) (entPhySensorType == 8)
+            and on (instance, entPhysicalIndex) (entPhySensorScale == 9)
+          )
+          or
+          fgHwSensorEntValueNumber{fgHwSensorEntName=~"(?i).*temp.*"}
+
+      # Max of inbound and outbound, as a fraction of ifHighSpeed.
+      - record: ie:interface_utilization_ratio
+        expr: |
+          max without (ie_dir) (
+            label_replace(
+              rate(ifHCInOctets[5m]) * 8 / clamp_min(ifHighSpeed * 1000000, 1),
+              "ie_dir", "in", "", ""
+            )
+            or
+            label_replace(
+              rate(ifHCOutOctets[5m]) * 8 / clamp_min(ifHighSpeed * 1000000, 1),
+              "ie_dir", "out", "", ""
+            )
+          )
+
+      - record: ie:interface_drops_rate
+        expr: |
+          sum without (ie_dir) (
+            label_replace(rate(ifInDiscards[5m]), "ie_dir", "in", "", "")
+            or
+            label_replace(rate(ifOutDiscards[5m]), "ie_dir", "out", "", "")
+          )
+
+      # 1 when the interface alias, description or name marks the path.
+      # NetBox tag critical-path is mirrored by operators into ifAlias, and
+      # the UI also highlights the tag directly.
+      - record: ie:interface_critical_path
+        expr: |
+          max by (instance, hostname, device_role, site, job, ifIndex, ifName, ifDescr, ifAlias) (
+            ifHCInOctets{ifAlias=~"(?i).*(critical-path|uplink).*"}
+            or ifHCInOctets{ifDescr=~"(?i).*(critical-path|uplink).*"}
+            or ifHCInOctets{ifName=~"(?i).*uplink.*"}
+          ) * 0 + 1
+
+      # WLC summaries. 9800 joined-AP count is one scalar. AireOS client count
+      # is one scalar. Per-AP series below are Telegraf, not snmp-exporter.
+      - record: ie:wlc_aps_joined
+        expr: |
+          max by (instance, hostname, device_role, site, job) (cLApGlobalAPConnectCount)
+          or count by (agent_host, wlc, site, platform) (ie_wlc_ap_oper_status)
+          or count by (agent_host, wlc, site, platform) (ie_wlc_ap_admin_status)
+
+      - record: ie:wlc_clients
+        expr: |
+          max by (instance, hostname, device_role, site, job) (bsnGlobalDot11SystemMobileStations)
+          or sum by (agent_host, wlc, site, platform) (ie_wlc_ap_clients)
+          or sum by (agent_host, wlc, site, platform) (ie_wlc_radio_clients)
+
+      - record: ie:site_aps_joined
+        expr: sum by (site) (ie:wlc_aps_joined)
+
+      - record: ie:site_clients
+        expr: sum by (site) (ie:wlc_clients)
+
+  - name: insightengine-health-alerts
+    rules:
+      - alert: DeviceFanFailed
+        expr: ie:device_fan_ok == 0
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: hardware
+        annotations:
+          summary: "Fan failed on {{ $labels.hostname }}"
+          description: "A fan on {{ $labels.hostname }} ({{ $labels.instance }}) has been failed for 5 minutes."
+
+      - alert: DevicePsuFailed
+        expr: ie:device_psu_ok == 0
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: hardware
+        annotations:
+          summary: "Power supply failed on {{ $labels.hostname }}"
+          description: "A power supply on {{ $labels.hostname }} ({{ $labels.instance }}) has been failed for 5 minutes."
+
+      - alert: DeviceTemperatureHigh
+        expr: ie:device_temperature_celsius > 75
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: hardware
+        annotations:
+          summary: "Temperature high on {{ $labels.hostname }}"
+          description: "A sensor on {{ $labels.hostname }} is above 75C ({{ $value }}C) for 10 minutes."
+
+      - alert: DeviceMemoryHigh
+        expr: ie:device_memory_used_ratio > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: hardware
+        annotations:
+          summary: "Memory above 90% on {{ $labels.hostname }}"
+          description: "Memory used ratio on {{ $labels.hostname }} is {{ $value }} for 10 minutes."
+
+      - alert: CriticalPathUtilizationHigh
+        expr: |
+          ie:interface_utilization_ratio > 0.8
+          and on (instance, ifIndex) ie:interface_critical_path == 1
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: link_warning
+        annotations:
+          summary: "Critical-path utilization above 80% on {{ $labels.hostname }} {{ $labels.ifName }}"
+          description: "Interface {{ $labels.ifName }} ({{ $labels.ifAlias }}) on {{ $labels.hostname }} is above 80% for 10 minutes."
+
+      - alert: CriticalPathDrops
+        expr: |
+          ie:interface_drops_rate > 0
+          and on (instance, ifIndex) ie:interface_critical_path == 1
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: link_warning
+        annotations:
+          summary: "Critical-path drops on {{ $labels.hostname }} {{ $labels.ifName }}"
+          description: "Interface {{ $labels.ifName }} ({{ $labels.ifAlias }}) on {{ $labels.hostname }} is dropping frames for 10 minutes."

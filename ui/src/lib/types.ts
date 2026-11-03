@@ -153,6 +153,59 @@ export interface HardwareItem {
   detail: string;
 }
 
+export interface HealthGroup {
+  id: string;
+  label: string;
+  supported: boolean;
+  status: 'ok' | 'warn' | 'fail' | 'unsupported' | 'unknown';
+  value: string;
+  detail: string;
+}
+
+export interface HealthInterfaceRow {
+  name: string;
+  ifIndex: string;
+  utilization: number | null;
+  dropsRate: number | null;
+  errorsRate: number | null;
+  criticalPath: boolean;
+}
+
+export interface AccessPointRadio {
+  slot: string;
+  channel: number | string | null;
+  utilization: number | null;
+  clients: number | null;
+}
+
+export interface AccessPointRow {
+  name: string;
+  mac: string;
+  wlc: string;
+  site: string;
+  status: string;
+  clients: number | null;
+  uptimeSeconds: number | null;
+  radios: AccessPointRadio[];
+}
+
+export interface DeviceHealthPanel {
+  profile: string;
+  profileLabel: string;
+  groups: HealthGroup[];
+  interfacesSupported: boolean;
+  interfaces: HealthInterfaceRow[];
+  interfacesNote: string;
+  wlc: { joinedAps: number | null; clients: number | null; note: string } | null;
+  accessPoint: {
+    note: string;
+    status: string;
+    clients: number | null;
+    uptimeSeconds: number | null;
+    radios: AccessPointRadio[];
+  } | null;
+}
+
 export interface SeriesPoint {
   t: number;
   label: string;
@@ -233,6 +286,7 @@ export interface DeviceDetailData {
   issues: IssueItem[];
   checks: HealthCheck[];
   hardware: HardwareItem[];
+  healthPanel?: DeviceHealthPanel;
   checkRunAt: string;
   interfaces?: DeviceInterfaceRow[];
   addresses?: DeviceAddressRow[];

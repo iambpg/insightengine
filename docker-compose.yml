@@ -856,6 +856,49 @@ services:
         limits: {memory: "${TELEGRAF_API_MEM:-2g}", cpus: "${TELEGRAF_API_CPUS:-2}"}   # ESTIMATE
         reservations: {memory: 256m}
 
+  # Per-AP polls. One process, several inputs per WLC (status, clients, radio,
+  # channel) with staggered offsets. Put the ~5000-AP Catalyst 9800 on its own
+  # shard (IE_WLC_SHARD_COUNT / IE_WLC_SHARD_INDEX) or split tables with
+  # IE_WLC_TABLE. See docs/health-metrics.md.
+  telegraf-wlc:
+    build:
+      context: ./config/telegraf/wlc
+      dockerfile: Dockerfile
+    image: insightengine/telegraf-wlc:${TELEGRAF_IMAGE:-1.38.3}
+    container_name: telegraf-wlc-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    user: "10001:10001"
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      SNMP_V2_COMMUNITY: ${SNMP_V2_COMMUNITY:-}
+      SNMP_V3_USER: ${SNMP_V3_USER:-}
+      SNMP_V3_USERNAME: ${SNMP_V3_USERNAME:-}
+      SNMP_V3_AUTH_PASSWORD: ${SNMP_V3_AUTH_PASSWORD:-}
+      SNMP_V3_PRIV_PASSWORD: ${SNMP_V3_PRIV_PASSWORD:-}
+      IE_NETBOX_SD_URL: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
+      IE_NETBOX_CA: /etc/ie-certs/ca.crt
+      IE_WLC_TABLE: ${IE_WLC_TABLE:-all}
+      IE_WLC_SHARD_COUNT: ${IE_WLC_SHARD_COUNT:-1}
+      IE_WLC_SHARD_INDEX: ${IE_WLC_SHARD_INDEX:-0}
+    volumes:
+      - ./config/telegraf/wlc/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
+    secrets:
+      - source: netbox_token_prometheus
+        target: netbox_token
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9273/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits: {memory: "${TELEGRAF_WLC_MEM:-2g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
+        reservations: {memory: 256m}
+
   telegraf-host:
     image: ${TELEGRAF_IMAGE}
     container_name: telegraf-host-${CLIENT_SLUG}

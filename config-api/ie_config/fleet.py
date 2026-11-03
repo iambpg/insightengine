@@ -28,6 +28,14 @@ import httpx
 from fastapi import Request
 
 from .errors import ApiError
+from .health import (
+    aireos_psu_states,
+    build_health_panel,
+    classify_profile,
+    critical_names_from_interfaces,
+    mark_critical_interface,
+    page_rows,
+)
 from .hostnames import effective_suffixes, names_match, strip_device_label, strip_hostname, suffix_pattern
 from .ifnames import iface_match_keys
 from .neighbours import merge_neighbors, neighbors_from_cdp, neighbors_from_lldp
@@ -1287,6 +1295,13 @@ class FleetService:
             client, "/api/ipam/ip-addresses/?device_id=%s&limit=200" % quote(device_id, safe="")
         )
         detail["interfaces"] = [_public_interface(row) for row in interfaces if isinstance(row, dict)]
+        panel = detail.get("healthPanel")
+        if isinstance(panel, dict) and panel.get("interfacesSupported"):
+            marked = critical_names_from_interfaces(detail["interfaces"])
+            for item in panel.get("interfaces") or []:
+                name = str(item.get("name") or "").lower()
+                if name in marked:
+                    item["criticalPath"] = True
         detail["addresses"] = [_public_address(row) for row in addresses if isinstance(row, dict)]
         selector = self._selector(device) if device else ""
         history = []
@@ -1408,7 +1423,7 @@ class FleetService:
         cached = self.cache.get("ports:" + device["name"])
         if cached is None:
             try:
-                cached = self._load_ports(client, selector)
+                cached = self._load_ports(client, selector, device.get("name") or "")
             except UpstreamError:
                 cached = {"degraded": True, "ports": [], "cpu": None, "mem": None, "temp": None, "fans": [], "psus": [], "rtt": None}
             self.cache.put("ports:" + device["name"], cached)
@@ -1416,6 +1431,29 @@ class FleetService:
         form = row["formFactor"]
         faceplate = _faceplate(form, row["role"], row["hostname"], device.get("model") or "", ports)
         checks, hardware = _checks_and_hardware(row, cached, self._now_dt())
+        device = row["_device"]
+        profile = classify_profile(
+            row.get("role_slug") or row.get("role") or "",
+            device.get("platform") or "",
+            device.get("manufacturer") or "",
+            device.get("model") or "",
+        )
+        mem = cached.get("mem")
+        fan_states = [_env_state(sample, "ciscoEnvMonFanState") or _env_state(sample, "cefcFanTrayOperStatus") for sample in cached.get("fans") or []]
+        psu_states = [_env_state(sample, "ciscoEnvMonSupplyState") or _env_state(sample, "cefcFRUPowerOperStatus") for sample in cached.get("psus") or []]
+        psu_states.extend(aireos_psu_states(cached.get("aireos_psu") or []))
+        health_panel = build_health_panel(
+            profile,
+            memory_ratio=None if mem is None else float(mem) / 100.0,
+            memory_detail="Used percent",
+            fan_states=[item for item in fan_states if item],
+            psu_states=[item for item in psu_states if item],
+            temp_c=cached.get("temp"),
+            ports=cached.get("ports") or [],
+            wlc_joined=cached.get("joined_aps"),
+            wlc_clients=cached.get("wlc_clients"),
+            ap=self._ap_for_device(client, row["hostname"]) if profile == "ap" else None,
+        )
         return {
             "id": row["id"],
             "hostname": row["hostname"],
@@ -1434,6 +1472,7 @@ class FleetService:
             "issues": [],
             "checks": checks,
             "hardware": hardware,
+            "healthPanel": health_panel,
             "checkRunAt": _clock_stamp(self._now_dt()),
             "_port_degraded": bool(cached.get("degraded")),
             "_snmp_at": cached.get("snmp_at") or "",
@@ -1441,13 +1480,15 @@ class FleetService:
             "_snmp_neighbors": cached.get("neighbors") or [],
         }
 
-    def _load_ports(self, client, selector: str) -> dict:
+    def _load_ports(self, client, selector: str, hostname: str = "") -> dict:
         oper = self._prom(client, "ifOperStatus_info%s or ifOperStatus%s" % (selector, selector))
         admin = self._prom(client, "ifAdminStatus_info%s or ifAdminStatus%s" % (selector, selector))
         speed = self._prom(client, "ifHighSpeed%s" % selector)
         inbound = self._prom(client, "rate(ifHCInOctets%s[5m])" % selector)
         outbound = self._prom(client, "rate(ifHCOutOctets%s[5m])" % selector)
         errors = self._prom(client, "rate(ifInErrors%s[5m])" % selector)
+        discards_in = self._prom(client, "rate(ifInDiscards%s[5m])" % selector)
+        discards_out = self._prom(client, "rate(ifOutDiscards%s[5m])" % selector)
         cpu = self._prom(
             client,
             "avg(cpmCPUTotal5minRev%s) or avg(fgSysCpuUsage%s)" % (selector, selector),
@@ -1463,7 +1504,7 @@ class FleetService:
         fans = self._prom(client, "ciscoEnvMonFanState_info%s or ciscoEnvMonFanState%s" % (selector, selector))
         psus = self._prom(client, "ciscoEnvMonSupplyState_info%s or ciscoEnvMonSupplyState%s" % (selector, selector))
         rtt = self._prom(client, "avg(probe_duration_seconds%s)" % selector)
-        ports = _join_ports(oper, admin, speed, inbound, outbound, errors)
+        ports = _join_ports(oper, admin, speed, inbound, outbound, errors, discards_in, discards_out)
         suffixes = self._suffixes()
 
         def named(metric: str) -> list[dict]:
@@ -1479,6 +1520,7 @@ class FleetService:
             named("lldpRemManAddrIfId"), named("lldpLocPortId"),
             ports, suffixes,
         )
+        host_name = hostname or ""
         return {
             "degraded": False,
             "ports": ports,
@@ -1491,6 +1533,22 @@ class FleetService:
             "fans": fans,
             "psus": psus,
             "rtt": _first_value(rtt),
+            "joined_aps": _first_value(self._prom(
+                client,
+                'max(cLApGlobalAPConnectCount%s) or count(ie_wlc_ap_admin_status{wlc="%s"}) or count(ie_wlc_ap_oper_status{wlc="%s"})'
+                % (selector, prom_escape(host_name), prom_escape(host_name)),
+            )),
+            "wlc_clients": _first_value(self._prom(
+                client,
+                'max(bsnGlobalDot11SystemMobileStations%s) or sum(ie_wlc_ap_clients{wlc="%s"}) or sum(ie_wlc_radio_clients{wlc="%s"})'
+                % (selector, prom_escape(host_name), prom_escape(host_name)),
+            )),
+            "aireos_psu": self._prom(
+                client,
+                "agentSwitchInfoPowerSupply1Present%s or agentSwitchInfoPowerSupply1Operational%s or "
+                "agentSwitchInfoPowerSupply2Present%s or agentSwitchInfoPowerSupply2Operational%s"
+                % (selector, selector, selector, selector),
+            ),
         }
 
     def list_sites(self, *, page: int, page_size: int, q: str, health: str, region: str) -> dict:
@@ -1893,6 +1951,141 @@ class FleetService:
         log.info("alert webhook accepted count=%s", received)
         return {"ok": True, "received": received}
 
+    def _ap_for_device(self, client, hostname: str) -> dict | None:
+        safe = prom_escape(hostname or "")
+        if not safe:
+            return None
+        status = self._prom(
+            client,
+            'ie_wlc_ap_admin_status{ap_name="%s"} or ie_wlc_ap_oper_status{ap_name="%s"}' % (safe, safe),
+        )
+        clients = self._prom(client, 'ie_wlc_ap_clients{ap_name="%s"} or sum(ie_wlc_radio_clients{ap_name="%s"})' % (safe, safe))
+        uptime = self._prom(client, 'ie_wlc_ap_uptime_centiseconds{ap_name="%s"}' % safe)
+        radios = self._join_ap_radios(
+            self._prom(client, 'ie_wlc_radio_channel{ap_name="%s"}' % safe),
+            self._prom(client, 'ie_wlc_radio_channel_util{ap_name="%s"}' % safe),
+            self._prom(client, 'ie_wlc_radio_clients{ap_name="%s"}' % safe),
+        )
+        word = ""
+        if status:
+            sample = status[0]
+            word = _ap_status_word(sample.get("metric") or {}, _sample_value(sample))
+        seconds = _first_value(uptime)
+        if seconds is not None:
+            seconds = float(seconds) / 100.0
+        return {
+            "status": word,
+            "clients": _first_value(clients),
+            "uptimeSeconds": seconds,
+            "radios": radios,
+        }
+
+    def _join_ap_radios(self, channels, utils, clients) -> list[dict]:
+        by_slot: dict[str, dict] = {}
+
+        def slot_of(sample: dict) -> str:
+            metric = sample.get("metric") or {}
+            return str(metric.get("slot") or metric.get("index") or "")
+
+        for sample in channels or []:
+            key = slot_of(sample)
+            by_slot.setdefault(key, {"slot": key, "channel": None, "utilization": None, "clients": None})
+            by_slot[key]["channel"] = _sample_value(sample)
+        for sample in utils or []:
+            key = slot_of(sample)
+            by_slot.setdefault(key, {"slot": key, "channel": None, "utilization": None, "clients": None})
+            value = _sample_value(sample)
+            by_slot[key]["utilization"] = None if value is None else round(float(value) / 100.0, 4)
+        for sample in clients or []:
+            key = slot_of(sample)
+            by_slot.setdefault(key, {"slot": key, "channel": None, "utilization": None, "clients": None})
+            by_slot[key]["clients"] = _sample_value(sample)
+        return [by_slot[key] for key in sorted(by_slot)]
+
+    def list_access_points(self, *, page: int, page_size: int, q: str, wlc: str, site: str, status: str) -> dict:
+        cached = self.cache.get("ap-snapshot")
+        degraded = []
+        if cached is None:
+            try:
+                with self._session() as client:
+                    cached = self._ap_snapshot(client)
+            except UpstreamError:
+                cached = {"rows": [], "degraded": True}
+            self.cache.put("ap-snapshot", cached)
+        if cached.get("degraded"):
+            degraded = ["prometheus"]
+        body = page_rows(cached.get("rows") or [], page=page, page_size=page_size, q=q, wlc=wlc, site=site, status=status)
+        if degraded:
+            body["degraded"] = degraded
+        return body
+
+    def _ap_snapshot(self, client) -> dict:
+        try:
+            status = self._prom(client, "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status")
+            clients = self._prom(client, "ie_wlc_ap_clients")
+            uptime = self._prom(client, "ie_wlc_ap_uptime_centiseconds")
+            channels = self._prom(client, "ie_wlc_radio_channel")
+            utils = self._prom(client, "ie_wlc_radio_channel_util")
+            radio_clients = self._prom(client, "ie_wlc_radio_clients")
+        except UpstreamError:
+            return {"rows": [], "degraded": True}
+        rows: dict[tuple, dict] = {}
+
+        def ensure(metric: dict) -> dict:
+            name, mac, wlc, site = _ap_identity(metric)
+            key = (wlc, name or mac)
+            row = rows.get(key)
+            if row is None:
+                row = {
+                    "name": name or mac or "unknown",
+                    "mac": mac,
+                    "wlc": wlc,
+                    "site": site,
+                    "status": "unknown",
+                    "clients": None,
+                    "uptimeSeconds": None,
+                    "radios": [],
+                }
+                rows[key] = row
+            return row
+
+        for sample in status:
+            metric = sample.get("metric") or {}
+            row = ensure(metric)
+            row["status"] = _ap_status_word(metric, _sample_value(sample))
+        for sample in clients:
+            metric = sample.get("metric") or {}
+            row = ensure(metric)
+            row["clients"] = _sample_value(sample)
+        for sample in uptime:
+            metric = sample.get("metric") or {}
+            row = ensure(metric)
+            value = _sample_value(sample)
+            row["uptimeSeconds"] = None if value is None else round(float(value) / 100.0, 1)
+        radio_by: dict[tuple, dict] = {}
+        for sample in list(channels) + list(utils) + list(radio_clients):
+            metric = sample.get("metric") or {}
+            name, mac, wlc, _site = _ap_identity(metric)
+            slot = str(metric.get("slot") or "")
+            key = (wlc, name or mac, slot)
+            radio = radio_by.setdefault(key, {"slot": slot, "channel": None, "utilization": None, "clients": None, "owner": (wlc, name or mac)})
+            value = _sample_value(sample)
+            metric_name = str(metric.get("__name__") or "")
+            if metric_name.endswith("channel") and "util" not in metric_name:
+                radio["channel"] = value
+            elif "util" in metric_name:
+                radio["utilization"] = None if value is None else round(float(value) / 100.0, 4)
+            elif "clients" in metric_name:
+                radio["clients"] = value
+        grouped: dict[tuple, list] = {}
+        for radio in radio_by.values():
+            grouped.setdefault(radio.pop("owner"), []).append(radio)
+        for key, radios in grouped.items():
+            if key in rows:
+                rows[key]["radios"] = radios
+        ordered = sorted(rows.values(), key=lambda item: (str(item["wlc"]).lower(), str(item["name"]).lower()))
+        return {"rows": ordered, "degraded": False}
+
 
 def _title(upstream: str) -> str:
     return {"netbox": "NetBox", "prometheus": "Prometheus", "alertmanager": "Alertmanager"}.get(upstream, upstream)
@@ -1976,7 +2169,15 @@ def _latest_stamp(samples) -> str:
     return datetime.fromtimestamp(latest, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _join_ports(oper, admin, speed, inbound, outbound, errors) -> list[dict]:
+def _drop_rate(drop_in: dict, drop_out: dict, metric: dict):
+    left = _get_joined(drop_in, metric, None)
+    right = _get_joined(drop_out, metric, None)
+    if left is None and right is None:
+        return None
+    return round(float(left or 0) + float(right or 0), 4)
+
+
+def _join_ports(oper, admin, speed, inbound, outbound, errors, discards_in=None, discards_out=None) -> list[dict]:
     admin_by = {}
     for sample in admin:
         metric = sample.get("metric") or {}
@@ -2002,6 +2203,16 @@ def _join_ports(oper, admin, speed, inbound, outbound, errors) -> list[dict]:
         metric = sample.get("metric") or {}
         if _sample_keys(metric):
             _put_joined(err_by, metric, (_sample_value(sample) or 0) * 60)
+    drop_in = {}
+    for sample in discards_in or []:
+        metric = sample.get("metric") or {}
+        if _sample_keys(metric):
+            _put_joined(drop_in, metric, _sample_value(sample) or 0)
+    drop_out = {}
+    for sample in discards_out or []:
+        metric = sample.get("metric") or {}
+        if _sample_keys(metric):
+            _put_joined(drop_out, metric, _sample_value(sample) or 0)
     seen = set()
     ports = []
     for sample in oper:
@@ -2031,6 +2242,9 @@ def _join_ports(oper, admin, speed, inbound, outbound, errors) -> list[dict]:
             "errors": int(round(err)),
             "inBps": round(bits_in, 1),
             "outBps": round(bits_out, 1),
+            "dropsRate": _drop_rate(drop_in, drop_out, metric),
+            "alias": str(metric.get("ifAlias") or ""),
+            "description": str(metric.get("ifDescr") or ""),
         }
         ports.append(port)
     ports.sort(key=lambda item: item["name"].lower())
@@ -2091,6 +2305,7 @@ def _public_interface(raw: dict) -> dict:
         "enabled": bool(raw.get("enabled", True)),
         "mac": str(raw.get("mac_address") or ""),
         "description": str(raw.get("description") or ""),
+        "criticalPath": mark_critical_interface(raw),
     }
 
 
@@ -2741,6 +2956,29 @@ def _port_matcher(selector: str, port_id: str) -> str:
     return "{" + ",".join(pieces) + "}"
 
 
+def _metric_number(sample: dict):
+    return _sample_value(sample)
+
+
+def _ap_identity(metric: dict) -> tuple[str, str, str, str]:
+    name = str(metric.get("ap_name") or metric.get("bsnAPName") or metric.get("cLApName") or "")
+    mac = str(metric.get("ap_mac") or metric.get("index") or "")
+    wlc = str(metric.get("wlc") or metric.get("agent_host") or "")
+    site = str(metric.get("site") or "")
+    return name, mac, wlc, site
+
+
+def _ap_status_word(metric: dict, value) -> str:
+    name = str(metric.get("__name__") or "")
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return "unknown"
+    if "oper_status" in name:
+        return {1: "associated", 2: "disassociating", 3: "downloading"}.get(number, "unknown")
+    return "up" if number == 1 else "down"
+
+
 def mount_fleet(app, user_of) -> None:
     def fleet() -> FleetService:
         service = getattr(app.state, "fleet", None)
@@ -2762,6 +3000,19 @@ def mount_fleet(app, user_of) -> None:
     def summary(request: Request):
         reader(request)
         return fleet().summary()
+
+    @app.get("/api/v1/access-points")
+    def access_points(request: Request):
+        reader(request)
+        params = request.query_params
+        return fleet().list_access_points(
+            page=_qint(params.get("page"), 1, 1, 100000),
+            page_size=_qint(params.get("page_size"), 50, 1, 100),
+            q=(params.get("q") or "")[:200],
+            wlc=(params.get("wlc") or "")[:200],
+            site=(params.get("site") or "")[:200],
+            status=(params.get("status") or "")[:40],
+        )
 
     @app.get("/api/v1/devices")
     def devices(request: Request):

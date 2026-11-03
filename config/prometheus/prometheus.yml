@@ -19,6 +19,7 @@ global:
 
 rule_files:
   - /etc/prometheus/alert-rules.yml
+  - /etc/prometheus/health-rules.yml
 
 alerting:
   alertmanagers:
@@ -40,6 +41,12 @@ scrape_configs:
     static_configs: [{targets: ['telegraf-host:9273']}]
   - job_name: telegraf-syslog
     static_configs: [{targets: ['telegraf-syslog:9273']}]
+  # Telegraf's /metrics is already collected. The SNMP walks behind it run
+  # every 5-10 minutes, so this scrape stays short.
+  - job_name: telegraf-wlc
+    scrape_interval: 60s
+    scrape_timeout: 20s
+    static_configs: [{targets: ['telegraf-wlc:9273']}]
   - job_name: netbox
     metrics_path: /metrics
     static_configs: [{targets: ['netbox:8080']}]
@@ -183,6 +190,9 @@ scrape_configs:
         url: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=access-switch&ie_sd=0
         refresh_interval: 1m
     relabel_configs: &snmp_relabels
+      - source_labels: [__meta_netbox_snmp_module]
+        regex: skip
+        action: drop
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]
@@ -249,7 +259,7 @@ scrape_configs:
     scrape_timeout: 45s
     metrics_path: /snmp
     params:
-      module: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortinet_health]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
@@ -262,7 +272,7 @@ scrape_configs:
     scrape_timeout: 45s
     metrics_path: /snmp
     params:
-      module: [if_mib_fortigate, fortigate, fortigate_bandwidth]
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortinet_health]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
@@ -275,7 +285,7 @@ scrape_configs:
     scrape_timeout: 45s
     metrics_path: /snmp
     params:
-      module: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortigate_est_bandwidth]
+      module: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortigate_est_bandwidth, fortinet_health]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
@@ -289,7 +299,9 @@ scrape_configs:
     sample_limit: 500000
     metrics_path: /snmp
     params:
-      module: [cisco_wlc_universal]
+      # System stats only. Per-AP tables are Telegraf. __meta_netbox_snmp_module
+      # replaces this list: aireos vs ios-xe (Catalyst 9800) from the module map.
+      module: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro]
       auth: [ie_wlc_v2]
     http_sd_configs:
       - <<: *netbox_sd
@@ -310,7 +322,10 @@ scrape_configs:
         refresh_interval: 1m
     relabel_configs:
       - source_labels: [__meta_netbox_role]
-        regex: access-switch|core-switch|distribution-switch|sdwan|hub|wireless-controller|core-firewall
+        regex: access-switch|core-switch|distribution-switch|sdwan|hub|wireless-controller|core-firewall|access-point|ap|wireless-ap
+        action: drop
+      - source_labels: [__meta_netbox_snmp_module]
+        regex: skip
         action: drop
       - source_labels: [__address__]
         target_label: __param_target

@@ -90,6 +90,11 @@ export const api = {
     return (await backend()).getDevice(form);
   },
 
+  // BACKEND: GET /api/v1/access-points?wlc=&page=&page_size=&q=
+  async listAccessPoints(query: { wlc?: string; site?: string; q?: string; status?: string; page?: number; pageSize?: number }) {
+    return (await backend()).listAccessPoints(query);
+  },
+
   // BACKEND: GET /api/v1/devices/{id}/metrics/throughput?range=
   async getThroughput(range: RangeKey, seed: string | number, customMin?: number): Promise<SeriesPoint[]> {
     return (await backend()).getThroughput(range, seed, customMin);

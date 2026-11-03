@@ -56,6 +56,19 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
   return request(`${API}/devices/${encodeURIComponent(form)}`);
 }
 
+export async function listAccessPoints(query: { wlc?: string; site?: string; q?: string; status?: string; page?: number; pageSize?: number }) {
+  const params = new URLSearchParams();
+  if (query.wlc) params.set('wlc', query.wlc);
+  if (query.site) params.set('site', query.site);
+  if (query.q) params.set('q', query.q);
+  if (query.status) params.set('status', query.status);
+  params.set('page', String(query.page || 1));
+  params.set('page_size', String(query.pageSize || 50));
+  return request<{ rows: import('@/lib/types').AccessPointRow[]; total: number; page: number; pageSize: number }>(
+    `${API}/access-points?${params.toString()}`,
+  );
+}
+
 export async function getThroughput(
   range: RangeKey,
   deviceId: string | number,

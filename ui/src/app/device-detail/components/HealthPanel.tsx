@@ -1,0 +1,98 @@
+import React from 'react';
+import type { DeviceHealthPanel, HealthGroup } from '@/lib/types';
+
+const TONE: Record<HealthGroup['status'], string> = {
+  ok: 'text-success',
+  warn: 'text-warning',
+  fail: 'text-destructive',
+  unknown: 'text-muted-foreground',
+  unsupported: 'text-muted-foreground',
+};
+
+function pct(value: number | null): string {
+  if (value === null || Number.isNaN(value)) return '—';
+  return `${Math.round(value * 100)}%`;
+}
+
+function rate(value: number | null): string {
+  if (value === null || Number.isNaN(value)) return '—';
+  return value.toFixed(2);
+}
+
+export default function HealthPanel({ panel }: { panel: DeviceHealthPanel }) {
+  return (
+    <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-labelledby="health-panel-title">
+      <header className="border-b border-border px-4 py-2.5">
+        <h2 id="health-panel-title" className="text-base font-semibold">Health</h2>
+        <p className="text-xs text-muted-foreground">{panel.profileLabel}. Memory, fans, power, temperature and the busiest interfaces.</p>
+      </header>
+      <ul className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
+        {panel.groups.map((group) => (
+          <li key={group.id} className="bg-card px-4 py-3">
+            <p className="label-caps text-muted-foreground">{group.label}</p>
+            <p className={`mt-1 text-sm font-semibold ${TONE[group.status]}`}>{group.value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{group.detail}</p>
+          </li>
+        ))}
+      </ul>
+      {panel.wlc ? (
+        <div className="border-t border-border px-4 py-3 text-sm">
+          <p className="font-medium">Controller summary</p>
+          <p className="mt-1 text-muted-foreground">
+            Joined APs {panel.wlc.joinedAps ?? '—'} · clients {panel.wlc.clients ?? '—'}. {panel.wlc.note}
+          </p>
+        </div>
+      ) : null}
+      {panel.accessPoint ? (
+        <div className="border-t border-border px-4 py-3 text-sm">
+          <p className="font-medium">Access point</p>
+          <p className="mt-1 text-muted-foreground">{panel.accessPoint.note}</p>
+          <p className="mt-2">
+            Status {panel.accessPoint.status} · clients {panel.accessPoint.clients ?? '—'} · uptime{' '}
+            {panel.accessPoint.uptimeSeconds === null || panel.accessPoint.uptimeSeconds === undefined
+              ? '—'
+              : `${Math.round(panel.accessPoint.uptimeSeconds / 60)} min`}
+          </p>
+          {panel.accessPoint.radios.length > 0 ? (
+            <ul className="mt-2 space-y-1 font-mono-data text-xs">
+              {panel.accessPoint.radios.map((radio) => (
+                <li key={radio.slot}>
+                  slot {radio.slot || '—'} · channel {radio.channel ?? '—'} · util {pct(radio.utilization)} · clients {radio.clients ?? '—'}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="border-t border-border px-4 py-3">
+        <h3 className="text-sm font-semibold">Interface utilization and drops</h3>
+        {!panel.interfacesSupported ? (
+          <p className="mt-1 text-sm text-muted-foreground">{panel.interfacesNote}</p>
+        ) : panel.interfaces.length === 0 ? (
+          <p className="mt-1 text-sm text-muted-foreground">No interface sample yet.</p>
+        ) : (
+          <table className="mt-2 w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-1.5 pr-3 font-semibold">Interface</th>
+                <th className="py-1.5 pr-3 font-semibold">Utilization</th>
+                <th className="py-1.5 pr-3 font-semibold">Drops/s</th>
+                <th className="py-1.5 font-semibold">Path</th>
+              </tr>
+            </thead>
+            <tbody>
+              {panel.interfaces.map((row) => (
+                <tr key={row.ifIndex || row.name} className="border-b border-border/70">
+                  <td className="py-1.5 pr-3 font-mono-data">{row.name}</td>
+                  <td className="py-1.5 pr-3 tabular">{pct(row.utilization)}</td>
+                  <td className="py-1.5 pr-3 tabular">{rate(row.dropsRate)}</td>
+                  <td className="py-1.5">{row.criticalPath ? <span className="font-semibold text-warning">critical-path</span> : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}

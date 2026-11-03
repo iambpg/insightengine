@@ -115,6 +115,22 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
   return buildDeviceDetail(form);
 }
 
+export async function listAccessPoints(query: { wlc?: string; q?: string; page?: number; pageSize?: number }) {
+  await delay(120);
+  const all = [
+    { name: 'ap-ams01-114', mac: '0.17.34.1.0.1', wlc: 'wlc-ein02', site: 'Rotterdam', status: 'up', clients: 18, uptimeSeconds: 86400, radios: [{ slot: '0', channel: 36, utilization: 0.22, clients: 11 }, { slot: '1', channel: 6, utilization: 0.41, clients: 7 }] },
+    { name: 'ap-ams01-115', mac: '0.17.34.1.0.2', wlc: 'wlc-ein02', site: 'Rotterdam', status: 'up', clients: 4, uptimeSeconds: 43200, radios: [{ slot: '0', channel: 44, utilization: 0.08, clients: 4 }] },
+    { name: 'ap-rot04-002', mac: '0.17.34.1.0.3', wlc: 'wlc-ein02', site: 'Rotterdam', status: 'down', clients: 0, uptimeSeconds: null, radios: [] },
+  ];
+  const needle = (query.q || '').toLowerCase();
+  const wlc = (query.wlc || '').toLowerCase();
+  const matched = all.filter((row) => (!wlc || row.wlc.toLowerCase().includes(wlc)) && (!needle || row.name.includes(needle) || row.mac.includes(needle)));
+  const page = query.page || 1;
+  const pageSize = query.pageSize || 50;
+  const start = (page - 1) * pageSize;
+  return { rows: matched.slice(start, start + pageSize), total: matched.length, page, pageSize };
+}
+
 export async function getThroughput(
   range: RangeKey,
   seed: string | number,
