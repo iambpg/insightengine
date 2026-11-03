@@ -1,0 +1,75 @@
+{
+  "name": "FVE-20E4",
+  "vendor": "fortinet",
+  "key": "fve-20e4",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fve-20e4.front.svg",
+  "width": 406.0,
+  "height": 68.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.06479,
+      "y": 0.36452,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "Line Port#4",
+      "x": 0.14233,
+      "y": 0.39534,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "Line Port#3",
+      "x": 0.22682,
+      "y": 0.39534,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "Line Port#2",
+      "x": 0.31131,
+      "y": 0.39534,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "Line Port#1",
+      "x": 0.3958,
+      "y": 0.39534,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.49534,
+      "y": 0.39534,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "FortiLink Port#2",
+      "x": 0.58562,
+      "y": 0.39534,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.6759,
+      "y": 0.39534,
+      "w": 0.03941,
+      "h": 0.36
+    },
+    {
+      "prompt": "VDC#1",
+      "x": 0.7818,
+      "y": 0.39192,
+      "w": 0.03941,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

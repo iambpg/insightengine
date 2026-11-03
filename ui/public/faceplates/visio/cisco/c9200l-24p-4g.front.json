@@ -1,0 +1,11 @@
+{
+  "name": "C9200L-24P-4G Front",
+  "vendor": "cisco",
+  "key": "c9200l-24p-4g",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9200l-24p-4g.front.svg",
+  "width": 2284.0,
+  "height": 217.0,
+  "hotspots": [],
+  "source": "visio"
+}

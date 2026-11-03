@@ -1,0 +1,11 @@
+{
+  "name": "Controller 5700 Front",
+  "vendor": "cisco",
+  "key": "controller-5700",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/controller-5700.front.svg",
+  "width": 1830.0,
+  "height": 174.0,
+  "hotspots": [],
+  "source": "visio"
+}

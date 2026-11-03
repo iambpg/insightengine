@@ -1,0 +1,11 @@
+{
+  "name": "FNR-3600G",
+  "vendor": "fortinet",
+  "key": "fnr-3600g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fnr-3600g.front.svg",
+  "width": 1143.0,
+  "height": 210.0,
+  "hotspots": [],
+  "source": "visio"
+}

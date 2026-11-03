@@ -1,0 +1,11 @@
+{
+  "name": "5500 Series Front",
+  "vendor": "cisco",
+  "key": "5500-series",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/5500-series.front.svg",
+  "width": 1830.0,
+  "height": 178.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,89 @@
+{
+  "name": "FAZ-810G",
+  "vendor": "fortinet",
+  "key": "faz-810g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-810g.front.svg",
+  "width": 1143.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "SFP Slot#1",
+      "x": 0.07984,
+      "y": 0.28847,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#2",
+      "x": 0.07984,
+      "y": 0.67586,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.12872,
+      "y": 0.18486,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.12872,
+      "y": 0.56324,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.16242,
+      "y": 0.18486,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.16242,
+      "y": 0.56324,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20743,
+      "y": 0.11279,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.20763,
+      "y": 0.38532,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.20763,
+      "y": 0.59703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PS Slot#1",
+      "x": 0.71928,
+      "y": 0.77495,
+      "w": 0.12,
+      "h": 0.36
+    },
+    {
+      "prompt": "Power Plug#1",
+      "x": 0.89999,
+      "y": 0.36505,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

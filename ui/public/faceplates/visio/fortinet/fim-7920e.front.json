@@ -1,0 +1,89 @@
+{
+  "name": "FIM-7920E",
+  "vendor": "fortinet",
+  "key": "fim-7920e",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fim-7920e.front.svg",
+  "width": 1036.0,
+  "height": 112.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.0739,
+      "y": 0.47471,
+      "w": 0.02,
+      "h": 0.33929
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.24305,
+      "y": 0.18182,
+      "w": 0.02,
+      "h": 0.33929
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.24305,
+      "y": 0.49563,
+      "w": 0.02,
+      "h": 0.33929
+    },
+    {
+      "prompt": "Management Port#3",
+      "x": 0.28557,
+      "y": 0.18182,
+      "w": 0.02,
+      "h": 0.33929
+    },
+    {
+      "prompt": "Management Port#4",
+      "x": 0.28557,
+      "y": 0.49563,
+      "w": 0.02,
+      "h": 0.33929
+    },
+    {
+      "prompt": "SFP Plus Slot#1",
+      "x": 0.31943,
+      "y": 0.27387,
+      "w": 0.03641,
+      "h": 0.33929
+    },
+    {
+      "prompt": "SFP Plus Slot#2",
+      "x": 0.31943,
+      "y": 0.60442,
+      "w": 0.03641,
+      "h": 0.33929
+    },
+    {
+      "prompt": "QSFP Slot#1",
+      "x": 0.43754,
+      "y": 0.64207,
+      "w": 0.04577,
+      "h": 0.33929
+    },
+    {
+      "prompt": "QSFP Slot#2",
+      "x": 0.55152,
+      "y": 0.64207,
+      "w": 0.04577,
+      "h": 0.33929
+    },
+    {
+      "prompt": "QSFP Slot#3",
+      "x": 0.66504,
+      "y": 0.64207,
+      "w": 0.04577,
+      "h": 0.33929
+    },
+    {
+      "prompt": "QSFP Slot#4",
+      "x": 0.77901,
+      "y": 0.64207,
+      "w": 0.04577,
+      "h": 0.33929
+    }
+  ],
+  "source": "visio"
+}

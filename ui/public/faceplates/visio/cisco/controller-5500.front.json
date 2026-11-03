@@ -1,0 +1,11 @@
+{
+  "name": "Controller 5500 Front",
+  "vendor": "cisco",
+  "key": "controller-5500",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/controller-5500.front.svg",
+  "width": 1830.0,
+  "height": 178.0,
+  "hotspots": [],
+  "source": "visio"
+}

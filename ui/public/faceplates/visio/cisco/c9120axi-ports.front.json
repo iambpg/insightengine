@@ -1,0 +1,11 @@
+{
+  "name": "C9120AXI Ports",
+  "vendor": "cisco",
+  "key": "c9120axi-ports",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9120axi-ports.front.svg",
+  "width": 1030.0,
+  "height": 230.0,
+  "hotspots": [],
+  "source": "visio"
+}

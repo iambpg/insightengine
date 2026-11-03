@@ -1,0 +1,11 @@
+{
+  "name": "FMG-2000F (F)",
+  "vendor": "fortinet",
+  "key": "fmg-2000f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fmg-2000f-f.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

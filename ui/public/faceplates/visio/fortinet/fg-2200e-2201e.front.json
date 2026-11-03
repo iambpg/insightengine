@@ -1,0 +1,138 @@
+{
+  "name": "FG-2200E/2201E",
+  "vendor": "fortinet",
+  "key": "fg-2200e-2201e",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-2200e-2201e.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.11474,
+      "y": 0.74848,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.14865,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.20044,
+      "y": 0.56029,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.20044,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.25141,
+      "y": 0.56029,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.25141,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.28059,
+      "y": 0.56029,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.28059,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.31018,
+      "y": 0.56029,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.31018,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.33936,
+      "y": 0.56029,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.33936,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#9",
+      "x": 0.37841,
+      "y": 0.56029,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#10",
+      "x": 0.37841,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#11",
+      "x": 0.40924,
+      "y": 0.56029,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#12",
+      "x": 0.40924,
+      "y": 0.7585,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.61293,
+      "y": 0.64811,
+      "w": 0.12,
+      "h": 0.20713
+    },
+    {
+      "prompt": "QSFP Port#1",
+      "x": 0.87274,
+      "y": 0.64699,
+      "w": 0.0449,
+      "h": 0.20935
+    }
+  ],
+  "source": "visio"
+}

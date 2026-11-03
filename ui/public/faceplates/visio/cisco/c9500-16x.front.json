@@ -1,0 +1,11 @@
+{
+  "name": "C9500-16X Front",
+  "vendor": "cisco",
+  "key": "c9500-16x",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9500-16x.front.svg",
+  "width": 2284.0,
+  "height": 217.0,
+  "hotspots": [],
+  "source": "visio"
+}

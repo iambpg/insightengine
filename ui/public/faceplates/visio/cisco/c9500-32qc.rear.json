@@ -1,0 +1,11 @@
+{
+  "name": "C9500-32QC Rear",
+  "vendor": "cisco",
+  "key": "c9500-32qc",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9500-32qc.rear.svg",
+  "width": 2284.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

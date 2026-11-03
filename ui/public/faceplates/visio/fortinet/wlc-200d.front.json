@@ -1,0 +1,61 @@
+{
+  "name": "WLC-200D",
+  "vendor": "fortinet",
+  "key": "wlc-200d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/wlc-200d.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.1318,
+      "y": 0.46414,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.17352,
+      "y": 0.35378,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.17352,
+      "y": 0.55198,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.24298,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.27751,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.3182,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.35231,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

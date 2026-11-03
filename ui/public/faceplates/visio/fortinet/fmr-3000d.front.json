@@ -1,0 +1,68 @@
+{
+  "name": "FMR-3000D",
+  "vendor": "fortinet",
+  "key": "fmr-3000d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fmr-3000d.front.svg",
+  "width": 1141.0,
+  "height": 313.0,
+  "hotspots": [
+    {
+      "prompt": "Power Plug#1",
+      "x": 0.44972,
+      "y": 0.54716,
+      "w": 0.02,
+      "h": 0.32485
+    },
+    {
+      "prompt": "Power Outlet#1",
+      "x": 0.46061,
+      "y": 0.07253,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "IPMI Port#1",
+      "x": 0.42705,
+      "y": 0.50442,
+      "w": 0.12,
+      "h": 0.12141
+    },
+    {
+      "prompt": "KVM Connector#1",
+      "x": 0.42767,
+      "y": 0.27014,
+      "w": 0.12,
+      "h": 0.12141
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.43014,
+      "y": 0.81729,
+      "w": 0.12,
+      "h": 0.12141
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.44514,
+      "y": 0.67283,
+      "w": 0.12,
+      "h": 0.12141
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.44575,
+      "y": 0.81729,
+      "w": 0.12,
+      "h": 0.12141
+    },
+    {
+      "prompt": "Power Outlet#2",
+      "x": 0.51857,
+      "y": 0.07253,
+      "w": 0.02,
+      "h": 0.12141
+    }
+  ],
+  "source": "visio"
+}

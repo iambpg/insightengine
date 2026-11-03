@@ -1,0 +1,11 @@
+{
+  "name": "PA-7050 Blank",
+  "vendor": "palo-alto",
+  "key": "pa-7050-blank",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-7050-blank.front.svg",
+  "width": 2619.0,
+  "height": 265.0,
+  "hotspots": [],
+  "source": "visio"
+}

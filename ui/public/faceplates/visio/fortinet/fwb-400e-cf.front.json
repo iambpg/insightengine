@@ -1,0 +1,89 @@
+{
+  "name": "FWB-400E (CF)",
+  "vendor": "fortinet",
+  "key": "fwb-400e-cf",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fwb-400e-cf.front.svg",
+  "width": 1143.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.09974,
+      "y": 0.49117,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.13755,
+      "y": 0.37631,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.13755,
+      "y": 0.5655,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.19695,
+      "y": 0.49117,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.23024,
+      "y": 0.49117,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.26723,
+      "y": 0.49117,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.30052,
+      "y": 0.49117,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#5",
+      "x": 0.33714,
+      "y": 0.67586,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#6",
+      "x": 0.36714,
+      "y": 0.67586,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#7",
+      "x": 0.41646,
+      "y": 0.67586,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#8",
+      "x": 0.44647,
+      "y": 0.67586,
+      "w": 0.03309,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

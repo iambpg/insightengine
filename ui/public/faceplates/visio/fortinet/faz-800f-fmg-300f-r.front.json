@@ -1,0 +1,89 @@
+{
+  "name": "FAZ-800F / FMG-300F (R)",
+  "vendor": "fortinet",
+  "key": "faz-800f-fmg-300f-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-800f-fmg-300f-r.front.svg",
+  "width": 1142.0,
+  "height": 103.0,
+  "hotspots": [
+    {
+      "prompt": "PS Slot#2",
+      "x": 0.07111,
+      "y": 0.75607,
+      "w": 0.12,
+      "h": 0.36
+    },
+    {
+      "prompt": "Power Plug#1",
+      "x": 0.22839,
+      "y": 0.30402,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.59296,
+      "y": 0.199,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.59296,
+      "y": 0.52776,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.63776,
+      "y": 0.199,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.63776,
+      "y": 0.52776,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.67598,
+      "y": 0.41817,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.67598,
+      "y": 0.60539,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.71585,
+      "y": 0.53233,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#2",
+      "x": 0.84583,
+      "y": 0.60082,
+      "w": 0.03214,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#1",
+      "x": 0.88076,
+      "y": 0.60082,
+      "w": 0.03214,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

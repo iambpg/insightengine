@@ -1,0 +1,33 @@
+{
+  "name": "FSW-424E-Fiber",
+  "vendor": "fortinet",
+  "key": "fsw-424e-fiber",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-424e-fiber.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Management Port#1",
+      "x": 0.06891,
+      "y": 0.25694,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.06912,
+      "y": 0.54748,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.61211,
+      "y": 0.28829,
+      "w": 0.12,
+      "h": 0.42342
+    }
+  ],
+  "source": "visio"
+}

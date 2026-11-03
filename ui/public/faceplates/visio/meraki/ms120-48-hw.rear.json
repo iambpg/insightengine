@@ -1,0 +1,11 @@
+{
+  "name": "MS120-48-HW Rear",
+  "vendor": "meraki",
+  "key": "ms120-48-hw",
+  "view": "rear",
+  "file": "/faceplates/visio/meraki/ms120-48-hw.rear.svg",
+  "width": 2283.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

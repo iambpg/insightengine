@@ -1,0 +1,110 @@
+{
+  "name": "FG-90/91G",
+  "vendor": "fortinet",
+  "key": "fg-90-91g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-90-91g.front.svg",
+  "width": 512.0,
+  "height": 99.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.21027,
+      "y": 0.15491,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.21073,
+      "y": 0.45915,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#1",
+      "x": 0.27847,
+      "y": 0.16434,
+      "w": 0.07392,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#2",
+      "x": 0.27847,
+      "y": 0.54642,
+      "w": 0.07392,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.41459,
+      "y": 0.0417,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#2",
+      "x": 0.41459,
+      "y": 0.41906,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.5358,
+      "y": 0.07,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.5358,
+      "y": 0.41906,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.60651,
+      "y": 0.07,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.60651,
+      "y": 0.41906,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.67721,
+      "y": 0.07,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.67721,
+      "y": 0.41906,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "FortiLink Port A#1",
+      "x": 0.74792,
+      "y": 0.07,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "FortiLink Port B#1",
+      "x": 0.74792,
+      "y": 0.41906,
+      "w": 0.03125,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

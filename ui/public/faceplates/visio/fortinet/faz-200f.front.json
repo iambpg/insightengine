@@ -1,0 +1,47 @@
+{
+  "name": "FAZ-200F",
+  "vendor": "fortinet",
+  "key": "faz-200f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-200f.front.svg",
+  "width": 1140.0,
+  "height": 106.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.33587,
+      "y": 0.37409,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.33587,
+      "y": 0.54298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.37677,
+      "y": 0.49187,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.42033,
+      "y": 0.18075,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.42033,
+      "y": 0.49187,
+      "w": 0.02,
+      "h": 0.35849
+    }
+  ],
+  "source": "visio"
+}

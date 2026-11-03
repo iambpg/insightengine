@@ -1,0 +1,68 @@
+{
+  "name": "FNC-M-550F/CA-600F/CA-700F (F)",
+  "vendor": "fortinet",
+  "key": "fnc-m-550f-ca-600f-ca-700f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fnc-m-550f-ca-600f-ca-700f-f.front.svg",
+  "width": 1143.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.11639,
+      "y": 0.48295,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.13694,
+      "y": 0.48295,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.16735,
+      "y": 0.46732,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20743,
+      "y": 0.46732,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#1",
+      "x": 0.30343,
+      "y": 0.66375,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#2",
+      "x": 0.33385,
+      "y": 0.66375,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#3",
+      "x": 0.36426,
+      "y": 0.66375,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#4",
+      "x": 0.39468,
+      "y": 0.66375,
+      "w": 0.03309,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

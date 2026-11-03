@@ -1,0 +1,11 @@
+{
+  "name": "C1161-8PLTEP Front",
+  "vendor": "cisco",
+  "key": "c1161-8pltep",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c1161-8pltep.front.svg",
+  "width": 1299.0,
+  "height": 215.0,
+  "hotspots": [],
+  "source": "visio"
+}

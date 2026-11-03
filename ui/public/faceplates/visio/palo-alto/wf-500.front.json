@@ -1,0 +1,11 @@
+{
+  "name": "WF-500 Front",
+  "vendor": "palo-alto",
+  "key": "wf-500",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/wf-500.front.svg",
+  "width": 2284.0,
+  "height": 424.0,
+  "hotspots": [],
+  "source": "visio"
+}

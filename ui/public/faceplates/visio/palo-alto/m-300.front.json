@@ -1,0 +1,11 @@
+{
+  "name": "M-300 Front",
+  "vendor": "palo-alto",
+  "key": "m-300",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/m-300.front.svg",
+  "width": 2283.0,
+  "height": 217.0,
+  "hotspots": [],
+  "source": "visio"
+}

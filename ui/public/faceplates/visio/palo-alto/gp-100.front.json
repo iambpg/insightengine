@@ -1,0 +1,11 @@
+{
+  "name": "GP-100 Front",
+  "vendor": "palo-alto",
+  "key": "gp-100",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/gp-100.front.svg",
+  "width": 2284.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "PA-3250 Front",
+  "vendor": "palo-alto",
+  "key": "pa-3250",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-3250.front.svg",
+  "width": 2284.0,
+  "height": 426.0,
+  "hotspots": [],
+  "source": "visio"
+}

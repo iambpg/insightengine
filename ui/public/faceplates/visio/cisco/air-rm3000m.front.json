@@ -1,0 +1,11 @@
+{
+  "name": "AIR-RM3000M",
+  "vendor": "cisco",
+  "key": "air-rm3000m",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/air-rm3000m.front.svg",
+  "width": 816.0,
+  "height": 243.0,
+  "hotspots": [],
+  "source": "visio"
+}

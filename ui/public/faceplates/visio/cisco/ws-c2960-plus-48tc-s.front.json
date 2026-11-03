@@ -1,0 +1,11 @@
+{
+  "name": "WS-C2960+48TC-S Front",
+  "vendor": "cisco",
+  "key": "ws-c2960-plus-48tc-s",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/ws-c2960-plus-48tc-s.front.svg",
+  "width": 1828.0,
+  "height": 173.0,
+  "hotspots": [],
+  "source": "visio"
+}

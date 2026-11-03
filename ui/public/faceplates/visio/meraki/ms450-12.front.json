@@ -1,0 +1,11 @@
+{
+  "name": "MS450-12 Front",
+  "vendor": "meraki",
+  "key": "ms450-12",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms450-12.front.svg",
+  "width": 2283.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

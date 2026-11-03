@@ -1,0 +1,1 @@
+{"slug": "fortinet-fap-221e", "model": "FortiAP 221E", "partNumber": "FAP-221E", "manufacturer": "Fortinet", "vendor": "fortinet", "source": "drawn", "front": "", "rear": "", "width": 1000, "height": 180, "raster": false, "ports": [{"name": "wan-poe", "type": "1000base-t", "x": 0.08, "y": 0.38, "w": 0.04, "h": 0.28}]}

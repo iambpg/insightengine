@@ -1,0 +1,11 @@
+{
+  "name": "WS-C2960S-24TD-L Front",
+  "vendor": "cisco",
+  "key": "ws-c2960s-24td-l",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/ws-c2960s-24td-l.front.svg",
+  "width": 1828.0,
+  "height": 173.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "AIR-AP2802I-K9 Side",
+  "vendor": "cisco",
+  "key": "air-ap2802i-k9-side",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/air-ap2802i-k9-side.front.svg",
+  "width": 1053.0,
+  "height": 270.0,
+  "hotspots": [],
+  "source": "visio"
+}

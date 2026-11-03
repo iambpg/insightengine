@@ -1,0 +1,1 @@
+{"slug": "cisco-ucsc-c245-m8sx", "model": "UCS C245 M8SX", "partNumber": "UCSC-C245-M8SX", "manufacturer": "Cisco", "vendor": "cisco", "source": "drawn", "front": "", "rear": "", "width": 1000, "height": 180, "raster": false, "ports": [{"name": "CIMC", "type": "1000base-t", "x": 0.08, "y": 0.38, "w": 0.04, "h": 0.28}]}

@@ -1,0 +1,82 @@
+{
+  "name": "FMG-410G (R)",
+  "vendor": "fortinet",
+  "key": "fmg-410g-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fmg-410g-r.front.svg",
+  "width": 1143.0,
+  "height": 210.0,
+  "hotspots": [
+    {
+      "prompt": "SFP Slot#1",
+      "x": 0.08189,
+      "y": 0.63781,
+      "w": 0.03309,
+      "h": 0.18095
+    },
+    {
+      "prompt": "SFP Slot#2",
+      "x": 0.08189,
+      "y": 0.80039,
+      "w": 0.03309,
+      "h": 0.18095
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.12995,
+      "y": 0.58658,
+      "w": 0.02,
+      "h": 0.18095
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.12995,
+      "y": 0.74249,
+      "w": 0.02,
+      "h": 0.18095
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.16283,
+      "y": 0.58658,
+      "w": 0.02,
+      "h": 0.18095
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.16283,
+      "y": 0.74249,
+      "w": 0.02,
+      "h": 0.18095
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20784,
+      "y": 0.522,
+      "w": 0.02,
+      "h": 0.18095
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.20804,
+      "y": 0.65229,
+      "w": 0.02,
+      "h": 0.18095
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.20804,
+      "y": 0.75474,
+      "w": 0.02,
+      "h": 0.18095
+    },
+    {
+      "prompt": "Power Plug#1",
+      "x": 0.79964,
+      "y": 0.68681,
+      "w": 0.12,
+      "h": 0.18095
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,61 @@
+{
+  "name": "FWB-100D",
+  "vendor": "fortinet",
+  "key": "fwb-100d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fwb-100d.front.svg",
+  "width": 510.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.11299,
+      "y": 0.40929,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.37494,
+      "y": 0.32446,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.37494,
+      "y": 0.48518,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.55646,
+      "y": 0.42268,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.65297,
+      "y": 0.42268,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.7504,
+      "y": 0.42268,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.84691,
+      "y": 0.42268,
+      "w": 0.03137,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

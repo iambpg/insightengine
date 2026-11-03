@@ -1,0 +1,68 @@
+{
+  "name": "FG-5101C",
+  "vendor": "fortinet",
+  "key": "fg-5101c",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-5101c.front.svg",
+  "width": 782.0,
+  "height": 69.0,
+  "hotspots": [
+    {
+      "prompt": "Management Port#1",
+      "x": 0.17382,
+      "y": 0.36054,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.21759,
+      "y": 0.36054,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.27814,
+      "y": 0.30649,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.3264,
+      "y": 0.35041,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP+ Slot#1",
+      "x": 0.36466,
+      "y": 0.62405,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP+ Slot#2",
+      "x": 0.40842,
+      "y": 0.62405,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP+ Slot#3",
+      "x": 0.45159,
+      "y": 0.62405,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP+ Slot#4",
+      "x": 0.49535,
+      "y": 0.62405,
+      "w": 0.04826,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

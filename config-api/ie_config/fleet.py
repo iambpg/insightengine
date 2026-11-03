@@ -927,6 +927,8 @@ class FleetService:
                 "site_slug": known.get("slug") or str(site.get("slug") or ""),
                 "region": known.get("region") or "Unassigned",
                 "model": str(dtype.get("model") or ""),
+                "slug": str(dtype.get("slug") or ""),
+                "part_number": str(dtype.get("part_number") or ""),
                 "manufacturer": str(manufacturer.get("name") or ""),
                 "ip": address,
                 "serial": str(raw.get("serial") or ""),
@@ -1361,7 +1363,17 @@ class FleetService:
         role = classified["role"]
         detail["role"] = role
         detail["status"] = found.get("status") or device.get("status") or "active"
-        face = _faceplate(form, role, detail.get("hostname") or "", device.get("model") or (nd_device or {}).get("model") or "", ports)
+        face = _faceplate(
+            form, role, detail.get("hostname") or "",
+            device.get("model") or (nd_device or {}).get("model") or "",
+            ports,
+            {
+                "model": device.get("model") or (nd_device or {}).get("model") or "",
+                "part_number": device.get("part_number") or "",
+                "slug": device.get("slug") or "",
+                "manufacturer": device.get("manufacturer") or "",
+            },
+        )
         face["snmpAt"] = detail.get("_snmp_at") or ""
         if "_snmp_missing" in detail:
             face["snmpMissing"] = bool(detail.get("_snmp_missing"))
@@ -1429,7 +1441,15 @@ class FleetService:
             self.cache.put("ports:" + device["name"], cached)
         ports = cached["ports"]
         form = row["formFactor"]
-        faceplate = _faceplate(form, row["role"], row["hostname"], device.get("model") or "", ports)
+        faceplate = _faceplate(
+            form, row["role"], row["hostname"], device.get("model") or "", ports,
+            {
+                "model": device.get("model") or "",
+                "part_number": device.get("part_number") or "",
+                "slug": device.get("slug") or "",
+                "manufacturer": device.get("manufacturer") or "",
+            },
+        )
         checks, hardware = _checks_and_hardware(row, cached, self._now_dt())
         device = row["_device"]
         profile = classify_profile(
@@ -2713,8 +2733,19 @@ def _detail_from_netdisco(snap: dict, now: datetime) -> dict:
     }
 
 
-def _faceplate(form: str, role: str, hostname: str, model: str, ports: list[dict]) -> dict:
-    base = {"form_factor": form if form in FORM_FACTORS else "generic", "role": role, "hostname": hostname}
+def _faceplate(form: str, role: str, hostname: str, model: str, ports: list[dict], identity: dict | None = None) -> dict:
+    ident = identity or {}
+    model_name = str(ident.get("model") or model or "")
+    base = {
+        "form_factor": form if form in FORM_FACTORS else "generic",
+        "role": role,
+        "hostname": hostname,
+        "model": model_name,
+        "modelName": model_name,
+        "partNumber": str(ident.get("part_number") or ""),
+        "slug": str(ident.get("slug") or ""),
+        "manufacturer": str(ident.get("manufacturer") or ""),
+    }
     if form == "switch-stack":
         groups: dict[int, list] = {}
         for port in ports:

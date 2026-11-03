@@ -1,0 +1,11 @@
+{
+  "name": "CW9166I Side",
+  "vendor": "cisco",
+  "key": "cw9166i-side",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/cw9166i-side.front.svg",
+  "width": 1150.0,
+  "height": 290.0,
+  "hotspots": [],
+  "source": "visio"
+}

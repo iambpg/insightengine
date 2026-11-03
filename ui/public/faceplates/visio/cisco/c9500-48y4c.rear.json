@@ -1,0 +1,11 @@
+{
+  "name": "C9500-48Y4C Rear",
+  "vendor": "cisco",
+  "key": "c9500-48y4c",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9500-48y4c.rear.svg",
+  "width": 2284.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

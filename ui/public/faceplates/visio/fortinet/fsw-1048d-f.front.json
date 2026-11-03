@@ -1,0 +1,33 @@
+{
+  "name": "FSW-1048D (F)",
+  "vendor": "fortinet",
+  "key": "fsw-1048d-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-1048d-f.front.svg",
+  "width": 1138.0,
+  "height": 102.0,
+  "hotspots": [
+    {
+      "prompt": "LC#1",
+      "x": 0.4082,
+      "y": 0.34101,
+      "w": 0.12,
+      "h": 0.39171
+    },
+    {
+      "prompt": "MGMT Port#1",
+      "x": 0.90005,
+      "y": 0.16562,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.90005,
+      "y": 0.5435,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "MX67-HW Front",
+  "vendor": "meraki",
+  "key": "mx67-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/mx67-hw.front.svg",
+  "width": 1131.0,
+  "height": 139.0,
+  "hotspots": [],
+  "source": "visio"
+}

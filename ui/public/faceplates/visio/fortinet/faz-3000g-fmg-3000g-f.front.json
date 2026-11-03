@@ -1,0 +1,11 @@
+{
+  "name": "FAZ-3000G/FMG-3000G (F)",
+  "vendor": "fortinet",
+  "key": "faz-3000g-fmg-3000g-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-3000g-fmg-3000g-f.front.svg",
+  "width": 1140.0,
+  "height": 313.0,
+  "hotspots": [],
+  "source": "visio"
+}

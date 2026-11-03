@@ -1,0 +1,11 @@
+{
+  "name": "MS120-48FP-HW Front",
+  "vendor": "meraki",
+  "key": "ms120-48fp-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms120-48fp-hw.front.svg",
+  "width": 2283.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

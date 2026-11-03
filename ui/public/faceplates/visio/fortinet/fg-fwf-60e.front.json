@@ -1,0 +1,110 @@
+{
+  "name": "FG/FWF-60E",
+  "vendor": "fortinet",
+  "key": "fg-fwf-60e",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-fwf-60e.front.svg",
+  "width": 510.0,
+  "height": 91.0,
+  "hotspots": [
+    {
+      "prompt": "DC Connector#1",
+      "x": 0.07155,
+      "y": 0.27078,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.11655,
+      "y": 0.2656,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.18909,
+      "y": 0.25005,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#2",
+      "x": 0.28275,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.34611,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "DMZ Port#1",
+      "x": 0.40947,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#7",
+      "x": 0.47192,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.53528,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.62068,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.68404,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.7474,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.80984,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Grounding Screw#1",
+      "x": 0.86769,
+      "y": 0.0,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.8732,
+      "y": 0.29668,
+      "w": 0.03137,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

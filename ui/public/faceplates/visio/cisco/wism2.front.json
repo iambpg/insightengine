@@ -1,0 +1,11 @@
+{
+  "name": "WiSM2",
+  "vendor": "cisco",
+  "key": "wism2",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/wism2.front.svg",
+  "width": 1381.0,
+  "height": 154.0,
+  "hotspots": [],
+  "source": "visio"
+}

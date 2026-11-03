@@ -1,0 +1,425 @@
+{
+  "name": "FSW-648F/-FPOE",
+  "vendor": "fortinet",
+  "key": "fsw-648f-fpoe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-648f-fpoe.front.svg",
+  "width": 1258.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "2.5Gbps Ethernet Port#1",
+      "x": 0.06316,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#2",
+      "x": 0.06316,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#3",
+      "x": 0.09234,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#4",
+      "x": 0.09234,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#5",
+      "x": 0.12111,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#6",
+      "x": 0.12111,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#7",
+      "x": 0.1503,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#8",
+      "x": 0.1503,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#9",
+      "x": 0.17948,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#10",
+      "x": 0.17948,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#11",
+      "x": 0.20866,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#12",
+      "x": 0.20866,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#13",
+      "x": 0.23743,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#14",
+      "x": 0.23743,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#15",
+      "x": 0.26661,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#16",
+      "x": 0.26661,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#17",
+      "x": 0.30402,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#18",
+      "x": 0.30402,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#19",
+      "x": 0.3332,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#20",
+      "x": 0.3332,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#21",
+      "x": 0.36197,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#22",
+      "x": 0.36197,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#23",
+      "x": 0.39115,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#24",
+      "x": 0.39115,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#25",
+      "x": 0.42033,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#26",
+      "x": 0.42033,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#27",
+      "x": 0.44952,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#28",
+      "x": 0.44952,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#29",
+      "x": 0.47829,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#30",
+      "x": 0.47829,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#31",
+      "x": 0.50747,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#32",
+      "x": 0.50747,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#33",
+      "x": 0.54528,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#34",
+      "x": 0.54528,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#35",
+      "x": 0.57446,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#36",
+      "x": 0.57446,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#37",
+      "x": 0.60323,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#38",
+      "x": 0.60323,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#39",
+      "x": 0.63242,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#40",
+      "x": 0.63242,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#41",
+      "x": 0.6616,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#42",
+      "x": 0.6616,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#43",
+      "x": 0.69078,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#44",
+      "x": 0.69078,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#45",
+      "x": 0.71955,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#46",
+      "x": 0.71955,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#47",
+      "x": 0.74873,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5Gbps Ethernet Port#48",
+      "x": 0.74873,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#49",
+      "x": 0.77815,
+      "y": 0.30661,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#50",
+      "x": 0.77815,
+      "y": 0.65036,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#51",
+      "x": 0.80816,
+      "y": 0.30661,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#52",
+      "x": 0.80816,
+      "y": 0.65036,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#53",
+      "x": 0.84392,
+      "y": 0.30661,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#54",
+      "x": 0.84392,
+      "y": 0.65036,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#55",
+      "x": 0.87392,
+      "y": 0.30661,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#56",
+      "x": 0.87392,
+      "y": 0.65036,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.91848,
+      "y": 0.13696,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.91848,
+      "y": 0.59679,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.91869,
+      "y": 0.36688,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

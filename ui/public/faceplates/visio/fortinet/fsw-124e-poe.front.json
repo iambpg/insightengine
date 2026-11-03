@@ -1,0 +1,215 @@
+{
+  "name": "FSW-124E-POE",
+  "vendor": "fortinet",
+  "key": "fsw-124e-poe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-124e-poe.front.svg",
+  "width": 1039.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.04906,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#1",
+      "x": 0.38247,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#2",
+      "x": 0.38247,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#3",
+      "x": 0.41674,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#4",
+      "x": 0.41674,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#5",
+      "x": 0.451,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#6",
+      "x": 0.451,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#7",
+      "x": 0.48527,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#8",
+      "x": 0.48527,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#9",
+      "x": 0.51953,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#10",
+      "x": 0.51953,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#11",
+      "x": 0.5538,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#12",
+      "x": 0.5538,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#13",
+      "x": 0.61015,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#14",
+      "x": 0.61015,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#15",
+      "x": 0.64442,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#16",
+      "x": 0.64442,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#17",
+      "x": 0.67868,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#18",
+      "x": 0.67868,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#19",
+      "x": 0.71295,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#20",
+      "x": 0.71295,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#21",
+      "x": 0.74721,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#22",
+      "x": 0.74721,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#23",
+      "x": 0.78148,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#24",
+      "x": 0.78148,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#25",
+      "x": 0.84862,
+      "y": 0.26144,
+      "w": 0.03629,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#26",
+      "x": 0.84862,
+      "y": 0.59477,
+      "w": 0.03629,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#27",
+      "x": 0.91986,
+      "y": 0.26144,
+      "w": 0.03629,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#28",
+      "x": 0.91986,
+      "y": 0.59477,
+      "w": 0.03629,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

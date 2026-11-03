@@ -1,0 +1,11 @@
+{
+  "name": "MS120-8FP-HW Rear",
+  "vendor": "meraki",
+  "key": "ms120-8fp-hw",
+  "view": "rear",
+  "file": "/faceplates/visio/meraki/ms120-8fp-hw.rear.svg",
+  "width": 1080.0,
+  "height": 213.0,
+  "hotspots": [],
+  "source": "visio"
+}

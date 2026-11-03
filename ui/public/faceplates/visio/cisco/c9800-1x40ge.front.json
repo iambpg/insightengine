@@ -1,0 +1,11 @@
+{
+  "name": "C9800-1X40GE",
+  "vendor": "cisco",
+  "key": "c9800-1x40ge",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9800-1x40ge.front.svg",
+  "width": 790.0,
+  "height": 183.0,
+  "hotspots": [],
+  "source": "visio"
+}

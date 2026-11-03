@@ -232,6 +232,168 @@ function generic(count: number): FaceplateDevice {
   return { form_factor: 'generic', role: 'Unclassified device', ports };
 }
 
+function namedPorts(names: { name: string; type: PortType; speed: string }[], seed: number): PortInfo[] {
+  const rnd = seeded(seed);
+  return names.map((spec, index) => {
+    const roll = rnd();
+    const state: PortState = roll < 0.45 ? 'up' : roll < 0.62 ? 'down' : roll < 0.74 ? 'unknown' : roll < 0.84 ? 'fault' : roll < 0.94 ? 'disabled' : 'warning';
+    const neighbour = index === 0
+      ? { device: 'dist-sw-02', port: 'Gi1/0/24', source: 'LLDP' }
+      : state === 'up' && rnd() > 0.7
+        ? { device: NEIGHBOURS[index % NEIGHBOURS.length], port: 'Gi1/0/13', source: index % 2 ? 'CDP' : 'LLDP' }
+        : undefined;
+    return {
+      id: `${spec.name}-${index}`,
+      name: spec.name,
+      type: spec.type,
+      speed: state === 'down' || state === 'disabled' || state === 'unknown' ? '—' : spec.speed,
+      state,
+      utilisation: state === 'up' ? Math.round(8 + rnd() * 70) : state === 'warning' ? 81 : 0,
+      errors: state === 'fault' ? 640 : state === 'warning' ? 18 : 0,
+      neighbour,
+    };
+  });
+}
+
+function sequence(count: number, spec: (index: number) => { name: string; type: PortType; speed: string }) {
+  return Array.from({ length: count }, (_, index) => spec(index + 1));
+}
+
+function realisticSample(spec: {
+  slug: string;
+  model: string;
+  partNumber: string;
+  manufacturer: string;
+  role: string;
+  form: FormFactor;
+  ports: { name: string; type: PortType; speed: string }[];
+}): FaceplateDevice {
+  return {
+    form_factor: spec.form,
+    role: spec.role,
+    model: spec.model,
+    modelName: spec.model,
+    partNumber: spec.partNumber,
+    slug: spec.slug,
+    manufacturer: spec.manufacturer,
+    ports: namedPorts(spec.ports, spec.slug.length * 17),
+  };
+}
+
+const REALISTIC_SAMPLES: Record<string, { label: string; build: () => FaceplateDevice }> = {
+  'ws-c2960-plus-48tc-l': {
+    label: '2960-Plus 48TC-L',
+    build: () => realisticSample({
+      slug: 'cisco-catalyst-2960-plus-48tc-l',
+      model: 'Catalyst 2960+48TC-L',
+      partNumber: 'WS-C2960+48TC-L',
+      manufacturer: 'Cisco',
+      role: 'Access switch',
+      form: 'access-switch-48',
+      ports: [
+        ...sequence(48, (n) => ({ name: `Fa0/${n}`, type: 'RJ45', speed: '100 Mbps' })),
+        ...sequence(2, (n) => ({ name: `Gi0/${n}`, type: 'SFP', speed: '1 Gbps' })),
+      ],
+    }),
+  },
+  'c9300-48p': {
+    label: 'C9300-48P',
+    build: () => realisticSample({
+      slug: 'cisco-c9300-48p',
+      model: 'Catalyst 9300-48P',
+      partNumber: 'C9300-48P',
+      manufacturer: 'Cisco',
+      role: 'Access switch',
+      form: 'access-switch-48',
+      ports: sequence(48, (n) => ({ name: `Gi1/0/${n}`, type: 'RJ45', speed: '1 Gbps' })),
+    }),
+  },
+  'fg-40f': {
+    label: 'FortiGate 40F',
+    build: () => realisticSample({
+      slug: 'fortinet-fg-40f',
+      model: 'FortiGate 40F',
+      partNumber: 'FG-40F',
+      manufacturer: 'Fortinet',
+      role: 'Firewall',
+      form: 'firewall',
+      ports: [
+        { name: 'wan', type: 'RJ45', speed: '1 Gbps' },
+        { name: 'A', type: 'RJ45', speed: '1 Gbps' },
+        { name: 'lan1', type: 'RJ45', speed: '1 Gbps' },
+        { name: 'lan2', type: 'RJ45', speed: '1 Gbps' },
+        { name: 'lan3', type: 'RJ45', speed: '1 Gbps' },
+      ],
+    }),
+  },
+  'fg-1200d': {
+    label: 'FortiGate 1200D',
+    build: () => realisticSample({
+      slug: 'fortinet-fg-1200d',
+      model: 'FortiGate 1200D',
+      partNumber: 'FG-1200D',
+      manufacturer: 'Fortinet',
+      role: 'Firewall',
+      form: 'firewall',
+      ports: [
+        { name: 'mgmt1', type: 'MGMT', speed: '1 Gbps' },
+        { name: 'mgmt2', type: 'MGMT', speed: '1 Gbps' },
+        ...sequence(32, (n) => ({ name: `port${n}`, type: n <= 16 ? 'SFP' : 'RJ45', speed: '1 Gbps' })),
+        ...sequence(4, (n) => ({ name: `port${32 + n}`, type: 'SFP+', speed: '10 Gbps' })),
+      ],
+    }),
+  },
+  'pa-3220': {
+    label: 'PA-3220',
+    build: () => realisticSample({
+      slug: 'palo-alto-networks-pa-3220',
+      model: 'PA-3220',
+      partNumber: 'PA-3220',
+      manufacturer: 'Palo Alto Networks',
+      role: 'Firewall',
+      form: 'firewall',
+      ports: [
+        ...sequence(20, (n) => ({
+          name: `ethernet1/${n}`,
+          type: n <= 12 ? 'RJ45' : n <= 16 ? 'SFP' : 'SFP+',
+          speed: n <= 16 ? '1 Gbps' : '10 Gbps',
+        })),
+        { name: 'ha1-a', type: 'RJ45', speed: '1 Gbps' },
+        { name: 'ha1-b', type: 'RJ45', speed: '1 Gbps' },
+        { name: 'hsci', type: 'SFP+', speed: '10 Gbps' },
+        { name: 'management', type: 'MGMT', speed: '1 Gbps' },
+      ],
+    }),
+  },
+  'c9800-40': {
+    label: 'Catalyst 9800-40',
+    build: () => realisticSample({
+      slug: 'cisco-c9800-40-k9',
+      model: 'Catalyst 9800-40-K9',
+      partNumber: 'C9800-40-K9',
+      manufacturer: 'Cisco',
+      role: 'Wireless controller',
+      form: 'wireless-controller',
+      ports: sequence(4, (n) => ({ name: `Te0/0/${n - 1}`, type: 'RJ45', speed: '10 Gbps' })),
+    }),
+  },
+  'ms120-48fp': {
+    label: 'Meraki MS120-48FP',
+    build: () => realisticSample({
+      slug: 'cisco-meraki-ms120-48fp',
+      model: 'Meraki MS120-48FP',
+      partNumber: 'MS120-48FP-HW',
+      manufacturer: 'Cisco',
+      role: 'Access switch',
+      form: 'access-switch-48',
+      ports: [
+        ...sequence(48, (n) => ({ name: `Port ${n}`, type: 'RJ45', speed: '1 Gbps' })),
+        ...sequence(4, (n) => ({ name: `Port ${48 + n}`, type: 'SFP+', speed: '10 Gbps' })),
+      ],
+    }),
+  },
+};
+
 export const FACEPLATE_SAMPLES: Record<string, { label: string; build: () => FaceplateDevice }> = {
   'access-switch-24': { label: 'Access switch · 24p PoE', build: () => sw24() },
   'access-switch-48': { label: 'Access switch · 48p', build: () => sw48() },
@@ -245,6 +407,7 @@ export const FACEPLATE_SAMPLES: Record<string, { label: string; build: () => Fac
   ...Object.fromEntries(
     FW_MODEL_LIST.map((m) => [m.id, { label: m.label, build: () => fwModel(m.id) }]),
   ),
+  ...REALISTIC_SAMPLES,
 };
 
 export function buildFaceplateFor(form: string): FaceplateDevice {

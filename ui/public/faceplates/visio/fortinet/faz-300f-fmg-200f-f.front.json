@@ -1,0 +1,61 @@
+{
+  "name": "FAZ-300F/ FMG-200F (F)",
+  "vendor": "fortinet",
+  "key": "faz-300f-fmg-200f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-300f-fmg-200f-f.front.svg",
+  "width": 1142.0,
+  "height": 106.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.33566,
+      "y": 0.37187,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.33566,
+      "y": 0.54075,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.37677,
+      "y": 0.49187,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.42033,
+      "y": 0.18075,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.42033,
+      "y": 0.49187,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "SFP Slot#3",
+      "x": 0.49071,
+      "y": 0.28298,
+      "w": 0.03214,
+      "h": 0.35849
+    },
+    {
+      "prompt": "SFP Slot#4",
+      "x": 0.49071,
+      "y": 0.60298,
+      "w": 0.03214,
+      "h": 0.35849
+    }
+  ],
+  "source": "visio"
+}

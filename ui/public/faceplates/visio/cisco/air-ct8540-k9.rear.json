@@ -1,0 +1,11 @@
+{
+  "name": "AIR-CT8540-K9 Rear",
+  "vendor": "cisco",
+  "key": "air-ct8540-k9",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/air-ct8540-k9.rear.svg",
+  "width": 2284.0,
+  "height": 432.0,
+  "hotspots": [],
+  "source": "visio"
+}

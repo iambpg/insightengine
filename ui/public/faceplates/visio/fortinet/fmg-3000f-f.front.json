@@ -1,0 +1,33 @@
+{
+  "name": "FMG-3000F (F)",
+  "vendor": "fortinet",
+  "key": "fmg-3000f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fmg-3000f-f.front.svg",
+  "width": 1140.0,
+  "height": 313.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.35683,
+      "y": 2e-05,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.39218,
+      "y": 2e-05,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "Serial Port#1",
+      "x": 0.46616,
+      "y": 2e-05,
+      "w": 0.02,
+      "h": 0.12141
+    }
+  ],
+  "source": "visio"
+}

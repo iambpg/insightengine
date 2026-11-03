@@ -1,0 +1,6580 @@
+{
+  "summary": {
+    "pass": 493,
+    "fallback": 58,
+    "byVendor": {
+      "cisco": {
+        "pass": 318,
+        "fallback": 57
+      },
+      "meraki": {
+        "pass": 27,
+        "fallback": 0
+      },
+      "fortinet": {
+        "pass": 96,
+        "fallback": 0
+      },
+      "palo-alto": {
+        "pass": 52,
+        "fallback": 1
+      }
+    }
+  },
+  "models": [
+    {
+      "slug": "cisco-2951-isr",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-8201-24h8fh",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 31
+      },
+      "ports": 31
+    },
+    {
+      "slug": "cisco-8212-48fh-m",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 37
+      },
+      "ports": 37
+    },
+    {
+      "slug": "cisco-8711-32fh-m",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-8818",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-air-ct3504-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-air-ct5520-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-apic-l3",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-asa5505",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-asa5510",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asa5512-x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-asa5515x-k8",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-asa5520-k8",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asa5525-x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-asa5540",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asa5545-x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-asa5555-x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-asr-9001",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-asr-9006",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9010-ac-v2",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9010-dc-v2",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-920-12cz-a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 11
+      },
+      "ports": 11
+    },
+    {
+      "slug": "cisco-asr-920-12cz-d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-asr-920-24sz-m",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-asr-920-4sz-a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-asr-9902",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 23
+      },
+      "ports": 23
+    },
+    {
+      "slug": "cisco-asr-9903",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 25
+      },
+      "ports": 25
+    },
+    {
+      "slug": "cisco-asr-9904",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9910",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9912-ac",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9912-dc",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9912",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9922-ac",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9922-dc",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9922",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr1001-hx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-asr1001-x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-asr1001",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-asr1002-hx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-asr1002-x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-asr1002",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-asr1004",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 1
+      },
+      "ports": 1
+    },
+    {
+      "slug": "cisco-asr1006",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr1009-x",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr1013",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-c1000-48t-4g-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-c1000-8t-2g-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-c1200-24p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 25
+      },
+      "ports": 25
+    },
+    {
+      "slug": "cisco-c1200-24t-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c1300-12xs",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-c1300-12xt-2x",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-c1300-16fp-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "cisco-c1300-16p-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "cisco-c1300-16p-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 9
+      },
+      "ports": 9
+    },
+    {
+      "slug": "cisco-c1300-16t-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "cisco-c1300-16xts",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 9
+      },
+      "ports": 9
+    },
+    {
+      "slug": "cisco-c1300-24fp-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 13
+      },
+      "ports": 13
+    },
+    {
+      "slug": "cisco-c1300-24fp-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c1300-24mgp-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "cisco-c1300-24p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 19
+      },
+      "ports": 19
+    },
+    {
+      "slug": "cisco-c1300-24p-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 17
+      },
+      "ports": 17
+    },
+    {
+      "slug": "cisco-c1300-24t-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c1300-24t-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c1300-24xs",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-c1300-24xt",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-c1300-24xts",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-c1300-48fp-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c1300-48fp-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-c1300-48mgp-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-c1300-48p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c1300-48p-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-c1300-48t-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c1300-48t-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-c1300-8fp-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-c1300-8mgp-2x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c1300-8p-e-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c1300-8t-e-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-catalyst-6807-xl",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-c6816-x-le",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 9
+      },
+      "ports": 9
+    },
+    {
+      "slug": "cisco-c6832-x-le",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c6840-x-le-40g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 27
+      },
+      "ports": 27
+    },
+    {
+      "slug": "cisco-c6880-x-le",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-c8300-1n1s-4t2x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c8300-1n1s-6t",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c8300-2n2s-4t2x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c8300-2n2s-6t",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-c8500-12x4qc",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 15
+      },
+      "ports": 15
+    },
+    {
+      "slug": "cisco-c8500l-8s4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-c9200-24p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-c9200-24t",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-c9200-48p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9200-48t",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9200cx-12p-2x2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9200cx-12p-2xgh",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-c9200cx-12t-2x2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9200cx-8p-2x2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 11
+      },
+      "ports": 11
+    },
+    {
+      "slug": "cisco-c9200cx-8p-2xgh",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-c9200cx-8uxg-2x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-c9200l-24p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9200l-24p-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9200l-24t-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9200l-24t-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9200l-48p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c9200l-48p-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c9200l-48t-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9200l-48t-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c921-4pltegb",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-c9300-24p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-c9300-24s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-c9300-24u",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-c9300-48p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9300-48s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9300-48t",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9300-48u",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9300l-24p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-c9300l-24p-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-c9300l-24t-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-c9300l-24t-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-c9300l-48p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c9300l-48p-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c9300l-48t-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c9300l-48t-4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c9300lm-24u-4y",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9300lm-48u-4y",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-c9300x-12y",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-c9300x-24hx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-c9300x-24y",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-c9300x-48hx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9300x-48hxn",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-c9300x-48tx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-catalyst-9404r",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-catalyst-9407r",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-catalyst-9410r",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-c9500-12q",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-c9500-16x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-c9500-24q",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-c9500-24y4c",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 27
+      },
+      "ports": 27
+    },
+    {
+      "slug": "cisco-c9500-32c",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-c9500-32qc",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 33
+      },
+      "ports": 33
+    },
+    {
+      "slug": "cisco-c9500-40x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 40
+      },
+      "ports": 40
+    },
+    {
+      "slug": "cisco-c9500-48y4c",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 49
+      },
+      "ports": 49
+    },
+    {
+      "slug": "cisco-c9500x-28c8d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "cisco-c9606r",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-c9610r",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-c9800-40-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-c9800-80-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-cbs250-8t-d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-cbs250-8t-e-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-cbs350-24p-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-cbs350-48t-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 27
+      },
+      "ports": 27
+    },
+    {
+      "slug": "cisco-c9500x-60l4d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 46
+      },
+      "ports": 46
+    },
+    {
+      "slug": "cisco-fpr3110-ngfw-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 17
+      },
+      "ports": 17
+    },
+    {
+      "slug": "cisco-fpr3120-ngfw-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 17
+      },
+      "ports": 17
+    },
+    {
+      "slug": "cisco-fpr3140-ngfw-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 17
+      },
+      "ports": 17
+    },
+    {
+      "slug": "cisco-fpr4215-ngfw-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-fpr4225-ngfw-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-firepower-2110",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-ie-3300-8u2x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ie-4000-16t4g-e",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-ie-4000-4gs8gp4g-e",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-ie-9320-24p4x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-ir1833-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 9
+      },
+      "ports": 9
+    },
+    {
+      "slug": "cisco-ir1835-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-isr1100-4g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-isr1100-6g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-isr-1111-8p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 9
+      },
+      "ports": 9
+    },
+    {
+      "slug": "cisco-isr-1121x-8p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "cisco-isr-c1111-4p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-isr4221",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-isr4321",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-isr4331",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-isr4351",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-isr4431",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-mds-9148s-16g-multilayer-fabric-switch",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-me-3800x-24fs-m",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-meraki-ms120-24",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-meraki-ms120-24p",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-meraki-ms120-48",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms120-48fp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms120-48lp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms120-8",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-meraki-ms120-8fp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "cisco-meraki-ms120-8lp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-meraki-ms125-24p",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-meraki-ms125-48fp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms125-48lp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms150-24mp-4x",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-meraki-ms150-48mp-4x",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-meraki-ms210-24",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-meraki-ms210-24p",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-meraki-ms210-48",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-meraki-ms210-48fp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-meraki-ms210-48lp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-meraki-ms220-24p",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-meraki-ms220-48fp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms225-48fp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms225-48lp",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-meraki-ms350-24p",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-meraki-ms425-16",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-meraki-ms425-32",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-meraki-mx100",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-meraki-mx95",
+      "vendor": "meraki",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-n2k-c2232pp-10ge",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-n2k-c2248tp-1ge",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-n2k-c2248tp-e-1ge",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-n2k-c2348tq-10g-e",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n3k-c3064tq-10gt",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "cisco-n3k-c31108pc-v",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 54
+      },
+      "ports": 54
+    },
+    {
+      "slug": "cisco-n3k-c31108tc-v",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-n3k-c31108tcv-32t",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 38
+      },
+      "ports": 38
+    },
+    {
+      "slug": "cisco-n3k-c3132q-40ge",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "cisco-n3k-c3132q-v",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-n3k-c3172tq-10gt",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-n3k-c3232c",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-n540-12z20g-sys-a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-n540-12z20g-sys-d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 21
+      },
+      "ports": 21
+    },
+    {
+      "slug": "cisco-n540-28z4c-sys-a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-n540-28z4c-sys-d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-n540-acc-sys",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 34
+      },
+      "ports": 34
+    },
+    {
+      "slug": "cisco-n540x-12z16g-sys-a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-n540x-12z16g-sys-d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-n540x-4z14g2q-a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "cisco-n540x-4z14g2q-d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "cisco-n540x-6z18g-sys-a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-n5k-c5548up",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 34
+      },
+      "ports": 34
+    },
+    {
+      "slug": "cisco-n5k-c5696q",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-n77-c7702",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-n77-c7706",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-n77-c7710",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-n77-c7718",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-n7k-c7010",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-n9324c-se1u",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-n9k-c92160yc-x",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c93108tc-ex",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c93108tc-fx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c93108tc-fx3",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c93120tx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 54
+      },
+      "ports": 54
+    },
+    {
+      "slug": "cisco-n9k-c93128tx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-n9k-c9316d-gx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-n9k-c93180lc-ex",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "cisco-n9k-c93180yc-ex",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 54
+      },
+      "ports": 54
+    },
+    {
+      "slug": "cisco-n9k-c93180yc-fx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 50
+      },
+      "ports": 50
+    },
+    {
+      "slug": "cisco-n9k-c93180yc-fx3",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 54
+      },
+      "ports": 54
+    },
+    {
+      "slug": "cisco-n9k-c93216tc-fx2",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 54
+      },
+      "ports": 54
+    },
+    {
+      "slug": "cisco-n9k-c93240yc-fx2",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 47
+      },
+      "ports": 47
+    },
+    {
+      "slug": "cisco-n9k-c9332c",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 25
+      },
+      "ports": 25
+    },
+    {
+      "slug": "cisco-n9k-c9332d-gx2b",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 34
+      },
+      "ports": 34
+    },
+    {
+      "slug": "cisco-n9k-c9332pq",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-n9k-c9336c-fx2",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 37
+      },
+      "ports": 37
+    },
+    {
+      "slug": "cisco-n9k-c9336pq",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 35
+      },
+      "ports": 35
+    },
+    {
+      "slug": "cisco-n9k-c9348gc-fx3",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 53
+      },
+      "ports": 53
+    },
+    {
+      "slug": "cisco-n9k-c9348gc-fx3ph",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 53
+      },
+      "ports": 53
+    },
+    {
+      "slug": "cisco-n9k-c9348gc-fxp",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 53
+      },
+      "ports": 53
+    },
+    {
+      "slug": "cisco-n9k-c93600cd-gx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "cisco-n9k-c9364c-gx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 35
+      },
+      "ports": 35
+    },
+    {
+      "slug": "cisco-n9k-c9364c",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 66
+      },
+      "ports": 66
+    },
+    {
+      "slug": "cisco-n9k-c9364d-gx2a",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "cisco-n9k-c9372px-e",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c9372px",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c9372tx-e",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c9372tx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-n9k-c9396px",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 23
+      },
+      "ports": 23
+    },
+    {
+      "slug": "cisco-n9k-c9396tx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-n9k-c9504",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ncs-5501-se",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 44
+      },
+      "ports": 44
+    },
+    {
+      "slug": "cisco-ncs-5504",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ncs-5508",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ncs-5516",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ncs-55a1-36h-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "cisco-ncs-57b1-5dse-sys",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 27
+      },
+      "ports": 27
+    },
+    {
+      "slug": "cisco-ncs-57b1-6d24-sys",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-ncs-6008",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-sf220-48p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-sg250-10p-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-sg250-26-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-sg250-50hp-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 50
+      },
+      "ports": 50
+    },
+    {
+      "slug": "cisco-sg300-20",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "cisco-sg300-28p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-sg500-28p-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-sg550x-24-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 13
+      },
+      "ports": 13
+    },
+    {
+      "slug": "cisco-sg550x-24mp-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-sg550x-48",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "cisco-sg550xg-24f-k9",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-ubr-10012",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ucs-fi-6332-16up",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 42
+      },
+      "ports": 42
+    },
+    {
+      "slug": "cisco-ucs-fi-6454",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 54
+      },
+      "ports": 54
+    },
+    {
+      "slug": "cisco-ucs-fi-6536",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "cisco-ucs-x9508",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ucsb-5108-ac2",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ucsb-b200-m3",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ucsb-b200-m4",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ucsb-b200-m5",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ucsb-b200-m6",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ucs-c220-m5l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-ucsc-c240-m4l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-ucsc-c240-m4sx",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-ucs-c460-m4",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-vg202xm",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-vg204xm",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-vg224",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-vg310",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-vg320",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-catalyst-2960-plus-24lc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-catalyst-2960-plus-24pc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-catalyst-2960-plus-24tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-catalyst-2960-plus-48pst-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-catalyst-2960-plus-48tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 50
+      },
+      "ports": 50
+    },
+    {
+      "slug": "cisco-ws-c2960-24lc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-ws-c2960-24lt-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-ws-c2960-24pc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-ws-c2960-24tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-ws-c2960-24tc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "cisco-ws-c2960-24tt-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c2960-48pst-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-ws-c2960-48tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 50
+      },
+      "ports": 50
+    },
+    {
+      "slug": "cisco-ws-c2960-48tt-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-ws-c2960-8tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c2960c-12pc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-ws-c2960c-8pc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-ws-c2960c-8tc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-ws-c2960cg-8tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "cisco-ws-c2960cpd-8tt-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-ws-c2960cx-8pc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c2960cx-8tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c2960g-24tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-ws-c2960g-48tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-ws-c2960g-8tc-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c2960l-8ps-ll",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-ws-c2960s-24pd-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c2960s-24ps-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c2960s-24td-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c2960s-24ts-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-ws-c2960s-48fpd-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-ws-c2960s-48fps-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-ws-c2960s-48lpd-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 50
+      },
+      "ports": 50
+    },
+    {
+      "slug": "cisco-ws-c2960s-48td-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960s-48ts-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-ws-c2960s-48ts-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 50
+      },
+      "ports": 50
+    },
+    {
+      "slug": "cisco-ws-c2960x-24pd-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "cisco-ws-c2960x-24ps-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c2960x-24psq-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c2960x-24td-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c2960x-24ts-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c2960x-24ts-ll",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 15
+      },
+      "ports": 15
+    },
+    {
+      "slug": "cisco-ws-c2960x-48fpd-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960x-48fps-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960x-48lpd-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960x-48lps-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960x-48td-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960x-48ts-l",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960xr-24td-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-ws-c2960xr-24ts-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c2960xr-48fpd-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960xr-48fps-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960xr-48lpd-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960xr-48lps-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960xr-48td-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c2960xr-48ts-i",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 51
+      },
+      "ports": 51
+    },
+    {
+      "slug": "cisco-ws-c3560-12pc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-ws-c3560-24ps",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c3560-48ps",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-ws-c3560c-12pc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "cisco-ws-c3560cg-8pc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-ws-c3560cg-8tc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "cisco-ws-c3560cx-12pd-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c3560cx-12tc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c3560cx-8pc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c3560cx-8pt-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c3560cx-8tc-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-ws-c3560cx-8xpd-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "cisco-ws-c3560x-24p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "cisco-ws-c3560x-48p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-ws-c3750e-24pd",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-ws-c3750e-24td",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "cisco-ws-c3750e-48pd",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-ws-c3750e-48td",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-ws-c3750g-12s-e",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c3750g-12s-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "cisco-ws-c3750v2-48ps-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "cisco-ws-c3750x-12s-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 9
+      },
+      "ports": 9
+    },
+    {
+      "slug": "cisco-catalyst-3850-48pt-12-mgig-plus-36-gig-upoe",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 48
+      },
+      "ports": 48
+    },
+    {
+      "slug": "cisco-ws-c3850-24xs-s",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 9
+      },
+      "ports": 9
+    },
+    {
+      "slug": "cisco-ws-c3850-24xs",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "cisco-catalyst-c4500x-16sfpp",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "cisco-catalyst-c4500x-32sfpp",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 19
+      },
+      "ports": 19
+    },
+    {
+      "slug": "cisco-ws-c4503-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c4506-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-catalyst-c4507r-plus-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-catalyst-c4510r-plus-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c4900m",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c6504-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c6506-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c6509-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c6509-v-e",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c6509",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-ws-c6513",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-asr-9006-dc",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "fortinet-faz-3700g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "fortinet-faz-810g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "fortinet-fg-1000d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "fortinet-fg-1000f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "fortinet-fg-1001f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 36
+      },
+      "ports": 36
+    },
+    {
+      "slug": "fortinet-fg-100d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-100e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-100ef",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-100f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 11
+      },
+      "ports": 11
+    },
+    {
+      "slug": "fortinet-fg-101e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-101f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 11
+      },
+      "ports": 11
+    },
+    {
+      "slug": "fortinet-fg-1100e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-1101e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-1200d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "fortinet-fg-120g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "fortinet-fg-121g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "fortinet-fg-140e-poe",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 42
+      },
+      "ports": 42
+    },
+    {
+      "slug": "fortinet-fg-1500d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.453,
+        "fraction": 0.619,
+        "count": 42
+      },
+      "ports": 42
+    },
+    {
+      "slug": "fortinet-fg-1500dt",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "fortinet-fg-1800f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-1801f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-200d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-200e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "fortinet-fg-200f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-200g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "fortinet-fg-201e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "fortinet-fg-201f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-201g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "fortinet-fg-2200e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "fortinet-fg-240d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 39
+      },
+      "ports": 39
+    },
+    {
+      "slug": "fortinet-fg-2600f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-3000d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 12
+      },
+      "ports": 12
+    },
+    {
+      "slug": "fortinet-fg-3000f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "fortinet-fg-3001f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 20
+      },
+      "ports": 20
+    },
+    {
+      "slug": "fortinet-fg-300c",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "fortinet-fg-300d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-300e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-301e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-30e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "fortinet-fg-30g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "fortinet-fg-310b",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "fortinet-fg-3200d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-3300e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 19
+      },
+      "ports": 19
+    },
+    {
+      "slug": "fortinet-fg-3301e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 19
+      },
+      "ports": 19
+    },
+    {
+      "slug": "fortinet-fg-3400e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 13
+      },
+      "ports": 13
+    },
+    {
+      "slug": "fortinet-fg-3600e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 23
+      },
+      "ports": 23
+    },
+    {
+      "slug": "fortinet-fg-3700d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 25
+      },
+      "ports": 25
+    },
+    {
+      "slug": "fortinet-fg-3701f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 30
+      },
+      "ports": 30
+    },
+    {
+      "slug": "fortinet-fg-400e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-400f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-401e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 22
+      },
+      "ports": 22
+    },
+    {
+      "slug": "fortinet-fg-401f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-40f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "fortinet-fg-500d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 17
+      },
+      "ports": 17
+    },
+    {
+      "slug": "fortinet-fg-500e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-501e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-50e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 7
+      },
+      "ports": 7
+    },
+    {
+      "slug": "fortinet-fg-50g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "fortinet-fg-51e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 7
+      },
+      "ports": 7
+    },
+    {
+      "slug": "fortinet-fg-600d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 17
+      },
+      "ports": 17
+    },
+    {
+      "slug": "fortinet-fg-600e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-600f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-601e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-601f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "fortinet-fg-60e-poe",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-60e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-60f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-61f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-700g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 34
+      },
+      "ports": 34
+    },
+    {
+      "slug": "fortinet-fg-701g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 34
+      },
+      "ports": 34
+    },
+    {
+      "slug": "fortinet-fg-70f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-70g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-800d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 32
+      },
+      "ports": 32
+    },
+    {
+      "slug": "fortinet-fg-80d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "fortinet-fg-80e-poe",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "fortinet-fg-80f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-81e-poe",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "fortinet-fg-81f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-900g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 34
+      },
+      "ports": 34
+    },
+    {
+      "slug": "fortinet-fg-90e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "fortinet-fg-90g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "fortinet-fg-91e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "fortinet-fg-91g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "fortinet-fpm-7620f",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fs-1024e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "fortinet-fs-1048e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 52
+      },
+      "ports": 52
+    },
+    {
+      "slug": "fortinet-fs-3032e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 31
+      },
+      "ports": 31
+    },
+    {
+      "slug": "fortinet-fs-3032g",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 34
+      },
+      "ports": 34
+    },
+    {
+      "slug": "fortinet-fs-424e-fpoe",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 13
+      },
+      "ports": 13
+    },
+    {
+      "slug": "fortinet-fs-424e-fiber",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 27
+      },
+      "ports": 27
+    },
+    {
+      "slug": "fortinet-fs-424e-poe",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 13
+      },
+      "ports": 13
+    },
+    {
+      "slug": "fortinet-fs-t1024e",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "palo-alto-networks-ion-1200-s",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "palo-alto-networks-ion-1200",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 3
+      },
+      "ports": 3
+    },
+    {
+      "slug": "palo-alto-networks-ion-3200",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "palo-alto-networks-ion-9200",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 24
+      },
+      "ports": 24
+    },
+    {
+      "slug": "palo-alto-networks-m-100",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 2
+      },
+      "ports": 2
+    },
+    {
+      "slug": "palo-alto-networks-m-500",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "palo-alto-networks-m-700",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "palo-alto-networks-pa-1410",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 25
+      },
+      "ports": 25
+    },
+    {
+      "slug": "palo-alto-networks-pa-1420",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 25
+      },
+      "ports": 25
+    },
+    {
+      "slug": "palo-alto-networks-pa-200",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "palo-alto-networks-pa-220",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "palo-alto-networks-pa-3020",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "palo-alto-networks-pa-3050",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "palo-alto-networks-pa-3060",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "palo-alto-networks-pa-3220",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 23
+      },
+      "ports": 23
+    },
+    {
+      "slug": "palo-alto-networks-pa-3250",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 23
+      },
+      "ports": 23
+    },
+    {
+      "slug": "palo-alto-networks-pa-3260",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 27
+      },
+      "ports": 27
+    },
+    {
+      "slug": "palo-alto-networks-pa-3410",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 29
+      },
+      "ports": 29
+    },
+    {
+      "slug": "palo-alto-networks-pa-3420",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 29
+      },
+      "ports": 29
+    },
+    {
+      "slug": "palo-alto-networks-pa-3430",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 31
+      },
+      "ports": 31
+    },
+    {
+      "slug": "palo-alto-networks-pa-3440",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 31
+      },
+      "ports": 31
+    },
+    {
+      "slug": "palo-alto-networks-pa-410",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "palo-alto-networks-pa-415",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "palo-alto-networks-pa-440",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "palo-alto-networks-pa-445",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "palo-alto-networks-pa-450",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "palo-alto-networks-pa-450r",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "palo-alto-networks-pa-455-5g",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 0.999,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "palo-alto-networks-pa-455",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "palo-alto-networks-pa-460",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 8
+      },
+      "ports": 8
+    },
+    {
+      "slug": "palo-alto-networks-pa-500",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "palo-alto-networks-pa-505",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "palo-alto-networks-pa-5050",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "palo-alto-networks-pa-5060",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 26
+      },
+      "ports": 26
+    },
+    {
+      "slug": "palo-alto-networks-pa-510",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "palo-alto-networks-pa-520",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 6
+      },
+      "ports": 6
+    },
+    {
+      "slug": "palo-alto-networks-pa-5220",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 29
+      },
+      "ports": 29
+    },
+    {
+      "slug": "palo-alto-networks-pa-5250",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 29
+      },
+      "ports": 29
+    },
+    {
+      "slug": "palo-alto-networks-pa-5260",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 29
+      },
+      "ports": 29
+    },
+    {
+      "slug": "palo-alto-networks-pa-5280",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 29
+      },
+      "ports": 29
+    },
+    {
+      "slug": "palo-alto-networks-pa-540",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "palo-alto-networks-pa-5410",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "palo-alto-networks-pa-5420",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "palo-alto-networks-pa-5430",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "palo-alto-networks-pa-5440",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "palo-alto-networks-pa-545-poe",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 16
+      },
+      "ports": 16
+    },
+    {
+      "slug": "palo-alto-networks-pa-550",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 15
+      },
+      "ports": 15
+    },
+    {
+      "slug": "palo-alto-networks-pa-5540",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "palo-alto-networks-pa-555-poe",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 14
+      },
+      "ports": 14
+    },
+    {
+      "slug": "palo-alto-networks-pa-560",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 23
+      },
+      "ports": 23
+    },
+    {
+      "slug": "palo-alto-networks-pa-7080",
+      "vendor": "palo-alto",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "palo-alto-networks-pa-820",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "palo-alto-networks-pa-850",
+      "vendor": "palo-alto",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-cbs250-8pp-d",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 4
+      },
+      "ports": 4
+    },
+    {
+      "slug": "cisco-cbs350-16t-2g",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 18
+      },
+      "ports": 18
+    },
+    {
+      "slug": "cisco-n9k-c93360yc-fx2",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 19
+      },
+      "ports": 19
+    },
+    {
+      "slug": "cisco-n9k-c9508",
+      "vendor": "cisco",
+      "result": "fallback",
+      "attempted": "photo",
+      "score": {
+        "median": 0.0,
+        "fraction": 0.0,
+        "count": 0
+      }
+    },
+    {
+      "slug": "cisco-sg220-26p",
+      "vendor": "cisco",
+      "result": "pass",
+      "source": "photo",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 28
+      },
+      "ports": 28
+    },
+    {
+      "slug": "fortinet-fg-50g-sfp-poe",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "fortinet-fg-50g-sfp",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 5
+      },
+      "ports": 5
+    },
+    {
+      "slug": "fortinet-fg-60d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 10
+      },
+      "ports": 10
+    },
+    {
+      "slug": "fortinet-fg-90d",
+      "vendor": "fortinet",
+      "result": "pass",
+      "source": "visio",
+      "score": {
+        "median": 1.0,
+        "fraction": 1.0,
+        "count": 15
+      },
+      "ports": 15
+    }
+  ]
+}

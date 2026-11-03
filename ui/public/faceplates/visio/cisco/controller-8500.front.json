@@ -1,0 +1,11 @@
+{
+  "name": "Controller 8500 Front",
+  "vendor": "cisco",
+  "key": "controller-8500",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/controller-8500.front.svg",
+  "width": 1828.0,
+  "height": 166.0,
+  "hotspots": [],
+  "source": "visio"
+}

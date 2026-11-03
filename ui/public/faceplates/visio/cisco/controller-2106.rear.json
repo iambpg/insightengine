@@ -1,0 +1,11 @@
+{
+  "name": "Controller 2106 Rear",
+  "vendor": "cisco",
+  "key": "controller-2106",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/controller-2106.rear.svg",
+  "width": 764.0,
+  "height": 171.0,
+  "hotspots": [],
+  "source": "visio"
+}

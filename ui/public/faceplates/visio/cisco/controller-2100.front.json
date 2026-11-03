@@ -1,0 +1,11 @@
+{
+  "name": "Controller 2100 Front",
+  "vendor": "cisco",
+  "key": "controller-2100",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/controller-2100.front.svg",
+  "width": 764.0,
+  "height": 171.0,
+  "hotspots": [],
+  "source": "visio"
+}

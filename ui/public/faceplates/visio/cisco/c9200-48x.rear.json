@@ -1,0 +1,11 @@
+{
+  "name": "C9200-48x Rear",
+  "vendor": "cisco",
+  "key": "c9200-48x",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9200-48x.rear.svg",
+  "width": 2283.0,
+  "height": 213.0,
+  "hotspots": [],
+  "source": "visio"
+}

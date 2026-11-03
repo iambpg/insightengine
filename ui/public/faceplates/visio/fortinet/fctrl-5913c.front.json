@@ -1,0 +1,61 @@
+{
+  "name": "FCTRL-5913C",
+  "vendor": "fortinet",
+  "key": "fctrl-5913c",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fctrl-5913c.front.svg",
+  "width": 782.0,
+  "height": 69.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.1969,
+      "y": 0.32338,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.25176,
+      "y": 0.30649,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "CFP Slot#1",
+      "x": 0.29577,
+      "y": 0.51595,
+      "w": 0.0979,
+      "h": 0.36
+    },
+    {
+      "prompt": "CFP Slot#2",
+      "x": 0.39949,
+      "y": 0.51595,
+      "w": 0.0979,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#1",
+      "x": 0.65003,
+      "y": 0.58351,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#2",
+      "x": 0.69439,
+      "y": 0.58351,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.76975,
+      "y": 0.30649,
+      "w": 0.02046,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

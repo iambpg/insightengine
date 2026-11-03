@@ -1,0 +1,11 @@
+{
+  "name": "MS210-48LP-HW Front",
+  "vendor": "meraki",
+  "key": "ms210-48lp-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms210-48lp-hw.front.svg",
+  "width": 2283.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

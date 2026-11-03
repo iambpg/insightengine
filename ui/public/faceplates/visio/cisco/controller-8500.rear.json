@@ -1,0 +1,11 @@
+{
+  "name": "Controller 8500 Rear",
+  "vendor": "cisco",
+  "key": "controller-8500",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/controller-8500.rear.svg",
+  "width": 1827.0,
+  "height": 166.0,
+  "hotspots": [],
+  "source": "visio"
+}

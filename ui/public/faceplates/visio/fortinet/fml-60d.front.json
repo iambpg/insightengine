@@ -1,0 +1,61 @@
+{
+  "name": "FML-60D",
+  "vendor": "fortinet",
+  "key": "fml-60d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fml-60d.front.svg",
+  "width": 497.0,
+  "height": 97.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.10277,
+      "y": 0.4142,
+      "w": 0.03219,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.37164,
+      "y": 0.32242,
+      "w": 0.03219,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.37164,
+      "y": 0.49633,
+      "w": 0.03219,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.55796,
+      "y": 0.4287,
+      "w": 0.03219,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.65702,
+      "y": 0.4287,
+      "w": 0.03219,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.75702,
+      "y": 0.4287,
+      "w": 0.03219,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.85607,
+      "y": 0.4287,
+      "w": 0.03219,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

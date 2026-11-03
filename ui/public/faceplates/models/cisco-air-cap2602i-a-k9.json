@@ -1,0 +1,1 @@
+{"slug": "cisco-air-cap2602i-a-k9", "model": "Aironet 2602I-A", "partNumber": "AIR-CAP2602I-A-K9", "manufacturer": "Cisco", "vendor": "cisco", "source": "drawn", "front": "", "rear": "", "width": 1000, "height": 180, "raster": false, "ports": [{"name": "GigabitEthernet0", "type": "1000base-t", "x": 0.08, "y": 0.38, "w": 0.04, "h": 0.28}]}

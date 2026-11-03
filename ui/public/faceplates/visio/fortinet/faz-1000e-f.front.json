@@ -1,0 +1,26 @@
+{
+  "name": "FAZ-1000E (F)",
+  "vendor": "fortinet",
+  "key": "faz-1000e-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-1000e-f.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.54055,
+      "y": 0.0,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.5759,
+      "y": 0.0,
+      "w": 0.02,
+      "h": 0.18009
+    }
+  ],
+  "source": "visio"
+}

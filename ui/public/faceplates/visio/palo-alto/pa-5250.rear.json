@@ -1,0 +1,11 @@
+{
+  "name": "PA-5250 Rear",
+  "vendor": "palo-alto",
+  "key": "pa-5250",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/pa-5250.rear.svg",
+  "width": 2284.0,
+  "height": 634.0,
+  "hotspots": [],
+  "source": "visio"
+}

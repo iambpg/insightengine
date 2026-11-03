@@ -1,0 +1,68 @@
+{
+  "name": "FWN-200B",
+  "vendor": "fortinet",
+  "key": "fwn-200b",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fwn-200b.front.svg",
+  "width": 1140.0,
+  "height": 106.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.32539,
+      "y": 0.4652,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.36074,
+      "y": 0.55409,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "HA Port#1",
+      "x": 0.41478,
+      "y": 0.4652,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.45835,
+      "y": 0.4652,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.50151,
+      "y": 0.4652,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.54467,
+      "y": 0.4652,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.58782,
+      "y": 0.4652,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.63098,
+      "y": 0.4652,
+      "w": 0.02,
+      "h": 0.35849
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,75 @@
+{
+  "name": "FCTRL-5902D",
+  "vendor": "fortinet",
+  "key": "fctrl-5902d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fctrl-5902d.front.svg",
+  "width": 782.0,
+  "height": 69.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.11207,
+      "y": 0.30649,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.16603,
+      "y": 0.30649,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "QSFP Plus Slot#1",
+      "x": 0.20108,
+      "y": 0.57676,
+      "w": 0.06067,
+      "h": 0.36
+    },
+    {
+      "prompt": "QSFP Plus Slot#2",
+      "x": 0.25564,
+      "y": 0.57676,
+      "w": 0.06067,
+      "h": 0.36
+    },
+    {
+      "prompt": "QSFP Plus Slot#3",
+      "x": 0.31019,
+      "y": 0.57676,
+      "w": 0.06067,
+      "h": 0.36
+    },
+    {
+      "prompt": "QSFP Plus Slot#4",
+      "x": 0.36475,
+      "y": 0.57676,
+      "w": 0.06067,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#1",
+      "x": 0.42521,
+      "y": 0.57676,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#2",
+      "x": 0.46957,
+      "y": 0.57676,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.51945,
+      "y": 0.39095,
+      "w": 0.02046,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

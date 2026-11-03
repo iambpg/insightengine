@@ -1,0 +1,11 @@
+{
+  "name": "ION 1200-S Rear",
+  "vendor": "palo-alto",
+  "key": "ion-1200-s",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/ion-1200-s.rear.svg",
+  "width": 1563.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

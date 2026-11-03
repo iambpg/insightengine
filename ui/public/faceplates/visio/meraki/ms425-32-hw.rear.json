@@ -1,0 +1,11 @@
+{
+  "name": "MS425-32-HW Rear",
+  "vendor": "meraki",
+  "key": "ms425-32-hw",
+  "view": "rear",
+  "file": "/faceplates/visio/meraki/ms425-32-hw.rear.svg",
+  "width": 2283.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

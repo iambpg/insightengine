@@ -1,0 +1,11 @@
+{
+  "name": "PA-3260 Rear",
+  "vendor": "palo-alto",
+  "key": "pa-3260",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/pa-3260.rear.svg",
+  "width": 2284.0,
+  "height": 424.0,
+  "hotspots": [],
+  "source": "visio"
+}

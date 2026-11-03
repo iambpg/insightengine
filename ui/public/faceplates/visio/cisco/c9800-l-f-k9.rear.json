@@ -1,0 +1,11 @@
+{
+  "name": "C9800-L-F-K9 Rear",
+  "vendor": "cisco",
+  "key": "c9800-l-f-k9",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9800-l-f-k9.rear.svg",
+  "width": 1023.0,
+  "height": 191.0,
+  "hotspots": [],
+  "source": "visio"
+}

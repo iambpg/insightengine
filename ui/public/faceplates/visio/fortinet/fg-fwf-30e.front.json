@@ -1,0 +1,82 @@
+{
+  "name": "FG/FWF-30E",
+  "vendor": "fortinet",
+  "key": "fg-fwf-30e",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-fwf-30e.front.svg",
+  "width": 511.0,
+  "height": 90.0,
+  "hotspots": [
+    {
+      "prompt": "F Connector#1",
+      "x": 0.04403,
+      "y": 0.1257,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "Grounding Screw#1",
+      "x": 0.09913,
+      "y": 0.14642,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Connector#1",
+      "x": 0.15101,
+      "y": 0.4314,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.22952,
+      "y": 0.34332,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.53715,
+      "y": 0.40549,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Internal Port#4",
+      "x": 0.60602,
+      "y": 0.40549,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Internal Port#3",
+      "x": 0.67489,
+      "y": 0.40549,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Internal Port#2",
+      "x": 0.74376,
+      "y": 0.40549,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Internal Port#1",
+      "x": 0.81263,
+      "y": 0.40549,
+      "w": 0.03131,
+      "h": 0.36
+    },
+    {
+      "prompt": "F Connector#2",
+      "x": 0.92466,
+      "y": 0.1257,
+      "w": 0.03131,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

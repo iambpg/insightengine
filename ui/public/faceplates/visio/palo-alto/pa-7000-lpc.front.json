@@ -1,0 +1,11 @@
+{
+  "name": "PA-7000-LPC",
+  "vendor": "palo-alto",
+  "key": "pa-7000-lpc",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-7000-lpc.front.svg",
+  "width": 1638.0,
+  "height": 173.0,
+  "hotspots": [],
+  "source": "visio"
+}

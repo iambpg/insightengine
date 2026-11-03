@@ -1,0 +1,11 @@
+{
+  "name": "C1161X-8P Front",
+  "vendor": "cisco",
+  "key": "c1161x-8p",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c1161x-8p.front.svg",
+  "width": 1299.0,
+  "height": 215.0,
+  "hotspots": [],
+  "source": "visio"
+}

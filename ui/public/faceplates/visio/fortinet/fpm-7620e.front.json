@@ -1,0 +1,11 @@
+{
+  "name": "FPM-7620E",
+  "vendor": "fortinet",
+  "key": "fpm-7620e",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fpm-7620e.front.svg",
+  "width": 1035.0,
+  "height": 112.0,
+  "hotspots": [],
+  "source": "visio"
+}

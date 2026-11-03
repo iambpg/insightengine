@@ -1,0 +1,369 @@
+{
+  "name": "FSW-148F-FPOE",
+  "vendor": "fortinet",
+  "key": "fsw-148f-fpoe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-148f-fpoe.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.05987,
+      "y": 0.27495,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.06008,
+      "y": 0.54297,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#1",
+      "x": 0.12255,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#2",
+      "x": 0.12255,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#3",
+      "x": 0.15379,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#4",
+      "x": 0.15379,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#5",
+      "x": 0.18503,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#6",
+      "x": 0.18503,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#7",
+      "x": 0.21626,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#8",
+      "x": 0.21626,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#9",
+      "x": 0.2475,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#10",
+      "x": 0.2475,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#11",
+      "x": 0.27874,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#12",
+      "x": 0.27874,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#13",
+      "x": 0.31162,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#14",
+      "x": 0.31162,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#15",
+      "x": 0.34286,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#16",
+      "x": 0.34286,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#17",
+      "x": 0.37409,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#18",
+      "x": 0.37409,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#19",
+      "x": 0.40533,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#20",
+      "x": 0.40533,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#21",
+      "x": 0.43657,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#22",
+      "x": 0.43657,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#23",
+      "x": 0.46781,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#24",
+      "x": 0.46781,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#25",
+      "x": 0.50562,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#26",
+      "x": 0.50562,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#27",
+      "x": 0.53686,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#28",
+      "x": 0.53686,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#29",
+      "x": 0.56809,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#30",
+      "x": 0.56809,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#31",
+      "x": 0.59933,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#32",
+      "x": 0.59933,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#33",
+      "x": 0.63057,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#34",
+      "x": 0.63057,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#35",
+      "x": 0.6618,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#36",
+      "x": 0.6618,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#37",
+      "x": 0.69469,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#38",
+      "x": 0.69469,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#39",
+      "x": 0.72592,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#40",
+      "x": 0.72592,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#41",
+      "x": 0.75716,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#42",
+      "x": 0.75716,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#43",
+      "x": 0.7884,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet PoE Port#44",
+      "x": 0.7884,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "FortiLink Port#45",
+      "x": 0.81963,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "FortiLink Port#46",
+      "x": 0.81963,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "FortiLink Port#47",
+      "x": 0.85087,
+      "y": 0.14432,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "FortiLink Port#48",
+      "x": 0.85087,
+      "y": 0.49568,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.89621,
+      "y": 0.31982,
+      "w": 0.03474,
+      "h": 0.36486
+    }
+  ],
+  "source": "visio"
+}

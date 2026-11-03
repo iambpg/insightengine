@@ -1,0 +1,11 @@
+{
+  "name": "MS350-24X-HW Front",
+  "vendor": "meraki",
+  "key": "ms350-24x-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms350-24x-hw.front.svg",
+  "width": 2284.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

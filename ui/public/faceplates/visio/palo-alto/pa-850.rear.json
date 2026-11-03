@@ -1,0 +1,11 @@
+{
+  "name": "PA-850 Rear",
+  "vendor": "palo-alto",
+  "key": "pa-850",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/pa-850.rear.svg",
+  "width": 2284.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

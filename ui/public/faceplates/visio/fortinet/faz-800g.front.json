@@ -1,0 +1,82 @@
+{
+  "name": "FAZ-800G",
+  "vendor": "fortinet",
+  "key": "faz-800g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-800g.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "LC#1",
+      "x": 0.08546,
+      "y": 0.36036,
+      "w": 0.02,
+      "h": 0.38739
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.12872,
+      "y": 0.18486,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.12872,
+      "y": 0.56324,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.16242,
+      "y": 0.18486,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.16242,
+      "y": 0.56324,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20702,
+      "y": 0.11279,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.20722,
+      "y": 0.38532,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.20722,
+      "y": 0.59703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PS Slot#1",
+      "x": 0.71928,
+      "y": 0.77495,
+      "w": 0.12,
+      "h": 0.36
+    },
+    {
+      "prompt": "Power Plug#1",
+      "x": 0.9004,
+      "y": 0.36279,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

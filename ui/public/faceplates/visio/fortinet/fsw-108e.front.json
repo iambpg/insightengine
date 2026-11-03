@@ -1,0 +1,82 @@
+{
+  "name": "FSW-108E",
+  "vendor": "fortinet",
+  "key": "fsw-108e",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-108e.front.svg",
+  "width": 522.0,
+  "height": 91.0,
+  "hotspots": [
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.16719,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.23714,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.3062,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.37526,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.45059,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.52055,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#7",
+      "x": 0.58961,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet/PoE PD Port#8",
+      "x": 0.65867,
+      "y": 0.41585,
+      "w": 0.03065,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#9",
+      "x": 0.76704,
+      "y": 0.59202,
+      "w": 0.0722,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#10",
+      "x": 0.88274,
+      "y": 0.59202,
+      "w": 0.0722,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

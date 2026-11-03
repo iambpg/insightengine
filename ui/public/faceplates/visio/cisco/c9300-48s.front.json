@@ -1,0 +1,11 @@
+{
+  "name": "C9300-48S Front",
+  "vendor": "cisco",
+  "key": "c9300-48s",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9300-48s.front.svg",
+  "width": 2284.0,
+  "height": 219.0,
+  "hotspots": [],
+  "source": "visio"
+}

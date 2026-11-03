@@ -1,0 +1,11 @@
+{
+  "name": "FAZ-1000F (F)",
+  "vendor": "fortinet",
+  "key": "faz-1000f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-1000f-f.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "C9115AXI Side",
+  "vendor": "cisco",
+  "key": "c9115axi-side",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9115axi-side.front.svg",
+  "width": 970.0,
+  "height": 230.0,
+  "hotspots": [],
+  "source": "visio"
+}

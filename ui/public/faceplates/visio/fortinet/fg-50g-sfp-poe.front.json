@@ -1,0 +1,75 @@
+{
+  "name": "FG-50G-SFP-POE",
+  "vendor": "fortinet",
+  "key": "fg-50g-sfp-poe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-50g-sfp-poe.front.svg",
+  "width": 512.0,
+  "height": 97.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.10329,
+      "y": 0.44379,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.17721,
+      "y": 0.44136,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.31771,
+      "y": 0.49233,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN PoE Plus Port#1",
+      "x": 0.43066,
+      "y": 0.45107,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN PoE Plus Port#2",
+      "x": 0.49953,
+      "y": 0.45107,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE FortiLink PoE Plus A Port#1",
+      "x": 0.56656,
+      "y": 0.45107,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE Ethernet PoE Plus Port#2",
+      "x": 0.63359,
+      "y": 0.45107,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE Ethernet PoE Plus Port#1",
+      "x": 0.70155,
+      "y": 0.45107,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Connector 54V#1",
+      "x": 0.87464,
+      "y": 0.38796,
+      "w": 0.03125,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

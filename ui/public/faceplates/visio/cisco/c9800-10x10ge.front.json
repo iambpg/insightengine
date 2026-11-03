@@ -1,0 +1,11 @@
+{
+  "name": "C9800-10X10GE",
+  "vendor": "cisco",
+  "key": "c9800-10x10ge",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9800-10x10ge.front.svg",
+  "width": 784.0,
+  "height": 177.0,
+  "hotspots": [],
+  "source": "visio"
+}

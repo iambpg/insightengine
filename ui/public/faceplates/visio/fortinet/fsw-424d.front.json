@@ -1,0 +1,201 @@
+{
+  "name": "FSW-424D",
+  "vendor": "fortinet",
+  "key": "fsw-424d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-424d.front.svg",
+  "width": 1141.0,
+  "height": 102.0,
+  "hotspots": [
+    {
+      "prompt": "Management Port#1",
+      "x": 0.06727,
+      "y": 0.45014,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.393,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.393,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.42711,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.42711,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.46123,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.46123,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#7",
+      "x": 0.49534,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#8",
+      "x": 0.49534,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#9",
+      "x": 0.52946,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#10",
+      "x": 0.52946,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#11",
+      "x": 0.56152,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#12",
+      "x": 0.56152,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#13",
+      "x": 0.61495,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#14",
+      "x": 0.61495,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#15",
+      "x": 0.64906,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#16",
+      "x": 0.64906,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#17",
+      "x": 0.68318,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#18",
+      "x": 0.68318,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#19",
+      "x": 0.71729,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#20",
+      "x": 0.71729,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#21",
+      "x": 0.75141,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#22",
+      "x": 0.75141,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#23",
+      "x": 0.78346,
+      "y": 0.14877,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#24",
+      "x": 0.78346,
+      "y": 0.4958,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#25",
+      "x": 0.84104,
+      "y": 0.60539,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#26",
+      "x": 0.90228,
+      "y": 0.60539,
+      "w": 0.03309,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

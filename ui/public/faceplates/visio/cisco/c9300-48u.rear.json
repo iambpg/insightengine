@@ -1,0 +1,11 @@
+{
+  "name": "C9300-48U Rear",
+  "vendor": "cisco",
+  "key": "c9300-48u",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9300-48u.rear.svg",
+  "width": 2284.0,
+  "height": 216.0,
+  "hotspots": [],
+  "source": "visio"
+}

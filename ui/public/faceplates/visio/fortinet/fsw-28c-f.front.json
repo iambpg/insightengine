@@ -1,0 +1,26 @@
+{
+  "name": "FSW-28C (F)",
+  "vendor": "fortinet",
+  "key": "fsw-28c-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-28c-f.front.svg",
+  "width": 507.0,
+  "height": 84.0,
+  "hotspots": [
+    {
+      "prompt": "USB MGMT#1",
+      "x": 0.10287,
+      "y": 0.30611,
+      "w": 0.03156,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.18044,
+      "y": 0.23944,
+      "w": 0.03156,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,201 @@
+{
+  "name": "FSW-124B-POE (F)",
+  "vendor": "fortinet",
+  "key": "fsw-124b-poe-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-124b-poe-f.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "PoE Ethernet Port#1",
+      "x": 0.32539,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#2",
+      "x": 0.32539,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#3",
+      "x": 0.35539,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#4",
+      "x": 0.35539,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#5",
+      "x": 0.3854,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#6",
+      "x": 0.3854,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#7",
+      "x": 0.4154,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#8",
+      "x": 0.4154,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#9",
+      "x": 0.4454,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#10",
+      "x": 0.4454,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#11",
+      "x": 0.47541,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Ethernet Port#12",
+      "x": 0.47541,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#13",
+      "x": 0.51281,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#14",
+      "x": 0.51281,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#15",
+      "x": 0.54282,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#16",
+      "x": 0.54282,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#17",
+      "x": 0.57282,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#18",
+      "x": 0.57282,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#19",
+      "x": 0.60282,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#20",
+      "x": 0.60282,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#21",
+      "x": 0.63283,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#22",
+      "x": 0.63283,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#23",
+      "x": 0.66283,
+      "y": 0.13081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#24",
+      "x": 0.66283,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#25",
+      "x": 0.70434,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#26",
+      "x": 0.81491,
+      "y": 0.50919,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.76491,
+      "y": 0.52721,
+      "w": 0.12,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

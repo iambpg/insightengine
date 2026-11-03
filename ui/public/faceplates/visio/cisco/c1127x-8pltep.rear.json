@@ -1,0 +1,11 @@
+{
+  "name": "C1127X-8PLTEP Rear",
+  "vendor": "cisco",
+  "key": "c1127x-8pltep",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c1127x-8pltep.rear.svg",
+  "width": 1527.0,
+  "height": 215.0,
+  "hotspots": [],
+  "source": "visio"
+}

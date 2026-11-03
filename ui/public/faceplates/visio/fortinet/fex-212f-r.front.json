@@ -1,0 +1,82 @@
+{
+  "name": "FEX-212F (R)",
+  "vendor": "fortinet",
+  "key": "fex-212f-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fex-212f-r.front.svg",
+  "width": 408.0,
+  "height": 88.0,
+  "hotspots": [
+    {
+      "prompt": "Antenna Connector#2",
+      "x": 0.0,
+      "y": 0.28774,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20306,
+      "y": 0.23129,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.28361,
+      "y": 0.23667,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.36302,
+      "y": 0.23129,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN Port#1",
+      "x": 0.44127,
+      "y": 0.23129,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN Port#2",
+      "x": 0.51837,
+      "y": 0.23129,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN Port#3",
+      "x": 0.59662,
+      "y": 0.23129,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN Port#4",
+      "x": 0.67372,
+      "y": 0.23129,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "VDC#1",
+      "x": 0.77383,
+      "y": 0.25817,
+      "w": 0.03922,
+      "h": 0.36
+    },
+    {
+      "prompt": "Antenna Connector#1",
+      "x": 0.98097,
+      "y": 0.28774,
+      "w": 0.03922,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "C8300-2N2S-4T2X Front",
+  "vendor": "cisco",
+  "key": "c8300-2n2s-4t2x",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c8300-2n2s-4t2x.front.svg",
+  "width": 2283.0,
+  "height": 419.0,
+  "hotspots": [],
+  "source": "visio"
+}

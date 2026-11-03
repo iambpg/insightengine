@@ -1,0 +1,82 @@
+{
+  "name": "WLC-1000D",
+  "vendor": "fortinet",
+  "key": "wlc-1000d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/wlc-1000d.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [
+    {
+      "prompt": "IPMI Port#1",
+      "x": 0.1094,
+      "y": 0.73846,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.14721,
+      "y": 0.73846,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.18503,
+      "y": 0.73846,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.22263,
+      "y": 0.73846,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.25284,
+      "y": 0.72398,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.27586,
+      "y": 0.72398,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "SFP Plus Slot#1",
+      "x": 0.41235,
+      "y": 0.76964,
+      "w": 0.03309,
+      "h": 0.18009
+    },
+    {
+      "prompt": "SFP Plus Slot#2",
+      "x": 0.50524,
+      "y": 0.76964,
+      "w": 0.03309,
+      "h": 0.18009
+    },
+    {
+      "prompt": "SFP Plus Slot#3",
+      "x": 0.59443,
+      "y": 0.76964,
+      "w": 0.03309,
+      "h": 0.18009
+    },
+    {
+      "prompt": "SFP Plus Slot#4",
+      "x": 0.68732,
+      "y": 0.76964,
+      "w": 0.03309,
+      "h": 0.18009
+    }
+  ],
+  "source": "visio"
+}

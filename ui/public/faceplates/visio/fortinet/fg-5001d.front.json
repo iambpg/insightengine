@@ -1,0 +1,68 @@
+{
+  "name": "FG-5001D",
+  "vendor": "fortinet",
+  "key": "fg-5001d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-5001d.front.svg",
+  "width": 782.0,
+  "height": 69.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.06381,
+      "y": 0.38419,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.10128,
+      "y": 0.3673,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.15074,
+      "y": 0.36054,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.1969,
+      "y": 0.36054,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "QSFP Slot#1",
+      "x": 0.23106,
+      "y": 0.62405,
+      "w": 0.06067,
+      "h": 0.36
+    },
+    {
+      "prompt": "QSFP Slot#2",
+      "x": 0.28981,
+      "y": 0.62405,
+      "w": 0.06067,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#3",
+      "x": 0.35207,
+      "y": 0.62405,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#4",
+      "x": 0.39643,
+      "y": 0.62405,
+      "w": 0.04826,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

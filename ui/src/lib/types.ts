@@ -77,6 +77,9 @@ export interface FaceplateDevice {
   moduleSlotFilled?: boolean;
   model?: string;
   modelName?: string;
+  partNumber?: string;
+  slug?: string;
+  manufacturer?: string;
 }
 
 export interface DeviceRow {

@@ -1,0 +1,11 @@
+{
+  "name": "FAZ-800F / FMG-300F (F)",
+  "vendor": "fortinet",
+  "key": "faz-800f-fmg-300f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-800f-fmg-300f-f.front.svg",
+  "width": 1140.0,
+  "height": 103.0,
+  "hotspots": [],
+  "source": "visio"
+}

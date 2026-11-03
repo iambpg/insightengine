@@ -1,0 +1,11 @@
+{
+  "name": "PA-7000- 20G-NPC",
+  "vendor": "palo-alto",
+  "key": "pa-7000-20g-npc",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-7000-20g-npc.front.svg",
+  "width": 1638.0,
+  "height": 169.0,
+  "hotspots": [],
+  "source": "visio"
+}
