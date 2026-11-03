@@ -12,11 +12,18 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import yaml
+import cv2
+import numpy as np
 from PIL import Image
+
+from cutouts import alignment_score, choose_hotspots
 
 ROOT = Path(__file__).resolve().parents[2]
 LIBRARY = ROOT / "netbox" / "device-types" / "library" / "device-types"
@@ -208,6 +215,13 @@ def rasterize(svg: Path, width: int) -> Image.Image | None:
 def shutil_which(name: str) -> str | None:
     from shutil import which
     return which(name)
+
+
+def rasterize_bgr(svg: Path, width: int):
+    image = rasterize(svg, width)
+    if image is None:
+        return None
+    return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
 
 def _luminance(pixel) -> float:
@@ -504,8 +518,9 @@ def build(limit_slugs: set[str] | None = None) -> dict:
     vendor_root = PUBLIC / "vendor"
     models_dir = PUBLIC / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
-    counts = defaultdict(lambda: {"visio": 0, "photo": 0, "vendor": 0, "drawn": 0, "devices": 0})
+    counts = defaultdict(lambda: {"visio": 0, "photo": 0, "vendor": 0, "drawn": 0, "devices": 0, "aligned": 0, "fallback": 0})
     entries = []
+    report = []
     for device in devices:
         if limit_slugs and device["slug"] not in limit_slugs:
             continue
@@ -518,47 +533,68 @@ def build(limit_slugs: set[str] | None = None) -> dict:
         source = "drawn"
         front_url = rear_url = ""
         width = 1000
-        height = 160
+        height = 180
         raster = False
         ports: list[dict] = []
+        score = {"median": 0, "fraction": 0, "count": 0}
+        image_bgr = None
+        prompted = None
         if front:
             source = "visio"
             front_url = front["file"]
-            width = front["width"]
-            height = front["height"]
+            width = float(front["width"])
+            height = float(front["height"])
             if front.get("hotspots"):
-                ports = assign_prompts(front["hotspots"], device["interfaces"])
-            else:
-                image = rasterize(ROOT / "ui" / "public" / front["file"].lstrip("/"), min(1800, int(front["width"])))
-                boxes = detect_openings(image, per_row_for(device["interfaces"])) if image is not None else []
-                ports = assign_detected(boxes, device["interfaces"])
+                prompted = assign_prompts(front["hotspots"], device["interfaces"])
+            svg_path = ROOT / "ui" / "public" / front["file"].lstrip("/")
+            image_bgr = rasterize_bgr(svg_path, max(1, int(round(width))))
             if rear:
                 rear_url = rear["file"]
         else:
             photo = library_root / device["vendor"] / f"{device['slug']}.front.png"
             vendor_photo = vendor_root / vendor / f"{device['slug']}.front.png"
-            if photo.exists():
-                source = "photo"
-                with Image.open(photo) as image:
+            chosen_photo = photo if photo.exists() else vendor_photo if vendor_photo.exists() else None
+            if chosen_photo is not None:
+                source = "photo" if chosen_photo == photo else "vendor"
+                with Image.open(chosen_photo) as image:
                     width, height = image.size
-                front_url = public_url(photo)
+                front_url = public_url(chosen_photo)
                 raster = True
-                boxes = detect_openings(Image.open(photo).convert("RGB"), per_row_for(device["interfaces"]))
-                ports = assign_detected(boxes, device["interfaces"])
-            elif vendor_photo.exists():
-                source = "vendor"
-                with Image.open(vendor_photo) as image:
-                    width, height = image.size
-                front_url = public_url(vendor_photo)
-                raster = True
-                boxes = detect_openings(Image.open(vendor_photo).convert("RGB"), per_row_for(device["interfaces"]))
-                ports = assign_detected(boxes, device["interfaces"])
-        override = ROOT / "scripts" / "faceplates" / "overrides" / f"{device['slug']}.json"
-        if override.exists():
-            ports = json.loads(override.read_text(encoding="utf-8")).get("ports") or ports
-        if not ports and source == "drawn":
+                image_bgr = cv2.cvtColor(np.array(Image.open(chosen_photo).convert("RGB")), cv2.COLOR_RGB2BGR)
+        if image_bgr is not None:
+            # Detection ran in the raster's pixel space. Fractions match the viewBox
+            # when the raster width is the SVG width, so hotspots share that space.
+            aligned, score = choose_hotspots(image_bgr, device["interfaces"], prompted)
+            if aligned:
+                ports = aligned
+                bucket["aligned"] += 1
+            else:
+                report.append({
+                    "slug": device["slug"],
+                    "vendor": vendor,
+                    "result": "fallback",
+                    "attempted": source,
+                    "score": score,
+                })
+                source = "drawn"
+                front_url = ""
+                rear_url = ""
+                width, height = 1000, 180
+                raster = False
+                bucket["fallback"] += 1
+                ports = drawn_ports(device["interfaces"])
+        if source == "drawn" and not ports:
             ports = drawn_ports(device["interfaces"])
             width, height = 1000, 180
+        if source != "drawn":
+            report.append({
+                "slug": device["slug"],
+                "vendor": vendor,
+                "result": "pass",
+                "source": source,
+                "score": score,
+                "ports": len(ports),
+            })
         bucket[source] += 1
         model = {
             "slug": device["slug"],
@@ -585,8 +621,18 @@ def build(limit_slugs: set[str] | None = None) -> dict:
         })
     index = {"entries": entries}
     (PUBLIC / "index.json").write_text(json.dumps(index), encoding="utf-8")
-    coverage = {"byVendor": counts, "devices": len(entries)}
+    passed = [row for row in report if row["result"] == "pass"]
+    failed = [row for row in report if row["result"] == "fallback"]
+    summary = defaultdict(lambda: {"pass": 0, "fallback": 0})
+    for row in report:
+        summary[row["vendor"]][row["result"] if row["result"] == "pass" else "fallback"] += 1
+    coverage = {
+        "byVendor": counts,
+        "devices": len(entries),
+        "alignment": {"pass": len(passed), "fallback": len(failed), "byVendor": summary},
+    }
     (PUBLIC / "coverage.json").write_text(json.dumps(coverage, indent=2), encoding="utf-8")
+    (PUBLIC / "alignment-report.json").write_text(json.dumps({"summary": coverage["alignment"], "models": report}, indent=2), encoding="utf-8")
     return coverage
 
 

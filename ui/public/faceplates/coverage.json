@@ -2,32 +2,62 @@
   "byVendor": {
     "cisco": {
       "visio": 119,
-      "photo": 256,
+      "photo": 199,
       "vendor": 0,
-      "drawn": 570,
-      "devices": 945
+      "drawn": 627,
+      "devices": 945,
+      "aligned": 318,
+      "fallback": 57
     },
     "meraki": {
       "visio": 17,
       "photo": 10,
       "vendor": 0,
       "drawn": 59,
-      "devices": 86
+      "devices": 86,
+      "aligned": 27,
+      "fallback": 0
     },
     "fortinet": {
       "visio": 86,
       "photo": 10,
       "vendor": 0,
       "drawn": 81,
-      "devices": 177
+      "devices": 177,
+      "aligned": 96,
+      "fallback": 0
     },
     "palo-alto": {
       "visio": 52,
-      "photo": 1,
+      "photo": 0,
       "vendor": 0,
-      "drawn": 27,
-      "devices": 80
+      "drawn": 28,
+      "devices": 80,
+      "aligned": 52,
+      "fallback": 1
     }
   },
-  "devices": 1288
+  "devices": 1288,
+  "alignment": {
+    "pass": 493,
+    "fallback": 58,
+    "byVendor": {
+      "cisco": {
+        "pass": 318,
+        "fallback": 57
+      },
+      "meraki": {
+        "pass": 27,
+        "fallback": 0
+      },
+      "fortinet": {
+        "pass": 96,
+        "fallback": 0
+      },
+      "palo-alto": {
+        "pass": 52,
+        "fallback": 1
+      }
+    }
+  }
 }

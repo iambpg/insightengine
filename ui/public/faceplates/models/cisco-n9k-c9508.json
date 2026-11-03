@@ -1,1 +1,1 @@
-{"slug": "cisco-n9k-c9508", "model": "Nexus 9508", "partNumber": "N9K-C9508", "manufacturer": "Cisco", "vendor": "cisco", "source": "photo", "front": "/faceplates/library/cisco/cisco-n9k-c9508.front.png", "rear": "", "width": 1826, "height": 2192, "raster": true, "ports": []}
+{"slug": "cisco-n9k-c9508", "model": "Nexus 9508", "partNumber": "N9K-C9508", "manufacturer": "Cisco", "vendor": "cisco", "source": "drawn", "front": "", "rear": "", "width": 1000, "height": 180, "raster": false, "ports": []}

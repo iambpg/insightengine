@@ -100,57 +100,56 @@ function Hotspot({
   );
 }
 
-function Artwork({ model, zoomed }: { model: FaceplateModel; zoomed: boolean }) {
-  const native = Math.max(1, model.width);
-  if (!model.front) {
-    return (
-      <svg viewBox="0 0 1000 180" className="block h-auto w-full" role="img" aria-hidden="true">
-        <rect x="8" y="16" width="984" height="148" rx="10" fill="#2c333c" stroke="#6d7886" />
-        <rect x="8" y="16" width="984" height="18" rx="8" fill="#3a424c" />
-        <text x="28" y="78" fill="#d5dde6" fontSize="22" fontFamily="var(--font-sans)">{model.model}</text>
-        <text x="28" y="108" fill="#8a97ab" fontSize="14" fontFamily="var(--font-mono)">{model.partNumber || model.manufacturer}</text>
-      </svg>
-    );
-  }
-  const style: React.CSSProperties = model.raster
-    ? { width: '100%', maxWidth: native, height: 'auto' }
-    : { width: '100%', maxWidth: zoomed ? native : 1180, height: 'auto' };
-  return (
-    <img
-      src={model.front}
-      alt=""
-      width={model.width}
-      height={model.height}
-      draggable={false}
-      style={style}
-      className="block"
-    />
-  );
-}
-
-export default function RealisticFaceplate({ device, model, selectedPortId = null, onHover, onSelect }: Props) {
-  const [zoom, setZoom] = useState(false);
-  const ports = livePorts(device);
+function Panel({
+  model,
+  ports,
+  selectedPortId,
+  onHover,
+  onSelect,
+  zoomed,
+  onZoom,
+}: {
+  model: FaceplateModel;
+  ports: PortInfo[];
+  selectedPortId: string | null;
+  onHover: Props['onHover'];
+  onSelect: Props['onSelect'];
+  zoomed: boolean;
+  onZoom: () => void;
+}) {
+  // One SVG holds the artwork and the hotspots. Both use the image's native
+  // viewBox, and preserveAspectRatio is none, so a CSS resize cannot shift
+  // the highlights relative to the picture. Raster photos are capped at their
+  // pixel size; Visio drawings are vectors and may scale down to fit.
   const width = model.width || 1000;
   const height = model.height || 180;
-  const frameStyle: React.CSSProperties = model.raster
-    ? { width: '100%', maxWidth: width }
-    : { width: '100%', maxWidth: zoom ? width : 1180 };
-
-  const overlay = (key: string) => (
+  // Photos stop at their pixel width. Visio art is a vector, so it can grow to
+  // the row width; the viewBox keeps the hotspots on the same points.
+  const maxWidth = model.raster ? width : zoomed ? 1600 : 1180;
+  return (
     <svg
-      key={key}
       viewBox={`0 0 ${width} ${height}`}
-      className="absolute inset-0 h-full w-full"
+      preserveAspectRatio="none"
       role="presentation"
-      onClick={() => setZoom(true)}
+      data-testid="realistic-faceplate"
+      data-faceplate-source={model.source}
+      onClick={onZoom}
+      style={{ width: '100%', maxWidth, height: 'auto', display: 'block', aspectRatio: `${width} / ${height}` }}
     >
+      {model.front ? (
+        <image href={model.front} x={0} y={0} width={width} height={height} preserveAspectRatio="none" />
+      ) : (
+        <>
+          <rect x={8} y={16} width={width - 16} height={height - 32} rx={10} fill="#2c333c" stroke="#6d7886" />
+          <text x={28} y={height * 0.45} fill="#d5dde6" fontSize={22} fontFamily="var(--font-sans)">{model.model}</text>
+        </>
+      )}
       {model.ports.map((box) => {
         const port = portForBox(box, ports);
         if (!port) return null;
         return (
           <Hotspot
-            key={`${key}-${box.name}`}
+            key={box.name}
             box={box}
             port={port}
             width={width}
@@ -163,13 +162,12 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
       })}
     </svg>
   );
+}
 
-  const frame = (
-    <div className="relative mx-auto" style={frameStyle} data-testid="realistic-faceplate" data-faceplate-source={model.source}>
-      <Artwork model={model} zoomed={zoom} />
-      {overlay('inline')}
-    </div>
-  );
+export default function RealisticFaceplate({ device, model, selectedPortId = null, onHover, onSelect }: Props) {
+  const [zoom, setZoom] = useState(false);
+  const ports = livePorts(device);
+  const width = model.width || 1000;
 
   return (
     <div>
@@ -186,15 +184,14 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
           Zoom
         </button>
       </div>
-      {frame}
+      <div className="mx-auto" style={{ maxWidth: model.raster ? width : 1180 }}>
+        <Panel model={model} ports={ports} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} zoomed={false} onZoom={() => setZoom(true)} />
+      </div>
       {zoom && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" role="dialog" aria-label={`${model.model} faceplate`}>
           <button type="button" className="absolute inset-0 cursor-zoom-out" aria-label="Close zoom" onClick={() => setZoom(false)} />
           <div className="relative z-10 max-h-full max-w-full overflow-auto rounded-md bg-background p-3">
-            <div className="relative" style={{ width: model.raster ? width : Math.min(width, 1600) }}>
-              <Artwork model={{ ...model, raster: model.raster }} zoomed />
-              {overlay('zoom')}
-            </div>
+            <Panel model={model} ports={ports} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} zoomed onZoom={() => undefined} />
           </div>
         </div>
       )}

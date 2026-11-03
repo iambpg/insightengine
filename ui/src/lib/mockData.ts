@@ -365,6 +365,18 @@ const REALISTIC_SAMPLES: Record<string, { label: string; build: () => FaceplateD
       ],
     }),
   },
+  'c9800-40': {
+    label: 'Catalyst 9800-40',
+    build: () => realisticSample({
+      slug: 'cisco-c9800-40-k9',
+      model: 'Catalyst 9800-40-K9',
+      partNumber: 'C9800-40-K9',
+      manufacturer: 'Cisco',
+      role: 'Wireless controller',
+      form: 'wireless-controller',
+      ports: sequence(4, (n) => ({ name: `Te0/0/${n - 1}`, type: 'RJ45', speed: '10 Gbps' })),
+    }),
+  },
   'ms120-48fp': {
     label: 'Meraki MS120-48FP',
     build: () => realisticSample({
