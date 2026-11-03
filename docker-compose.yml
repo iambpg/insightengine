@@ -893,6 +893,8 @@ services:
       IE_GNMI_USER: ${IE_GNMI_USER:-}
       IE_GNMI_PASSWORD: ${IE_GNMI_PASSWORD:-}
       IE_MDT_PORT: ${IE_MDT_PORT:-57500}
+      # render_wlc.py imports catalog from the image and from the checkout mount.
+      PYTHONPATH: /usr/local/bin:/etc/telegraf
     ports:
       # gRPC dial-out for 9800 and cEdge. gNMI dial-in uses the device port 9339, not this port.
       # Host 57500 is the only Telegraf publish. UI HTTPS is 57400 when 443 is taken.
@@ -900,6 +902,9 @@ services:
       - "${HOST_BIND:-0.0.0.0}:${PORT_MDT:-57500}:${IE_MDT_PORT:-57500}"
     volumes:
       - ./config/telegraf/wlc:/etc/telegraf:ro
+      # Same module the image copies to /usr/local/bin. A git pull is visible
+      # here even when the running image was built from an older catalog.py.
+      - ./config/telegraf/wlc/catalog.py:/usr/local/bin/catalog.py:ro
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
     secrets:
       - source: netbox_token_prometheus

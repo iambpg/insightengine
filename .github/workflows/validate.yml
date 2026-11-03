@@ -20,6 +20,8 @@ jobs:
           python3 netbox/regions/test_regions.py
           python3 netbox/component-backfill/test_backfill.py
           bash scripts/smoke.sh --self-test
+      - name: Telegraf 1.38.3 Starlark dialect
+        run: python3 config/telegraf/wlc/test_starlark.py
       - name: shellcheck
         run: |
           sudo apt-get update

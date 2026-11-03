@@ -135,6 +135,14 @@ if have telegraf; then
     fi
   done
 else skip "telegraf"; fi
+# Pinned Telegraf 1.38.3 binary (downloaded on first run). Catches Starlark
+# dialect errors in normalize.star that --test on host/api configs cannot see.
+if python3 config/telegraf/wlc/test_starlark.py >"$TMP/star.out" 2>&1; then
+  ok "telegraf 1.38.3 starlark dialect"
+else
+  bad "telegraf 1.38.3 starlark dialect"
+  tail -n 40 "$TMP/star.out" | sed 's/^/      /'
+fi
 # --- shell scripts
 if have shellcheck; then
   if shellcheck -x install.sh scripts/*.sh config/oxidized/*.sh trapd/*.sh >"$TMP/sc.out" 2>&1; then ok "shellcheck"; else bad "shellcheck"; sed 's/^/      /' "$TMP/sc.out" | head -n 40; fi
