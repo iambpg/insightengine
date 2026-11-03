@@ -6,9 +6,9 @@ telemetry (inputs.cisco_telemetry_mdt, gRPC dial-out). This renderer does not
 emit SNMP table walks for a 9800 unless IE_WLC_LEGACY_SNMP=1. snmp-exporter
 still collects 9800 chassis health and cLApGlobalAPConnectCount.
 
-AireOS has no MDT. It stays on SNMP: bsnAPTable, bsnAPIfLoadParametersTable
-(channel utilization and client count) and bsnMobileStation RSSI/SNR. The
-station walk is aggregated in Telegraf before Prometheus sees it.
+AireOS has no MDT. It stays on SNMP: bsnAPTable, radio and RRM counters,
+CDP neighbours, WLAN client counts, and a rogue-AP count. Individual client
+tables (bsnMobileStation) are not walked. Client RSSI and SNR are 9800 MDT.
 
 IE_WLC_MDT_TRANSPORT=gnmi renders inputs.gnmi dial-in for each 9800 instead
 of relying on dial-out. Username and password come from the environment and
@@ -25,7 +25,14 @@ import hashlib
 import json
 import os
 import ssl
+import sys
 import urllib.request
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+import catalog  # noqa: E402
 
 # Columns only. Full-table walks are intentionally not used.
 IOSXE = {
@@ -73,71 +80,18 @@ IOSXE = {
     },
 }
 
-AIREOS = {
-    "status": {
-        "measurement": "ie_wlc_ap",
-        "interval": "5m",
-        "offset": "0s",
-        "timeout": "120s",
-        "fields": [
-            ("ap_name", "1.3.6.1.4.1.14179.2.2.1.1.3", True),
-            ("oper_status", "1.3.6.1.4.1.14179.2.2.1.1.6", False),
-        ],
-    },
-    "clients": {
-        "measurement": "ie_wlc_radio",
-        "interval": "5m",
-        "offset": "120s",
-        "timeout": "120s",
-        "fields": [
-            ("clients", "1.3.6.1.4.1.14179.2.2.13.1.4", False),
-        ],
-    },
-    "radio": {
-        "measurement": "ie_wlc_radio",
-        "interval": "10m",
-        "offset": "240s",
-        "timeout": "180s",
-        "fields": [
-            ("channel", "1.3.6.1.4.1.14179.2.2.2.1.4", False),
-        ],
-    },
-    "channel": {
-        # bsnAPIfLoadParametersTable. AireOS has no RRM MDT stream.
-        "measurement": "ie_wlc_radio",
-        "interval": "10m",
-        "offset": "300s",
-        "timeout": "180s",
-        "fields": [
-            ("channel_util", "1.3.6.1.4.1.14179.2.2.13.1.3", False),
-        ],
-    },
-    "stations": {
-        # bsnMobileStationTable (AP MAC, radio slot) joined with
-        # bsnMobileStationStatsTable (RSSI, SNR). Same client-MAC index.
-        # Telegraf drops the client identity before Prometheus. See normalize.star.
-        "measurement": "ie_wlc_station",
-        "interval": "5m",
-        "offset": "150s",
-        "timeout": "180s",
-        "fields": [
-            ("ap_mac", "1.3.6.1.4.1.14179.2.1.4.1.4", True),
-            ("radio", "1.3.6.1.4.1.14179.2.1.4.1.5", True),
-            ("rssi", "1.3.6.1.4.1.14179.2.1.6.1.1", False),
-            ("snr", "1.3.6.1.4.1.14179.2.1.6.1.26", False),
-        ],
-    },
-}
-
-# gNMI dial-in paths. Used only when IE_WLC_MDT_TRANSPORT=gnmi.
-GNMI_SUBS = (
-    ("ie_wlc_client_raw", "/wireless-client-oper:client-oper-data/traffic-stats", "sample", "60s"),
-    ("ie_wlc_client_common", "/wireless-client-oper:client-oper-data/common-oper-data", "sample", "60s"),
-    ("ie_wlc_rrm", "/wireless-rrm-oper:rrm-oper-data/rrm-measurement", "sample", "60s"),
-    ("ie_wlc_ap_mdt", "/wireless-access-point-oper:access-point-oper-data/capwap-data", "on_change", "60s"),
-    ("ie_wlc_radio_mdt", "/wireless-access-point-oper:access-point-oper-data/radio-oper-data", "sample", "60s"),
-    ("ie_wlc_ssid", "/wireless-access-point-oper:access-point-oper-data/ssid-counters", "sample", "60s"),
-)
+def _gnmi_subs():
+    rows = []
+    seen = set()
+    for _offset, xpath, alias, policy, seconds, _shows in catalog.MDT_SUBS:
+        mode = "on_change" if policy == "on-change" else "sample"
+        interval = "%ds" % (seconds or 60)
+        key = (alias, xpath, mode)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append((alias, xpath, mode, interval))
+    return rows
 
 
 def _toml(value: str) -> str:
@@ -255,9 +209,9 @@ def _gnmi(agent: str, tags: dict, env: dict) -> str:
         "    site = %s" % _toml(tags["site"]),
         "    platform = %s" % _toml(tags["platform"]),
         "    device_role = %s" % _toml(tags["role"]),
-        "    store_clients = %s" % _toml(tags.get("store_clients") or "0"),
+        "    store_clients = %s" % _toml(tags.get("store_clients") or "1"),
     ]
-    for name, path, mode, interval in GNMI_SUBS:
+    for name, path, mode, interval in _gnmi_subs():
         lines.extend([
             "  [[inputs.gnmi.subscription]]",
             "    name = %s" % _toml(name),
@@ -271,10 +225,15 @@ def _gnmi(agent: str, tags: dict, env: dict) -> str:
 
 def render(targets: list[dict], env: dict) -> str:
     table = (env.get("IE_WLC_TABLE") or "all").strip().lower()
-    wanted = ["status", "clients", "radio", "channel", "stations"] if table in ("", "all") else [table]
     transport = (env.get("IE_WLC_MDT_TRANSPORT") or "grpc").strip().lower()
     legacy = _truthy(env.get("IE_WLC_LEGACY_SNMP") or "")
-    store = "1" if _truthy(env.get("IE_WLC_STORE_CLIENTS") or "") else "0"
+    # Per-client MDT series are on unless this is explicitly turned off.
+    # SNMP never walks clients, so the flag does not change AireOS tables.
+    raw_store = env.get("IE_WLC_STORE_CLIENTS")
+    if raw_store is None or str(raw_store).strip() == "":
+        store = "1"
+    else:
+        store = "1" if _truthy(str(raw_store)) else "0"
     try:
         count = int(env.get("IE_WLC_SHARD_COUNT") or "1")
         index = int(env.get("IE_WLC_SHARD_INDEX") or "0")
@@ -283,7 +242,8 @@ def render(targets: list[dict], env: dict) -> str:
     chunks = [
         "# Generated from NetBox. Do not commit this file.",
         "# 9800 per-AP data is MDT unless IE_WLC_LEGACY_SNMP=1.",
-        "# AireOS stays on SNMP, including bsnMobileStation RSSI/SNR.",
+        "# AireOS stays on SNMP. Client tables are not walked; counts only.",
+        "# 9800 client RSSI/SNR/rates are MDT and are stored unless IE_WLC_STORE_CLIENTS=0.",
         "",
     ]
     for item in targets:
@@ -299,7 +259,22 @@ def render(targets: list[dict], env: dict) -> str:
         platform = str(labels.get("__meta_netbox_platform") or "")
         role = str(labels.get("__meta_netbox_role") or "")
         kind = platform_kind(platform, role)
-        tables = IOSXE if kind == "iosxe" else AIREOS
+        tables = IOSXE if kind == "iosxe" else catalog.AIREOS_TABLES
+        if table in ("", "all"):
+            wanted = list(tables)
+        elif table == "stations":
+            chunks.append(
+                "# %s: per-client SNMP walks are not collected.\n" % ip
+            )
+            continue
+        elif table == "status" and kind != "iosxe":
+            wanted = ["inventory"]
+        elif table == "clients" and kind != "iosxe":
+            wanted = ["rf", "wlan"]
+        elif table == "channel" and kind != "iosxe":
+            wanted = ["radio", "rf"]
+        else:
+            wanted = [table]
         auth_name = str(labels.get("__meta_netbox_snmp_auth") or "ie_wlc_v2")
         auth = auth_for(auth_name, env)
         tags = {
@@ -326,10 +301,7 @@ def render(targets: list[dict], env: dict) -> str:
             spec = tables.get(name)
             if not spec:
                 continue
-            row_tags = dict(tags)
-            if name == "stations":
-                row_tags["store_clients"] = store
-            chunks.append(_input("udp://%s:161" % ip, kind, name, spec, row_tags, auth))
+            chunks.append(_input("udp://%s:161" % ip, kind, name, spec, tags, auth))
     return "\n".join(chunks)
 
 

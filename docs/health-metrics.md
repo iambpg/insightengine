@@ -93,7 +93,7 @@ Telegraf `--test` durations against snmpsim on the same host, `max_repetitions=1
 
 snmpsim CPU after the walks was idle (about 0.04% of one core, about 43 MB). The walks were too short to sample a spike. This duration is not what a Catalyst 9800 will do. Each GETBULK of 10 rows is one round trip. Status is 3 columns × 5,000 rows / 10 ≈ 1,500 round trips. At 50 ms RTT that is about 75 seconds. At 100 ms it is about 150 seconds, which is most of the 180 second timeout and will overlap the next staggered table. Channel utilization is 2 columns × 10,000 radios / 10 ≈ 2,000 round trips.
 
-Watch the 9800 control-plane CPU (`cpmCPUTotal5minRev` is already collected) during the first real poll. Per-AP and per-client detail on a Catalyst 9800 now comes from model-driven telemetry, not these SNMP tables. See `docs/service-experience.md`. `IE_WLC_LEGACY_SNMP=1` restores the SNMP AP tables for a comparison walk. snmp-exporter still collects chassis health and `cLApGlobalAPConnectCount`. AireOS stays on the SNMP tables, including `bsnAPIfLoadParametersTable` and `bsnMobileStation` RSSI/SNR.
+Watch the 9800 control-plane CPU (`cpmCPUTotal5minRev` is already collected) during the first real poll. Per-AP detail and per-client RSSI on a Catalyst 9800 come from model-driven telemetry, not SNMP client walks. See `docs/wlc-9800-full.md`. `IE_WLC_LEGACY_SNMP=1` restores the small SNMP AP tables for a comparison walk. snmp-exporter still collects chassis health, joined AP count and the client total. AireOS stays on SNMP counts and inventory. `bsnMobileStation` is not walked.
 
 `promtool check rules` accepted `health-rules.yml` (17 rules) and the existing `alert-rules.yml` (47 rules).
 

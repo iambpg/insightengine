@@ -29,6 +29,18 @@ def field(mod, name, **kind):
     return mod.TelemetryField(name=name, **kind)
 
 
+def _typed(mod, name, value):
+    text = str(value)
+    if text.startswith("-") and text[1:].isdigit():
+        return field(mod, name, sint32_value=int(text))
+    if text.isdigit():
+        number = int(text)
+        if number > 4294967295:
+            return field(mod, name, uint64_value=number)
+        return field(mod, name, uint32_value=number)
+    return field(mod, name, string_value=text)
+
+
 def row(mod, keys, content):
     # IOS-XE GPB-KV is one TelemetryField whose children are "keys" and "content".
     return mod.TelemetryField(fields=[
@@ -62,52 +74,36 @@ def main() -> int:
     import telemetry_bis_pb2 as tele
 
     when = int(time.time() * 1000)
-    client = "Cisco-IOS-XE-wireless-client-oper:client-oper-data"
-    rows = [
-        message(tele, "wlc-9800", client + "/common-oper-data", "61000", [
-            field(tele, "client-mac", string_value="aa:bb:cc:dd:ee:01"),
-        ], [
-            field(tele, "ap-name", string_value="AP-1"),
-            field(tele, "ms-ap-slot-id", uint32_value=1),
-        ], when),
-        message(tele, "wlc-9800", client + "/traffic-stats", "61001", [
-            field(tele, "ms-mac-address", string_value="aa:bb:cc:dd:ee:01"),
-        ], [
-            field(tele, "most-recent-rssi", sint32_value=-60),
-            field(tele, "most-recent-snr", uint32_value=25),
-        ], when),
-        message(tele, "wlc-9800", client + "/traffic-stats", "61001", [
-            field(tele, "ms-mac-address", string_value="aa:bb:cc:dd:ee:02"),
-            field(tele, "ap-name", string_value="AP-1"),
-            field(tele, "ms-ap-slot-id", uint32_value=1),
-        ], [
-            field(tele, "most-recent-rssi", sint32_value=-80),
-            field(tele, "most-recent-snr", uint32_value=15),
-        ], when),
-        message(tele, "wlc-9800", "Cisco-IOS-XE-wireless-rrm-oper:rrm-oper-data/rrm-measurement", "61002", [
-            field(tele, "wtp-mac", string_value="00:11:22:33:44:55"),
-            field(tele, "radio-slot-id", uint32_value=1),
-        ], [
-            field(tele, "cca-util-percentage", uint32_value=55),
-            field(tele, "rx-noise-channel-utilization", uint32_value=12),
-        ], when),
-        message(tele, "wlc-9800", "Cisco-IOS-XE-wireless-access-point-oper:access-point-oper-data/capwap-data", "61003", [
-            field(tele, "name", string_value="AP-1"),
-        ], [
-            field(tele, "ap-operation-state", string_value="registered"),
-            field(tele, "reboot-reason", string_value="none"),
-        ], when),
-        message(tele, "edge-1", "Cisco-IOS-XE-sdwan-oper:sdwan-oper-data/app-route/statistics", "62000", [
-            field(tele, "local-color", string_value="biz-internet"),
-            field(tele, "remote-color", string_value="mpls"),
-            field(tele, "dst-ip", string_value="10.9.0.2"),
-        ], [
-            field(tele, "mean-loss", uint32_value=4),
-            field(tele, "mean-latency", uint32_value=22),
-            field(tele, "mean-jitter", uint32_value=3),
-            field(tele, "state", string_value="up"),
-        ], when),
-    ]
+    sys.path.insert(0, str(ROOT.parents[1].parent / "config" / "telegraf" / "wlc"))
+    import catalog
+    rows = []
+    for index, sample in enumerate(catalog.sample_kvgpb()):
+        node = "edge-1" if "sdwan" in sample["path"] else "wlc-9800"
+        rows.append(message(
+            tele, node, sample["path"], str(61000 + index),
+            [_typed(tele, name, value) for name, value in sample["keys"]],
+            [_typed(tele, name, value) for name, value in sample["content"]],
+            when,
+        ))
+    # Second client so the per-radio rollup is an average, still dropped when store_clients=0.
+    rows.append(message(tele, "wlc-9800", "Cisco-IOS-XE-wireless-client-oper:client-oper-data/traffic-stats", "61001", [
+        field(tele, "ms-mac-address", string_value="aa:bb:cc:dd:ee:02"),
+        field(tele, "ap-name", string_value="AP-1"),
+        field(tele, "ms-ap-slot-id", uint32_value=1),
+    ], [
+        field(tele, "most-recent-rssi", sint32_value=-80),
+        field(tele, "most-recent-snr", uint32_value=15),
+    ], when))
+    rows.append(message(tele, "edge-1", "Cisco-IOS-XE-sdwan-oper:sdwan-oper-data/app-route/statistics", "62000", [
+        field(tele, "local-color", string_value="biz-internet"),
+        field(tele, "remote-color", string_value="mpls"),
+        field(tele, "dst-ip", string_value="10.9.0.2"),
+    ], [
+        field(tele, "mean-loss", uint32_value=4),
+        field(tele, "mean-latency", uint32_value=22),
+        field(tele, "mean-jitter", uint32_value=3),
+        field(tele, "state", string_value="up"),
+    ], when))
 
     def generate():
         for index, row in enumerate(rows, 1):

@@ -116,13 +116,37 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
   return buildDeviceDetail(form);
 }
 
+const ACCESS_POINTS = [
+  {
+    name: 'ap-ams01-114', mac: '0.17.34.1.0.1', wlc: 'wlc-ein02', site: 'Rotterdam', netboxSite: 'Rotterdam', status: 'up', clients: 18, uptimeSeconds: 86400,
+    model: 'C9120AXI', serial: 'FGL000114', ip: '10.8.1.114', location: 'floor-1', ios: '17.12.1', mode: 'local',
+    neighborSwitch: 'sw-ams01', neighborPort: 'Gi1/0/14', rssiAvg: -61, snrAvg: 27,
+    radios: [
+      { slot: '0', channel: 36, utilization: 0.22, clients: 11, noise: -92, interference: 8, txPowerDbm: 18, width: 40, rssiAvg: -58, snrAvg: 30, band: '5' },
+      { slot: '1', channel: 6, utilization: 0.41, clients: 7, noise: -88, interference: 14, txPowerDbm: 14, width: 20, rssiAvg: -64, snrAvg: 24, band: '2.4' },
+    ],
+    ssids: [{ ssid: 'corp', radio: '0', band: '5', clients: 11 }, { ssid: 'corp', radio: '1', band: '2.4', clients: 7 }],
+  },
+  { name: 'ap-ams01-115', mac: '0.17.34.1.0.2', wlc: 'wlc-ein02', site: 'Rotterdam', netboxSite: 'Rotterdam', status: 'up', clients: 4, uptimeSeconds: 43200, model: 'C9115AXI', serial: 'FGL000115', ip: '10.8.1.115', neighborSwitch: 'sw-ams01', neighborPort: 'Gi1/0/15', radios: [{ slot: '0', channel: 44, utilization: 0.08, clients: 4 }], ssids: [] },
+  { name: 'ap-rot04-002', mac: '0.17.34.1.0.3', wlc: 'wlc-ein02', site: 'Rotterdam', netboxSite: '', status: 'down', clients: 0, uptimeSeconds: null, radios: [], ssids: [] },
+];
+
+export async function getAccessPointDetail(wlc: string, name: string) {
+  await delay(80);
+  const row = ACCESS_POINTS.find((item) => item.name === name && (!wlc || item.wlc === wlc)) || ACCESS_POINTS[0];
+  return {
+    accessPoint: row,
+    events: [
+      { t: 1700000000, what: 'channel', ap: row.name, radio: '0', from: '40', to: '36' },
+      { t: 1700001000, what: 'oper', ap: row.name, radio: '', from: '0', to: '1' },
+    ],
+    degraded: [],
+  };
+}
+
 export async function listAccessPoints(query: { wlc?: string; q?: string; page?: number; pageSize?: number }) {
   await delay(120);
-  const all = [
-    { name: 'ap-ams01-114', mac: '0.17.34.1.0.1', wlc: 'wlc-ein02', site: 'Rotterdam', status: 'up', clients: 18, uptimeSeconds: 86400, radios: [{ slot: '0', channel: 36, utilization: 0.22, clients: 11 }, { slot: '1', channel: 6, utilization: 0.41, clients: 7 }] },
-    { name: 'ap-ams01-115', mac: '0.17.34.1.0.2', wlc: 'wlc-ein02', site: 'Rotterdam', status: 'up', clients: 4, uptimeSeconds: 43200, radios: [{ slot: '0', channel: 44, utilization: 0.08, clients: 4 }] },
-    { name: 'ap-rot04-002', mac: '0.17.34.1.0.3', wlc: 'wlc-ein02', site: 'Rotterdam', status: 'down', clients: 0, uptimeSeconds: null, radios: [] },
-  ];
+  const all = ACCESS_POINTS;
   const needle = (query.q || '').toLowerCase();
   const wlc = (query.wlc || '').toLowerCase();
   const matched = all.filter((row) => (!wlc || row.wlc.toLowerCase().includes(wlc)) && (!needle || row.name.includes(needle) || row.mac.includes(needle)));
@@ -528,7 +552,7 @@ export async function getTelemetryConfig() {
   return {
     configured: true,
     pushed: false,
-    title: 'Telemetry subscription',
+    title: 'Controller config',
     filename: 'telemetry-subscription.txt',
     receiverConfigured: false,
     reason: '',

@@ -68,14 +68,16 @@ def test_legacy_flag_restores_9800_snmp_tables():
     assert "1.3.6.1.4.1.9.9.513.1.1.1.1.5" in text
 
 
-def test_aireos_keeps_load_table_and_station_rssi():
+def test_aireos_snmp_is_inventory_and_counts_not_clients():
     text = _render().render([_target("aireos", "wlc-aireos")], {"SNMP_V2_COMMUNITY": "public"})
     assert "1.3.6.1.4.1.14179.2.2.13.1.3" in text
-    assert "1.3.6.1.4.1.14179.2.1.6.1.1" in text
-    assert "1.3.6.1.4.1.14179.2.1.6.1.26" in text
-    assert "bsnMobile" not in text or "station" in text
-    assert 'wlc_table = "stations"' in text
-    assert "store_clients" in text
+    assert "1.3.6.1.4.1.14179.2.2.13.1.4" in text
+    assert "1.3.6.1.4.1.14179.2.2.1.1.16" in text
+    assert "1.3.6.1.4.1.14179.2.2.15.1.21" in text
+    assert "1.3.6.1.4.1.9.9.623.1.3.1.1.6" in text
+    assert "1.3.6.1.4.1.14179.2.1.4" not in text
+    assert "1.3.6.1.4.1.14179.2.1.6" not in text
+    assert 'wlc_table = "stations"' not in text
 
 
 def test_gnmi_dial_in_is_rendered_for_a_9800_only_when_asked():
@@ -112,11 +114,18 @@ def test_telemetry_cli_for_9800_is_paste_only():
     assert "57000" not in body["config"]
 
 
-def test_aireos_telemetry_says_snmp():
-    body = telemetry_config({"name": "wlc-a", "ip": "10.9.0.9", "role": "wireless-controller", "platform": "aireos"})
-    assert body["configured"] is False
-    assert "AireOS" in body["reason"]
-    assert body["config"] == ""
+def test_aireos_telemetry_is_snmp_paste_without_secrets():
+    body = telemetry_config(
+        {"name": "wlc-a", "ip": "10.9.0.9", "role": "wireless-controller", "platform": "aireos"},
+    )
+    assert body["configured"] is True
+    assert body["pushed"] is False
+    assert "config snmp community create <ie_wlc_v2>" in body["config"]
+    assert "config snmp v3user create" in body["config"]
+    assert "show snmpcommunity" in body["config"]
+    assert "show snmpv3user" in body["config"]
+    assert "does not push" in body["config"]
+    assert "1.3.6.1.4.1.14179.2.1.4" not in body["config"]
 
 
 def test_cedge_cli_is_not_the_fortigate_role():

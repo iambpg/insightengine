@@ -11,7 +11,7 @@ Four checks sit next to device health. None of them push configuration onto a ro
 
 The UI page is **Service Experience**. Empty groups say **not configured**. Grafana dashboard **Service Experience** is provisioned from `config/grafana/provisioning/dashboards/json/service-experience.json`. Alerts and recording rules are `config/prometheus/experience-rules.yml`.
 
-Per-client wireless samples are not stored in Prometheus unless `IE_WLC_STORE_CLIENTS=1`. One Catalyst 9800 holds about 5,000 APs. Telegraf keeps the client MAC in memory and exports per AP and per radio: average and minimum RSSI, average and minimum SNR, and the client count. Recording rules then add per-site averages. Turning on per-client series is optional and will be a large number of series (thousands of clients times RSSI and SNR). Leave it off.
+9800 client detail from MDT is stored per client by default. `IE_WLC_STORE_CLIENTS=0` drops those series and keeps the per-AP/per-radio rollup. SNMP never walks a client list. The full path, OID and cardinality table is `docs/wlc-9800-full.md`.
 
 ## NetBox fields
 
@@ -38,18 +38,18 @@ SNMP on a 9800 does not give useful per-client RSSI/SNR or per-radio noise and i
 
 Open **TCP 57500** on the collector for that dial-out. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. **57500** is the only Telegraf host port. Telegraf's Prometheus `/metrics` output is not published (it used to be host 57500, then 57501). Prometheus scrapes `telegraf-host:9273` and `telegraf-wlc:9273` on the docker network. gNMI dial-in does not use 57500: Telegraf dials the controller on port 9339.
 
-On the device page, **Telemetry subscription** copies the IOS-XE CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you.
+On the device page, **Controller config** copies the IOS-XE or AireOS CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you. The subscription list, including intervals, is `docs/wlc-9800-full.md`.
 
-Subscriptions, 60 second periodic (`update-policy periodic 6000`, the unit is centiseconds) plus on-change where the data is an event:
+The paths below are the original client, RRM and AP set. Inventory is 600s, radio and RRM 120s, clients 60s, with on-change on join/leave, radio channel and tx power, and SSID client counts. The full list is `docs/wlc-9800-full.md`.
 
 | Path | Policy | What it is |
 |---|---|---|
-| `/wireless-client-oper:client-oper-data/traffic-stats` | periodic | `most-recent-rssi`, `most-recent-snr` |
-| `/wireless-client-oper:client-oper-data/common-oper-data` | periodic | AP name and radio slot, joined to the RSSI row inside Telegraf and then dropped |
-| `/wireless-rrm-oper:rrm-oper-data/rrm-measurement` | periodic | channel utilization (`cca-util-percentage`), noise, interference |
-| `/wireless-access-point-oper:access-point-oper-data/capwap-data` | on-change and periodic | AP state, reboot reason (CAPWAP join/leave) |
-| `/wireless-access-point-oper:access-point-oper-data/radio-oper-data` | on-change and periodic | channel, tx power |
-| `/wireless-access-point-oper:access-point-oper-data/ssid-counters` | periodic | clients per WLAN, summed to the radio |
+| `/wireless-client-oper:client-oper-data/traffic-stats` | 60s | RSSI, SNR, rates, retries, bytes. Stored per client unless `IE_WLC_STORE_CLIENTS=0` |
+| `/wireless-client-oper:client-oper-data/common-oper-data` | 60s | AP name and radio slot, joined to the client row |
+| `/wireless-rrm-oper:rrm-oper-data/rrm-measurement` | 120s | channel utilization (`cca-util-percentage`), noise, interference |
+| `/wireless-access-point-oper:access-point-oper-data/capwap-data` | on-change and 600s | AP state, reboot reason (CAPWAP join/leave) |
+| `/wireless-access-point-oper:access-point-oper-data/radio-oper-data` | on-change and 120s | channel, width, tx power |
+| `/wireless-access-point-oper:access-point-oper-data/ssid-counters` | on-change and 120s | clients per SSID |
 
 YANG modules: `Cisco-IOS-XE-wireless-client-oper`, `Cisco-IOS-XE-wireless-rrm-oper`, `Cisco-IOS-XE-wireless-access-point-oper`.
 
@@ -59,15 +59,7 @@ Only shard 0 opens port 57500. Extra AireOS shards set `IE_WLC_SHARD_INDEX` and 
 
 ## AireOS
 
-AireOS has no MDT. Telegraf keeps the SNMP tables from the health work and adds client RSSI and SNR:
-
-| Table | Columns |
-|---|---|
-| `bsnAPIfLoadParametersTable` | `bsnAPIfLoadChannelUtilization`, and the existing client count column |
-| `bsnMobileStationTable` | AP MAC `1.3.6.1.4.1.14179.2.1.4.1.4`, radio slot `…​.5` |
-| `bsnMobileStationStatsTable` | RSSI `1.3.6.1.4.1.14179.2.1.6.1.1`, SNR `…​.26` |
-
-The station walk shares the client MAC index, so one Telegraf table carries AP, radio, RSSI and SNR. The processor drops the client before Prometheus, same as MDT. AireOS does not report RRM noise and interference in that load table. The telemetry button on an AireOS controller says it is not configured.
+AireOS has no MDT. Telegraf polls inventory, radios, channel utilization, noise, interference, tx power, CDP neighbours, WLAN client counts and a rogue count. It does not walk `bsnMobileStationTable`. Client RSSI and SNR are 9800 MDT only. The Controller config button on an AireOS controller is the SNMP paste (`config snmp community`, `config snmp v3user`, `show snmpcommunity`). Secrets are not in that text. The metric table is `docs/wlc-9800-full.md`.
 
 ## SD-WAN cEdge
 

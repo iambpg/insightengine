@@ -2009,6 +2009,11 @@ class FleetService:
             try:
                 with self._session() as client:
                     cached = self._ap_snapshot(client)
+                    try:
+                        devices = self._devices_raw(client)
+                    except UpstreamError:
+                        devices = []
+                    attach_netbox_sites(cached.get("rows") or [], devices)
             except UpstreamError:
                 cached = {"rows": [], "degraded": True}
             self.cache.put("ap-snapshot", cached)
@@ -2021,12 +2026,21 @@ class FleetService:
 
     def _ap_snapshot(self, client) -> dict:
         try:
-            status = self._prom(client, "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status")
-            clients = self._prom(client, "ie_wlc_ap_clients")
+            status = self._prom(client, "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status or ie_wlc_ap_oper_up")
+            clients = self._prom(client, "ie_wlc_ap_clients or ie_wlc_client_radio_clients")
             uptime = self._prom(client, "ie_wlc_ap_uptime_centiseconds")
             channels = self._prom(client, "ie_wlc_radio_channel")
             utils = self._prom(client, "ie_wlc_radio_channel_util")
             radio_clients = self._prom(client, "ie_wlc_radio_clients")
+            info = self._prom(client, "ie_wlc_ap_info")
+            noise = self._prom(client, "ie_wlc_radio_noise")
+            interference = self._prom(client, "ie_wlc_radio_interference")
+            power = self._prom(client, "ie_wlc_radio_tx_power_dbm or ie_wlc_radio_tx_power")
+            width = self._prom(client, "ie_wlc_radio_width")
+            rssi = self._prom(client, "ie_wlc_client_radio_rssi_avg")
+            snr = self._prom(client, "ie_wlc_client_radio_snr_avg")
+            ssids = self._prom(client, "ie_wlc_ssid_clients")
+            neighbors = self._prom(client, "ie_wlc_neighbor_info")
         except UpstreamError:
             return {"rows": [], "degraded": True}
         rows: dict[tuple, dict] = {}
@@ -2045,6 +2059,18 @@ class FleetService:
                     "clients": None,
                     "uptimeSeconds": None,
                     "radios": [],
+                    "model": str(metric.get("model") or ""),
+                    "serial": str(metric.get("serial") or ""),
+                    "ip": str(metric.get("ip") or ""),
+                    "location": str(metric.get("location") or ""),
+                    "ios": str(metric.get("ios") or ""),
+                    "mode": str(metric.get("mode") or ""),
+                    "neighborSwitch": "",
+                    "neighborPort": "",
+                    "netboxSite": "",
+                    "ssids": [],
+                    "rssiAvg": None,
+                    "snrAvg": None,
                 }
                 rows[key] = row
             return row
@@ -2053,38 +2079,132 @@ class FleetService:
             metric = sample.get("metric") or {}
             row = ensure(metric)
             row["status"] = _ap_status_word(metric, _sample_value(sample))
+        radio_client_sum: dict[tuple, float] = {}
         for sample in clients:
             metric = sample.get("metric") or {}
             row = ensure(metric)
-            row["clients"] = _sample_value(sample)
+            value = _sample_value(sample)
+            name = str(metric.get("__name__") or "")
+            if name == "ie_wlc_client_radio_clients":
+                key = (row["wlc"], row["name"])
+                if value is not None:
+                    radio_client_sum[key] = radio_client_sum.get(key, 0) + float(value)
+            else:
+                row["clients"] = value
+        for key, total in radio_client_sum.items():
+            if key in rows and rows[key]["clients"] is None:
+                rows[key]["clients"] = total
         for sample in uptime:
             metric = sample.get("metric") or {}
             row = ensure(metric)
             value = _sample_value(sample)
             row["uptimeSeconds"] = None if value is None else round(float(value) / 100.0, 1)
         radio_by: dict[tuple, dict] = {}
-        for sample in list(channels) + list(utils) + list(radio_clients):
+        for sample in list(channels) + list(utils) + list(radio_clients) + list(noise) + list(interference) + list(power) + list(width) + list(rssi) + list(snr):
             metric = sample.get("metric") or {}
             name, mac, wlc, _site = _ap_identity(metric)
-            slot = str(metric.get("slot") or "")
+            slot = str(metric.get("slot") or metric.get("radio") or "")
             key = (wlc, name or mac, slot)
-            radio = radio_by.setdefault(key, {"slot": slot, "channel": None, "utilization": None, "clients": None, "owner": (wlc, name or mac)})
+            radio = radio_by.setdefault(key, {
+                "slot": slot, "channel": None, "utilization": None, "clients": None,
+                "noise": None, "interference": None, "txPowerDbm": None, "width": None,
+                "rssiAvg": None, "snrAvg": None, "band": str(metric.get("band") or ""),
+                "owner": (wlc, name or mac),
+            })
             value = _sample_value(sample)
             metric_name = str(metric.get("__name__") or "")
             if metric_name.endswith("channel") and "util" not in metric_name:
                 radio["channel"] = value
             elif "util" in metric_name:
                 radio["utilization"] = None if value is None else round(float(value) / 100.0, 4)
-            elif "clients" in metric_name:
+            elif "clients" in metric_name and "poor" not in metric_name:
                 radio["clients"] = value
+            elif metric_name.endswith("noise"):
+                radio["noise"] = value
+            elif "interference" in metric_name:
+                radio["interference"] = value
+            elif "tx_power" in metric_name:
+                radio["txPowerDbm"] = value
+            elif metric_name.endswith("width"):
+                radio["width"] = value
+            elif "rssi" in metric_name:
+                radio["rssiAvg"] = value
+            elif "snr" in metric_name:
+                radio["snrAvg"] = value
+        for sample in info or []:
+            metric = sample.get("metric") or {}
+            row = ensure(metric)
+            for src, dst in (("model", "model"), ("serial", "serial"), ("ip", "ip"), ("location", "location"), ("ios", "ios"), ("mode", "mode")):
+                if metric.get(src):
+                    row[dst] = str(metric.get(src))
+            if metric.get("mac"):
+                row["mac"] = str(metric.get("mac"))
+        for sample in neighbors or []:
+            metric = sample.get("metric") or {}
+            row = ensure(metric)
+            if metric.get("switch"):
+                row["neighborSwitch"] = str(metric.get("switch"))
+            if metric.get("port"):
+                row["neighborPort"] = str(metric.get("port"))
+        ssid_rows: dict[tuple, list] = {}
+        for sample in ssids or []:
+            metric = sample.get("metric") or {}
+            name, mac, wlc, _site = _ap_identity(metric)
+            ssid_rows.setdefault((wlc, name or mac), []).append({
+                "ssid": str(metric.get("ssid") or ""),
+                "radio": str(metric.get("radio") or metric.get("slot") or ""),
+                "band": str(metric.get("band") or ""),
+                "clients": _sample_value(sample),
+            })
         grouped: dict[tuple, list] = {}
         for radio in radio_by.values():
             grouped.setdefault(radio.pop("owner"), []).append(radio)
         for key, radios in grouped.items():
             if key in rows:
                 rows[key]["radios"] = radios
+                rssi_vals = [item["rssiAvg"] for item in radios if item.get("rssiAvg") is not None]
+                snr_vals = [item["snrAvg"] for item in radios if item.get("snrAvg") is not None]
+                if rssi_vals:
+                    rows[key]["rssiAvg"] = round(sum(rssi_vals) / len(rssi_vals), 1)
+                if snr_vals:
+                    rows[key]["snrAvg"] = round(sum(snr_vals) / len(snr_vals), 1)
+        for key, items in ssid_rows.items():
+            if key in rows:
+                rows[key]["ssids"] = items
         ordered = sorted(rows.values(), key=lambda item: (str(item["wlc"]).lower(), str(item["name"]).lower()))
         return {"rows": ordered, "degraded": False}
+
+    def access_point_detail(self, wlc: str, name: str) -> dict:
+        wanted_wlc = (wlc or "").strip()
+        wanted_name = (name or "").strip()
+        if not wanted_name:
+            raise ApiError(404, "not_found", "unknown access point")
+        listing = self.list_access_points(page=1, page_size=1, q="", wlc="", site="", status="")
+        cached = self.cache.get("ap-snapshot") or {}
+        row = None
+        for item in cached.get("rows") or []:
+            if str(item.get("name") or "") == wanted_name and (not wanted_wlc or wanted_wlc.lower() in str(item.get("wlc") or "").lower()):
+                row = item
+                break
+        if row is None:
+            raise ApiError(404, "not_found", "unknown access point")
+        events = []
+        degraded = list(listing.get("degraded") or [])
+        try:
+            with self._session() as client:
+                end = self._now_dt().timestamp()
+                start = end - 6 * 3600
+                safe_ap = prom_escape(wanted_name)
+                safe_wlc = prom_escape(row.get("wlc") or "")
+                selector = '{ap="%s",wlc="%s"}' % (safe_ap, safe_wlc)
+                oper = self._prom_range(client, "ie_wlc_ap_oper_up%s" % selector, start, end, 60)
+                channel = self._prom_range(client, "ie_wlc_radio_channel%s" % selector, start, end, 60)
+                power = self._prom_range(client, "ie_wlc_radio_tx_power_dbm%s" % selector, start, end, 60)
+                events = events_from_range(oper, "oper") + events_from_range(channel, "channel") + events_from_range(power, "tx power")
+                events.sort(key=lambda item: item["t"])
+        except UpstreamError:
+            degraded.append("prometheus")
+        return {"accessPoint": row, "events": events[-50:], "degraded": degraded}
 
 
 def _title(upstream: str) -> str:
@@ -2960,9 +3080,54 @@ def _metric_number(sample: dict):
     return _sample_value(sample)
 
 
+def attach_netbox_sites(rows: list[dict], devices: list[dict]) -> list[dict]:
+    """Match an AP name, then its CDP switch, to a NetBox device site."""
+    by_name = {}
+    for device in devices or []:
+        label = str(device.get("name") or device.get("hostname") or "").strip().lower()
+        site = str(device.get("site_name") or device.get("site") or "")
+        if label and site:
+            by_name[label] = site
+    for row in rows or []:
+        ap = str(row.get("name") or "").strip().lower()
+        switch = str(row.get("neighborSwitch") or "").strip().lower()
+        site = by_name.get(ap) or by_name.get(switch) or ""
+        row["netboxSite"] = site
+        if site:
+            row["site"] = site
+    return rows
+
+
+def events_from_range(result: list[dict], what: str) -> list[dict]:
+    events = []
+    for series in result or []:
+        metric = series.get("metric") or {}
+        previous = None
+        for pair in series.get("values") or []:
+            try:
+                stamp = int(float(pair[0]))
+                value = pair[1]
+            except (TypeError, ValueError, IndexError):
+                continue
+            if previous is None:
+                previous = value
+                continue
+            if str(value) != str(previous):
+                events.append({
+                    "t": stamp,
+                    "what": what,
+                    "ap": str(metric.get("ap") or metric.get("ap_name") or ""),
+                    "radio": str(metric.get("radio") or metric.get("slot") or ""),
+                    "from": previous,
+                    "to": value,
+                })
+                previous = value
+    return events
+
+
 def _ap_identity(metric: dict) -> tuple[str, str, str, str]:
-    name = str(metric.get("ap_name") or metric.get("bsnAPName") or metric.get("cLApName") or "")
-    mac = str(metric.get("ap_mac") or metric.get("index") or "")
+    name = str(metric.get("ap") or metric.get("ap_name") or metric.get("bsnAPName") or metric.get("cLApName") or "")
+    mac = str(metric.get("mac") or metric.get("ap_mac") or metric.get("ethernet_mac") or metric.get("index") or "")
     wlc = str(metric.get("wlc") or metric.get("agent_host") or "")
     site = str(metric.get("site") or "")
     return name, mac, wlc, site
@@ -3000,6 +3165,12 @@ def mount_fleet(app, user_of) -> None:
     def summary(request: Request):
         reader(request)
         return fleet().summary()
+
+    @app.get("/api/v1/access-points/detail")
+    def access_point_detail(request: Request):
+        reader(request)
+        params = request.query_params
+        return fleet().access_point_detail(params.get("wlc") or "", params.get("name") or "")
 
     @app.get("/api/v1/access-points")
     def access_points(request: Request):
