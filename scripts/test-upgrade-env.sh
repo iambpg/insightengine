@@ -24,6 +24,7 @@ INSTALL_DIR='/opt/insightengine'
 PUBLIC_HOST='monitor.example'
 PORT_HTTP=8080
 PORT_HTTPS=8443
+PORT_TELEGRAF=57500
 NETBOX_DB_PASSWORD='keep-db'
 NETBOX_SECRET_KEY='keep-secret-key'
 NETBOX_SUPERUSER_API_TOKEN='keep-token-value'
@@ -114,6 +115,8 @@ grep -q 'PORT_HTTPS stays 8443' "$dir/out" || fail "upgrade did not leave the no
 grep -q 'Open host port 18086' "$dir/out" || fail "upgrade did not say to open 18086"
 grep -q 'set PORT_NETBOX=8092 (was missing)' "$dir/out" || fail "upgrade did not say NetBox is 8092"
 grep -q 'set PORT_ALERTMANAGER=8086 (was missing)' "$dir/out" || fail "upgrade did not say Alertmanager is 8086"
+grep -q 'dropped PORT_TELEGRAF (was 57500)' "$dir/out" || fail "upgrade did not drop PORT_TELEGRAF"
+grep -q '^PORT_TELEGRAF=' "$dir/.env" && fail "PORT_TELEGRAF was kept"
 assert_identity_unchanged "$dir/.env"
 assert_certs_unchanged "$dir"
 [ "$(env_val "$dir/.env" OXIDIZED_NETBOX_FILTER)" = "status=active" ] || fail "old oxidized filter was kept"
@@ -129,6 +132,7 @@ if ! (cd "$dir" && ./install.sh --backfill-env --no-start >"$dir/out" 2>&1); the
 fi
 [ "$(env_val "$dir/.env" NETBOX_SUPERUSER_API_KEY)" = "$added" ] || fail "second backfill replaced the API key"
 [ "$(env_val "$dir/.env" NETBOX_DB_PASSWORD)" = "keep-db" ] || fail "second backfill replaced the db password"
+grep -q '^PORT_TELEGRAF=' "$dir/.env" && fail "second backfill restored PORT_TELEGRAF"
 rm -rf "$dir"
 
 # Dry-run shows the pre-marker path and writes nothing.
@@ -146,6 +150,7 @@ printf '%s\n' "$preview" | grep -q 'would write .install-started after backfill'
 printf '%s\n' "$preview" | grep -q 'would add NETBOX_SUPERUSER_API_KEY' || fail "dry-run did not list the missing API key"
 printf '%s\n' "$preview" | grep -q 'would leave PUBLIC_HOST' || fail "dry-run did not say identity stays"
 printf '%s\n' "$preview" | grep -q 'would set PORT_HTTP=18086' || fail "dry-run did not preview the HTTP port move"
+printf '%s\n' "$preview" | grep -q 'would drop PORT_TELEGRAF (was 57500)' || fail "dry-run did not preview dropping PORT_TELEGRAF"
 if printf '%s\n' "$preview" | grep -q 'would add NETBOX_DB_PASSWORD'; then
   fail "dry-run listed a secret that already has a value"
 fi
@@ -199,6 +204,7 @@ PORT_HTTPS=57400
 PORT_NETBOX=8444
 PORT_PROMETHEUS=19090
 PORT_ALERTMANAGER=19093
+PORT_TELEGRAF=57501
 NETBOX_DB_PASSWORD='keep-db'
 NETBOX_SECRET_KEY='keep-secret-key'
 EOF
@@ -215,7 +221,8 @@ fi
 [ "$(env_val "$dir/.env" PORT_HTTP3)" = "443" ] || fail "PORT_HTTP3 was not added"
 [ "$(env_val "$dir/.env" PORT_SNMP_EXPORTER)" = "9116" ] || fail "PORT_SNMP_EXPORTER was not added"
 [ "$(env_val "$dir/.env" PORT_BLACKBOX)" = "9115" ] || fail "PORT_BLACKBOX was not added"
-[ "$(env_val "$dir/.env" PORT_TELEGRAF)" = "57501" ] || fail "PORT_TELEGRAF was not added on 57501"
+grep -q '^PORT_TELEGRAF=' "$dir/.env" && fail "PORT_TELEGRAF=57501 was kept"
+grep -q 'dropped PORT_TELEGRAF (was 57501)' "$dir/out" || fail "did not drop PORT_TELEGRAF 57501"
 [ "$(env_val "$dir/.env" PORT_MDT)" = "57500" ] || fail "PORT_MDT was not added"
 [ "$(env_val "$dir/.env" IE_MDT_PORT)" = "57500" ] || fail "IE_MDT_PORT was not added"
 grep -q 'left PORT_PROMETHEUS=19090' "$dir/out" || fail "did not name the firewall port for Prometheus"
@@ -237,6 +244,7 @@ PORT_HTTPS=57400
 PORT_NETBOX=8080
 PORT_ALERTMANAGER=9093
 PORT_PROMETHEUS=19090
+PORT_TELEGRAF=57599
 NETBOX_DB_PASSWORD='keep-db'
 NETBOX_SECRET_KEY='keep-secret-key'
 EOF
@@ -253,6 +261,28 @@ fi
 grep -q 'set PORT_HTTP=18086 (was 8086)' "$dir/out" || fail "did not say HTTP left 8086"
 grep -q 'set PORT_NETBOX=8092 (was 8080)' "$dir/out" || fail "did not say NetBox left 8080"
 grep -q 'set PORT_ALERTMANAGER=8086 (was 9093)' "$dir/out" || fail "did not say Alertmanager left 9093"
+grep -q '^PORT_TELEGRAF=' "$dir/.env" && fail "custom PORT_TELEGRAF=57599 was kept"
+grep -q 'dropped PORT_TELEGRAF (was 57599)' "$dir/out" || fail "did not drop custom PORT_TELEGRAF"
+grep -q '^PORT_MDT=' "$dir/.env" || fail "PORT_MDT was not added beside the dropped metrics port"
+rm -rf "$dir"
+
+# A pre-marker install that never had the metrics port does not gain it.
+dir="$(prepare)"
+write_real_env "$dir"
+sed -i '/^PORT_TELEGRAF=/d' "$dir/.env"
+seed_certs "$dir"
+if ! (cd "$dir" && ./install.sh --upgrade-env --no-start >"$dir/out" 2>&1); then
+  cat "$dir/out" >&2
+  fail "upgrade without PORT_TELEGRAF failed"
+fi
+if grep -q '^PORT_TELEGRAF=' "$dir/.env"; then
+  fail "PORT_TELEGRAF was added"
+fi
+if grep -q 'PORT_TELEGRAF' "$dir/out"; then
+  fail "upgrade mentioned PORT_TELEGRAF when it was absent"
+fi
+[ "$(env_val "$dir/.env" PORT_MDT)" = "57500" ] || fail "PORT_MDT was not added when PORT_TELEGRAF was absent"
+[ "$(env_val "$dir/.env" IE_MDT_PORT)" = "57500" ] || fail "IE_MDT_PORT was not added when PORT_TELEGRAF was absent"
 rm -rf "$dir"
 
 echo "PASS  pre-marker .env is upgraded only with --upgrade-env; corrupt .env is refused"

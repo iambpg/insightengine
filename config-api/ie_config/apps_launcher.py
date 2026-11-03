@@ -14,7 +14,8 @@ from fastapi import Request
 
 # id, name, port env, default port, public scheme, internal health URL.
 # InsightEngine itself is the UI published on PORT_HTTPS.
-# Host ports: NetBox 8092, Alertmanager 8086. SNMP, blackbox, and Telegraf are plain HTTP.
+# Host ports: NetBox 8092, Alertmanager 8086. SNMP and blackbox are plain HTTP.
+# Telegraf /metrics is not published. Prometheus scrapes it on the docker network.
 # Health URLs stay on the container ports (NetBox 8080, Alertmanager 9093).
 _APPS = (
     ("ui", "InsightEngine", "PORT_HTTPS", "443", "https", "http://insightengine-ui:8080/healthz"),
@@ -27,7 +28,6 @@ _APPS = (
     ("oxidized", "Oxidized", "PORT_OXIDIZED", "8888", "https", "http://oxidized:8888/nodes"),
     ("snmp-exporter", "SNMP exporter", "PORT_SNMP_EXPORTER", "9116", "http", "http://snmp-exporter-1:9116/-/healthy"),
     ("blackbox", "blackbox exporter", "PORT_BLACKBOX", "9115", "http", "http://blackbox-exporter-1:9115/-/healthy"),
-    ("telegraf", "Telegraf", "PORT_TELEGRAF", "57501", "http", "http://telegraf-host:9273/metrics"),
 )
 
 
