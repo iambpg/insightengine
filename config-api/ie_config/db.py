@@ -25,6 +25,14 @@ class User(Base):
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Nullable until scripts/upgrade.sh backfills existing rows. The built-in
+    # account is the row whose username is admin; its password_hash is never rewritten.
+    username: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    display_name: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    must_change_password: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    builtin: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class SessionRow(Base):
@@ -183,4 +191,8 @@ def make_engine(url: str):
 def make_session_factory(url: str):
     engine = make_engine(url)
     Base.metadata.create_all(engine)
+    # Import inside the function so db can finish defining models first.
+    from .users_migrate import ensure_user_schema
+
+    ensure_user_schema(engine)
     return sessionmaker(bind=engine, expire_on_commit=False, future=True), engine

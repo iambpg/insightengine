@@ -3095,7 +3095,8 @@ def mount_fleet(app, user_of) -> None:
     @app.post("/api/v1/alerts/acknowledge")
     async def acknowledge(request: Request):
         user = reader(request)
-        if user.role == "Read-only":
+        from .auth import can_operate
+        if not can_operate(user.role):
             raise ApiError(403, "forbidden", "your role cannot acknowledge alerts")
         try:
             body = await request.json()

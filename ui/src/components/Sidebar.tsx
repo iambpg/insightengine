@@ -9,6 +9,7 @@ import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
 import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
+import { allowSettings } from '@/lib/settings/access';
 
 interface NavItem {
   href: string;
@@ -126,7 +127,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
 
       <nav className="scroll-thin flex-1 space-y-5 overflow-y-auto px-2 py-4" aria-label="Primary">
         {GROUPS.map((g) => {
-          const items = g.items.filter((item) => isMockMode() || item.href !== '/device-detail');
+          const items = g.items.filter((item) => (isMockMode() || item.href !== '/device-detail') && (item.href !== '/settings' || allowSettings(who.role)));
           if (items.length === 0) return null;
           return (
           <div key={`grp-${g.title}`}>

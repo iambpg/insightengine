@@ -161,12 +161,39 @@ export interface SetupState {
   step?: string;
 }
 
+export interface DirectoryUser {
+  id: number;
+  username: string;
+  displayName: string;
+  email: string;
+  role: RoleName;
+  status: 'active' | 'disabled';
+  lastLogin: string | null;
+  created: string | null;
+  builtin: boolean;
+  mustChangePassword: boolean;
+}
+
+export interface UserAuditEntry {
+  id: number;
+  at: string | null;
+  actor: string;
+  role: string;
+  action: string;
+  detail: string;
+  result: string;
+}
+
 export interface LoginResult {
   ok: boolean;
   role?: RoleName;
   email?: string;
   csrfToken?: string;
   error?: string;
+  id?: number;
+  username?: string;
+  displayName?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface DiscoverySuggestion {

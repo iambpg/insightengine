@@ -14,6 +14,7 @@ import type {
   FileDocument,
   HistoryDocument,
   HistoryEntry,
+  DirectoryUser,
   LoginResult,
   MibFile,
   OverviewResponse,
@@ -22,6 +23,7 @@ import type {
   SettingsApp,
   SetupState,
   UnapprovedDevice,
+  UserAuditEntry,
   ValidateResult,
 } from '@/lib/contract';
 import { request } from '@/lib/http';
@@ -177,7 +179,16 @@ export async function getSetupState(): Promise<SetupState> {
 
 export async function login(email: string, password: string): Promise<LoginResult> {
   try {
-    const data = await request<{ ok?: boolean; role?: LoginResult['role']; csrfToken?: string }>(
+    const data = await request<{
+      ok?: boolean;
+      role?: LoginResult['role'];
+      csrfToken?: string;
+      email?: string;
+      id?: number;
+      username?: string;
+      displayName?: string;
+      mustChangePassword?: boolean;
+    }>(
       `${API}/auth/login`,
       {
         method: 'POST',
@@ -186,7 +197,16 @@ export async function login(email: string, password: string): Promise<LoginResul
     );
     if (!data?.role || !data.csrfToken)
       return { ok: false, error: 'Sign-in did not return a session.' };
-    return { ok: true, role: data.role, email, csrfToken: data.csrfToken };
+    return {
+      ok: true,
+      role: data.role,
+      email: data.email || email,
+      csrfToken: data.csrfToken,
+      id: data.id,
+      username: data.username,
+      displayName: data.displayName,
+      mustChangePassword: data.mustChangePassword,
+    };
   } catch (error) {
     if (error instanceof ApiError) return { ok: false, error: error.message };
     return { ok: false, error: 'Sign-in failed.' };
@@ -411,6 +431,59 @@ export async function getIpSlaConfig(deviceId: string) {
 
 export async function getTelemetryConfig(deviceId: string) {
   return request<GeneratedConfig>(`${API}/devices/${encodeURIComponent(deviceId)}/telemetry-config`);
+}
+
+export async function listDirectoryUsers() {
+  return request<DirectoryUser[]>(`${API}/auth/users`);
+}
+
+export async function listUserAudit() {
+  return request<{ entries: UserAuditEntry[] }>(`${API}/auth/users/audit`);
+}
+
+export async function createDirectoryUser(body: {
+  username: string;
+  displayName: string;
+  email: string;
+  role: string;
+  password?: string;
+  generate?: boolean;
+  forceChange?: boolean;
+}) {
+  return request<DirectoryUser & { ok: boolean; oneTimePassword?: string }>(`${API}/auth/users`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export async function updateDirectoryUser(
+  id: number,
+  body: { displayName?: string; email?: string; role?: string }
+) {
+  return request<DirectoryUser>(`${API}/auth/users/${id}`, { method: 'PATCH', body });
+}
+
+export async function setDirectoryUserStatus(id: number, status: 'active' | 'disabled') {
+  const action = status === 'disabled' ? 'disable' : 'enable';
+  return request<DirectoryUser>(`${API}/auth/users/${id}/${action}`, { method: 'POST', body: {} });
+}
+
+export async function resetDirectoryPassword(id: number, body: { password?: string; generate?: boolean }) {
+  return request<{ ok: boolean; username: string; mustChangePassword: boolean; oneTimePassword?: string }>(
+    `${API}/auth/users/${id}/reset-password`,
+    { method: 'POST', body }
+  );
+}
+
+export async function deleteDirectoryUser(id: number) {
+  return request<{ ok: boolean }>(`${API}/auth/users/${id}`, { method: 'DELETE' });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  return request<{ ok: boolean }>(`${API}/auth/change-password`, {
+    method: 'POST',
+    body: { currentPassword, newPassword },
+  });
 }
 
 export async function saveDeviceCliCredentials(deviceId: string, username: string, password: string) {

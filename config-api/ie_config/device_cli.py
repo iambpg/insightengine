@@ -17,7 +17,6 @@ from fastapi import Request
 from .errors import ApiError
 from .fleet import FleetService
 
-CLI_ROLES = {"Administrator", "Engineer"}
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _FORBIDDEN = (";", "|", "&", "`", "$(", ">", "<", "\n", "\r")
 _OUTPUT_LIMIT = 48000
@@ -292,8 +291,9 @@ def _prompt_seen(chunks: list[str]) -> bool:
 
 
 def require_cli_role(user) -> None:
-    if getattr(user, "role", "") not in CLI_ROLES:
-        raise ApiError(403, "forbidden", "Device CLI is limited to Administrators and Engineers")
+    from .auth import can_operate
+    if not can_operate(getattr(user, "role", "")):
+        raise ApiError(403, "forbidden", "Device CLI is limited to Administrators, Engineers and Operators")
 
 
 def mount_device_cli(app, user_of, record, runner=None) -> None:

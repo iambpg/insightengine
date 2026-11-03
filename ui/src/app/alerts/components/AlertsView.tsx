@@ -13,6 +13,8 @@ import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { devicePath, isMockMode } from '@/lib/apiMode';
 import { readSession } from '@/lib/session';
+import { allowOperate } from '@/lib/settings/access';
+import { useKnownRole } from '@/lib/useSession';
 import type { AlertItem, AlertSeverity } from '@/lib/types';
 
 type SevFilter = AlertSeverity | 'all';
@@ -39,6 +41,7 @@ interface Group {
 }
 
 export default function AlertsView() {
+  const canWrite = allowOperate(useKnownRole());
   const [alerts, setAlerts] = useState<AlertItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -270,7 +273,7 @@ export default function AlertsView() {
           </div>
         </div>
 
-        {selected.length > 0 && (
+        {selected.length > 0 && canWrite && (
           <div className="slide-up flex flex-wrap items-center gap-3 border-b border-border bg-navy px-4 py-2 text-sm text-primary-foreground">
             <span className="font-medium tabular">{selected.length} selected</span>
             <button
@@ -393,7 +396,7 @@ export default function AlertsView() {
                                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title={`Acknowledged by ${a.acknowledgedBy} at ${a.acknowledgedAt}`}>
                                     <Icon name="CheckCircleIcon" size={14} variant="solid" className="text-success" /> Acknowledged
                                   </span>
-                                ) : (
+                                ) : canWrite ? (
                                   <button
                                     type="button"
                                     disabled={busy}
@@ -402,6 +405,8 @@ export default function AlertsView() {
                                   >
                                     <Icon name="CheckIcon" size={13} /> Acknowledge
                                   </button>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Open</span>
                                 )}
                               </div>
                             </td>

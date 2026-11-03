@@ -7,6 +7,8 @@ import Pagination from '@/components/ui/Pagination';
 import Link from 'next/link';
 import { api, type DeviceQuery } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
+import { allowOperate } from '@/lib/settings/access';
+import { useKnownRole } from '@/lib/useSession';
 import { describeLoadError, redirectIfSignedOut } from '@/lib/loadError';
 import type { DeviceHealth, DeviceRow } from '@/lib/types';
 import HealthStrip from './HealthStrip';
@@ -15,6 +17,7 @@ import DeviceTable from './DeviceTable';
 import ColumnMenu, { COLUMNS, type ColumnKey } from './ColumnMenu';
 
 export default function DeviceListView() {
+  const canWrite = allowOperate(useKnownRole());
   const [query, setQuery] = useState<DeviceQuery>({
     page: 1,
     pageSize: 25,
@@ -143,7 +146,7 @@ export default function DeviceListView() {
         {selected.length > 0 && (
           <div className="slide-up flex items-center gap-3 border-b border-border bg-navy px-4 py-2 text-sm text-primary-foreground">
             <span className="font-medium tabular">{selected.length} selected</span>
-            <button type="button" className="rounded-md bg-navy-3 px-2.5 py-1 text-xs font-medium transition-all hover:bg-navy-2 active:scale-95">Acknowledge alerts</button>
+            {canWrite ? <button type="button" className="rounded-md bg-navy-3 px-2.5 py-1 text-xs font-medium transition-all hover:bg-navy-2 active:scale-95">Acknowledge alerts</button> : null}
             <button type="button" className="rounded-md bg-navy-3 px-2.5 py-1 text-xs font-medium transition-all hover:bg-navy-2 active:scale-95">Export CSV</button>
             <button type="button" onClick={() => setSelected([])} className="ml-auto text-xs text-down hover:text-primary-foreground">Clear selection</button>
           </div>

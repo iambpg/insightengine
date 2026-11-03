@@ -7,6 +7,7 @@ import { api } from '@/lib/apiClient';
 import AppsLauncher from '@/components/AppsLauncher';
 import { reportLoadError } from '@/lib/loadError';
 import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
+import { allowSettings } from '@/lib/settings/access';
 
 interface TopbarProps {
   onOpenMobile: () => void;
@@ -167,9 +168,11 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
                 <p className="text-sm font-medium">{who.name || 'Signed out'}</p>
                 <p className="text-xs text-muted-foreground">{who.role || 'No session'}</p>
               </div>
-              <Link href="/settings" role="menuitem" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
-                <Icon name="Cog6ToothIcon" size={16} /> Settings
-              </Link>
+              {allowSettings(who.role) ? (
+                <Link href="/settings" role="menuitem" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
+                  <Icon name="Cog6ToothIcon" size={16} /> Settings
+                </Link>
+              ) : null}
               <button type="button" role="menuitem" onClick={signOut} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted">
                 <Icon name="ArrowRightOnRectangleIcon" size={16} /> Sign out
               </button>

@@ -6,7 +6,7 @@ import logging
 
 from fastapi import Request
 
-from ie_config.auth import SETTINGS_ROLES
+from ie_config.auth import can_operate
 from ie_config.errors import ApiError
 
 from .service import NetBridge
@@ -30,8 +30,8 @@ def mount_netbridge(app, user_of, audit) -> None:
 
     def editor(request: Request):
         user = reader(request)
-        if getattr(user, "role", "") not in SETTINGS_ROLES:
-            raise ApiError(403, "forbidden", "NetBridge writes are limited to Administrators and Engineers")
+        if not can_operate(getattr(user, "role", "")):
+            raise ApiError(403, "forbidden", "NetBridge writes are limited to Administrators, Engineers and Operators")
         return user
 
     @app.get("/api/v1/netbridge/summary")
