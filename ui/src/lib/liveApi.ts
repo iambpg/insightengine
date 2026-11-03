@@ -345,6 +345,51 @@ export async function runDeviceCli(deviceId: string, command: string) {
   );
 }
 
+export interface GeneratedConfig {
+  configured: boolean;
+  pushed: boolean;
+  title: string;
+  filename: string;
+  config: string;
+  reason: string;
+  receiverConfigured?: boolean;
+}
+
+export interface ExperienceSection {
+  configured: boolean;
+  reason: string;
+  note?: string;
+  controllers?: Array<Record<string, string>>;
+  routers?: Array<Record<string, string>>;
+  radios?: Array<Record<string, string>>;
+  tunnels?: Array<Record<string, string>>;
+  sites?: Array<Record<string, string | number>>;
+  sla?: Array<Record<string, string>>;
+  targets?: Array<Record<string, string | number>>;
+  probes?: Array<Record<string, string>>;
+}
+
+export interface ExperienceSummary {
+  isExampleData?: boolean;
+  degraded?: string[];
+  wlc: ExperienceSection;
+  sdwan: ExperienceSection;
+  vbs: ExperienceSection;
+  thirdParties: ExperienceSection;
+}
+
+export async function getExperience() {
+  return request<ExperienceSummary>(`${API}/experience`);
+}
+
+export async function getIpSlaConfig(deviceId: string) {
+  return request<GeneratedConfig>(`${API}/devices/${encodeURIComponent(deviceId)}/ip-sla-config`);
+}
+
+export async function getTelemetryConfig(deviceId: string) {
+  return request<GeneratedConfig>(`${API}/devices/${encodeURIComponent(deviceId)}/telemetry-config`);
+}
+
 export async function saveDeviceCliCredentials(deviceId: string, username: string, password: string) {
   return request<{ ok: boolean; configured: boolean }>(
     `${API}/devices/${encodeURIComponent(deviceId)}/cli/credentials`,

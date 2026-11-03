@@ -18,6 +18,18 @@ by_role_platform:
   wireless-controller/iosxe:
     modules: [if_mib, cisco_wlc_iosxe, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_env, cisco_mem]
     auth: ie_wlc_v2
+  cedge/ios-xe:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    auth: ntt_snmpv3_auth
+  cedge/iosxe:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    auth: ntt_snmpv3_auth
+  sdwan-edge/ios-xe:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    auth: ntt_snmpv3_auth
+  wan-edge/ios-xe:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    auth: ntt_snmpv3_auth
 by_role:
   access-switch:
     modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
@@ -40,6 +52,16 @@ by_role:
   wireless-controller:
     modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro]
     auth: ie_wlc_v2
+  # Cisco IOS-XE SD-WAN edge. Not the FortiGate role `sdwan`.
+  cedge:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    auth: ntt_snmpv3_auth
+  sdwan-edge:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    auth: ntt_snmpv3_auth
+  wan-edge:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    auth: ntt_snmpv3_auth
   access-point:
     skip_snmp: true
   ap:
@@ -58,13 +80,16 @@ by_manufacturer:
     auth: ntt_snmpv3_auth
 by_platform:
   ios:
-    modules: [if_mib, cisco_env, cisco_mem, cisco_pro, cisco_cdp, lldp]
+    modules: [if_mib, cisco_env, cisco_mem, cisco_pro, cisco_cdp, lldp, cisco_rttmon]
     auth: ntt_snmpv3_auth
   ios-xe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon]
     auth: ntt_snmpv3_auth
   iosxe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon]
+    auth: ntt_snmpv3_auth
+  ios-xe-sdwan:
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
     auth: ntt_snmpv3_auth
   nx-os:
     modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_cdp, lldp, cisco_mem]

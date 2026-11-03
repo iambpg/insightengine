@@ -312,4 +312,19 @@ export const api = {
   async saveDeviceCliCredentials(deviceId: string, username: string, password: string) {
     return (await backend()).saveDeviceCliCredentials(deviceId, username, password);
   },
+
+  // BACKEND: GET /api/v1/experience
+  async getExperience() {
+    return (await backend()).getExperience();
+  },
+
+  // BACKEND: GET /api/v1/devices/{id}/ip-sla-config
+  async getIpSlaConfig(deviceId: string) {
+    return (await backend()).getIpSlaConfig(deviceId);
+  },
+
+  // BACKEND: GET /api/v1/devices/{id}/telemetry-config
+  async getTelemetryConfig(deviceId: string) {
+    return (await backend()).getTelemetryConfig(deviceId);
+  },
 };

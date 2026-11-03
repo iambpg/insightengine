@@ -24,6 +24,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
       { href: '/', label: 'Devices', icon: 'ServerStackIcon' },
       { href: '/device-detail', label: 'Device detail', icon: 'CpuChipIcon' },
       { href: '/site-view', label: 'Sites', icon: 'BuildingOffice2Icon' },
+      { href: '/service-experience', label: 'Service Experience', icon: 'SignalIcon' },
       { href: '/alerts', label: 'Alerts', icon: 'BellAlertIcon' },
     ],
   },

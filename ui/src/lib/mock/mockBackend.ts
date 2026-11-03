@@ -399,3 +399,61 @@ export async function saveDeviceCliCredentials() {
   await delay(20);
   return { ok: true, configured: true };
 }
+
+export async function getExperience() {
+  await delay(40);
+  return {
+    isExampleData: true,
+    degraded: [],
+    wlc: {
+      configured: true,
+      reason: '',
+      note: 'Example only.',
+      controllers: [{ name: 'wlc-9800', site: 'Rotterdam', platform: 'ios-xe', transport: 'mdt' }],
+      radios: [{ ap: 'ap-rot-1', radio: '0', rssi_avg: '-64', clients: '12' }],
+    },
+    sdwan: {
+      configured: false,
+      reason: 'not configured. No Cisco SD-WAN cEdge is in NetBox.',
+      routers: [],
+      tunnels: [],
+    },
+    vbs: {
+      configured: false,
+      reason: 'not configured. No site has vbs_server_ip.',
+      sites: [],
+      sla: [],
+    },
+    thirdParties: {
+      configured: false,
+      reason: 'not configured. No NetBox service is tagged third-party or bank.',
+      targets: [],
+      probes: [],
+    },
+  };
+}
+
+export async function getIpSlaConfig() {
+  await delay(20);
+  return {
+    configured: false,
+    pushed: false,
+    title: 'IP SLA config',
+    filename: 'ip-sla.txt',
+    config: '',
+    reason: 'not configured. Site has no vbs_server_ip.',
+  };
+}
+
+export async function getTelemetryConfig() {
+  await delay(20);
+  return {
+    configured: true,
+    pushed: false,
+    title: 'Telemetry subscription',
+    filename: 'telemetry-subscription.txt',
+    receiverConfigured: false,
+    reason: '',
+    config: '! Example telemetry subscription. Nothing is pushed.\ntelemetry ietf subscription 60000\n',
+  };
+}

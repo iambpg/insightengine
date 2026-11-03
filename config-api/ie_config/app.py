@@ -23,6 +23,7 @@ from .errors import ApiError, error_body
 from .apps_launcher import mount_apps_launcher
 from .vault import mount_vault
 from .device_cli import mount_device_cli
+from .experience import mount_experience
 from .fleet import mount_fleet
 from .masking import leftover_placeholders, mask_text, restore_secrets
 from .registry import AppSpec, FileSpec, Registry, load_registry
@@ -970,6 +971,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         return found
 
     mount_fleet(app, user_of)
+    mount_experience(app, user_of)
 
     def record_cli(user, request, result, detail):
         _audit(sf, user, "device-cli", client_ip(request), result, "device-cli", "", "", (detail or "")[:500])
