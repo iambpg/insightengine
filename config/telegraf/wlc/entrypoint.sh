@@ -19,9 +19,43 @@ export PYTHONPATH="/usr/local/bin:/etc/telegraf${PYTHONPATH:+:$PYTHONPATH}"
 IE_MDT_PORT="${IE_MDT_PORT:-57500}"
 export IE_MDT_PORT
 out=/tmp/wlc-generated.conf
-if ! python3 /usr/local/bin/render_wlc.py -o "$out"; then
-  printf '%s\n' '# NetBox target render failed; no WLC inputs this start' > "$out"
+refresh="${IE_WLC_REFRESH_SECONDS:-300}"
+case "$refresh" in
+  ''|*[!0-9]*) refresh=300 ;;
+esac
+if [ ! -s "$out" ]; then
+  printf '%s\n' '# NetBox target list is not available yet' > "$out"
 fi
+# Retry quickly until the first good list, then every IE_WLC_REFRESH_SECONDS
+# (default 5 minutes). A failed fetch does not replace the last good file.
+# The dial-out Telegraf is not reloaded. Only the polling process, which
+# reads this generated file, is restarted when the list changes.
+poller_pid=
+main_pid=
+stop_poller() {
+  if [ -n "$poller_pid" ]; then
+    kill "$poller_pid" 2>/dev/null || true
+    wait "$poller_pid" 2>/dev/null || true
+    poller_pid=
+  fi
+}
+start_poller() {
+  stop_poller
+  if ! grep -q '^\[\[inputs\.' "$out" 2>/dev/null; then
+    return 0
+  fi
+  telegraf --config /etc/telegraf/poller.conf --config "$out" --non-strict-env-handling &
+  poller_pid=$!
+  echo "reloaded WLC poller"
+}
+stop_children() {
+  stop_poller
+  if [ -n "$main_pid" ]; then
+    kill "$main_pid" 2>/dev/null || true
+  fi
+}
+trap 'stop_children; wait; exit 0' TERM INT
+
 transport="${IE_WLC_MDT_TRANSPORT:-grpc}"
 enable="${IE_WLC_MDT:-}"
 if [ -z "$enable" ]; then
@@ -31,8 +65,33 @@ if [ -z "$enable" ]; then
     enable=0
   fi
 fi
-set -- --config /etc/telegraf/telegraf.conf --config "$out"
+set -- --config /etc/telegraf/telegraf.conf
 if [ "$transport" != "gnmi" ] && [ "$enable" != "0" ]; then
   set -- "$@" --config /etc/telegraf/mdt.conf
 fi
-exec telegraf "$@" --non-strict-env-handling
+telegraf "$@" --non-strict-env-handling &
+main_pid=$!
+
+delay=2
+have=0
+while kill -0 "$main_pid" 2>/dev/null; do
+  if log=$(python3 /usr/local/bin/render_wlc.py -o "$out" 2>&1); then
+    printf '%s\n' "$log"
+    case "$log" in
+      wrote*) start_poller ;;
+    esac
+    have=1
+    delay=2
+    sleep "$refresh"
+  elif [ "$have" -eq 0 ]; then
+    printf '%s\n' "$log"
+    sleep "$delay"
+    if [ "$delay" -lt 30 ]; then
+      delay=$((delay * 2))
+    fi
+  else
+    printf '%s\n' "$log"
+    sleep "$refresh"
+  fi
+done
+wait "$main_pid"

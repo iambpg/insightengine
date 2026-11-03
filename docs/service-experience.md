@@ -40,15 +40,15 @@ Open **TCP 57500** on the collector for that dial-out. **57400** is UI HTTPS whe
 
 On the device page, **Controller config** copies the IOS-XE or AireOS CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you. The subscription list, including intervals, is `docs/wlc-9800-full.md`.
 
-The paths below are the original client, RRM and AP set. Inventory is 600s, radio and RRM 120s, clients 60s, with on-change on join/leave, radio channel and tx power, and SSID client counts. The full list is `docs/wlc-9800-full.md`.
+The paths below are the original client, RRM and AP set. Inventory is 600s, radio and RRM 120s, clients 60s. SSID client counts also have on-change. capwap-data, radio-oper-data and ap-join-stats are periodic only. The full list is `docs/wlc-9800-full.md`.
 
 | Path | Policy | What it is |
 |---|---|---|
 | `/wireless-client-oper:client-oper-data/traffic-stats` | 60s | RSSI, SNR, rates, retries, bytes. Stored per client unless `IE_WLC_STORE_CLIENTS=0` |
 | `/wireless-client-oper:client-oper-data/common-oper-data` | 60s | AP name and radio slot, joined to the client row |
 | `/wireless-rrm-oper:rrm-oper-data/rrm-measurement` | 120s | channel utilization (`cca-util-percentage`), noise, interference |
-| `/wireless-access-point-oper:access-point-oper-data/capwap-data` | on-change and 600s | AP state, reboot reason (CAPWAP join/leave) |
-| `/wireless-access-point-oper:access-point-oper-data/radio-oper-data` | on-change and 120s | channel, width, tx power |
+| `/wireless-access-point-oper:access-point-oper-data/capwap-data` | 600s | AP name, model, serial, IP, location, IOS, mode, tags |
+| `/wireless-access-point-oper:access-point-oper-data/radio-oper-data` | 120s | channel, width, tx power |
 | `/wireless-access-point-oper:access-point-oper-data/ssid-counters` | on-change and 120s | clients per SSID |
 
 YANG modules: `Cisco-IOS-XE-wireless-client-oper`, `Cisco-IOS-XE-wireless-rrm-oper`, `Cisco-IOS-XE-wireless-access-point-oper`.

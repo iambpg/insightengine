@@ -128,6 +128,9 @@ class CatalogPackagingTests(unittest.TestCase):
         text = (WLC / "entrypoint.sh").read_text(encoding="utf-8")
         self.assertIn('PYTHONPATH="/usr/local/bin:/etc/telegraf', text)
         self.assertIn("/usr/local/bin/drop-priv.sh", text)
+        self.assertIn("IE_WLC_REFRESH_SECONDS:-300", text)
+        self.assertIn("reloaded WLC poller", text)
+        self.assertNotIn("--watch-config", text)
 
     def test_render_imports_catalog_from_the_script_dir_or_an_extra_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -272,6 +275,7 @@ class StarlarkDialectTests(unittest.TestCase):
                     "ie_wlc_radio,index=9.8.7,wlc=lab,site=hq channel=1i",
                     "ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-1,ms_mac_address=aabbccddeeff most_recent_rssi=-62i,most_recent_snr=28i",
                     "ie_wlc_rogue_raw,index=aabb,wlc=lab value=1i",
+                    'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",device_detail/static_info/ap_models/model="C9120AXI-B",device_detail/static_info/board_data/wtp_serial_num="FGL2417ABC1",device_detail/wtp_version/sw_version="17.15.1.4",wtp_ip="10.8.0.10",ap_location/location="floor-1",ap_mode_data/wtp_mode="local",tag_info/site_tag/site_tag_name="site-a",tag_info/policy_tag_info/policy_tag_name="pol-a",tag_info/rf_tag/rf_tag_name="rf-a",ap_state/ap_operation_state="ap-up"',
                     "",
                 ]),
                 encoding="utf-8",
@@ -312,6 +316,14 @@ class StarlarkDialectTests(unittest.TestCase):
         self.assertIn("client=aabbccddeeff", text)
         self.assertIn("ie_wlc_rogue", text)
         self.assertIn("aps=1", text)
+        self.assertIn("model=C9120AXI-B", text)
+        self.assertIn("sw_version=17.15.1.4", text)
+        self.assertIn("serial=FGL2417ABC1", text)
+        self.assertIn("location=floor-1", text)
+        self.assertIn("site_tag=site-a", text)
+        self.assertIn("policy_tag=pol-a", text)
+        self.assertIn("rf_tag=rf-a", text)
+        self.assertIn("ap_name=AP-1", text)
 
     def test_host_api_and_syslog_configs_parse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
