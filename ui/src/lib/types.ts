@@ -179,6 +179,29 @@ export interface AccessPointRadio {
   channel: number | string | null;
   utilization: number | null;
   clients: number | null;
+  noise?: number | null;
+  interference?: number | null;
+  txPowerDbm?: number | null;
+  width?: number | null;
+  rssiAvg?: number | null;
+  snrAvg?: number | null;
+  band?: string;
+}
+
+export interface AccessPointSsid {
+  ssid: string;
+  radio: string;
+  band: string;
+  clients: number | null;
+}
+
+export interface AccessPointEvent {
+  t: number;
+  what: string;
+  ap: string;
+  radio: string;
+  from: string | number;
+  to: string | number;
 }
 
 export interface AccessPointRow {
@@ -190,6 +213,18 @@ export interface AccessPointRow {
   clients: number | null;
   uptimeSeconds: number | null;
   radios: AccessPointRadio[];
+  model?: string;
+  serial?: string;
+  ip?: string;
+  location?: string;
+  ios?: string;
+  mode?: string;
+  neighborSwitch?: string;
+  neighborPort?: string;
+  netboxSite?: string;
+  ssids?: AccessPointSsid[];
+  rssiAvg?: number | null;
+  snrAvg?: number | null;
 }
 
 export interface DeviceHealthPanel {

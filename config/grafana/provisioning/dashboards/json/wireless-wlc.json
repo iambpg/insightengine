@@ -1,0 +1,108 @@
+{
+  "uid": "ie-wireless-wlc",
+  "title": "Wireless controllers",
+  "tags": ["insightengine", "wireless"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "wlc",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": "label_values(ie_wlc_ap_oper_up, wlc)",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "APs up",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie_wlc_ap_oper_up{wlc=~\"$wlc\"} == 1) or vector(0)"}]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "APs down",
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie_wlc_ap_oper_up{wlc=~\"$wlc\"} == 0) or vector(0)"}]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Clients",
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(ie_wlc_client_radio_clients{wlc=~\"$wlc\"}) or sum(bsnGlobalDot11SystemMobileStations) or sum(cLMobilityExtMCTotalClientCount) or vector(0)"}]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "HA not active",
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(cRFStatusUnitState != 7) or vector(0)"}]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Radios high interference",
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie_wlc_radio_interference{wlc=~\"$wlc\"} > 50) or vector(0)"}]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Channel utilization",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent"}},
+      "targets": [{"refId": "A", "expr": "ie_wlc_radio_channel_util{wlc=~\"$wlc\"}", "legendFormat": "{{ap}} r{{radio}}"}]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Interference",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent"}},
+      "targets": [{"refId": "A", "expr": "ie_wlc_radio_interference{wlc=~\"$wlc\"}", "legendFormat": "{{ap}} r{{radio}}"}]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Average RSSI",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "dBm"}},
+      "targets": [{"refId": "A", "expr": "ie_wlc_client_radio_rssi_avg{wlc=~\"$wlc\"}", "legendFormat": "{{ap}} r{{radio}}"}]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Average SNR",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "dB"}},
+      "targets": [{"refId": "A", "expr": "ie_wlc_client_radio_snr_avg{wlc=~\"$wlc\"}", "legendFormat": "{{ap}} r{{radio}}"}]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "AP inventory",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "ie_wlc_ap_info{wlc=~\"$wlc\"}", "format": "table", "instant": true}]
+    }
+  ]
+}

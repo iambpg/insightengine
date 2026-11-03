@@ -25,7 +25,14 @@ vi.mock('@/lib/apiMode', () => ({
 }));
 
 vi.mock('@/lib/apiClient', () => ({
-  api: { getDevice: vi.fn(), discoverDevice: vi.fn(), getDeviceDiscovery: vi.fn() },
+  api: {
+    getDevice: vi.fn(),
+    discoverDevice: vi.fn(),
+    getDeviceDiscovery: vi.fn(),
+    getTelemetryConfig: vi.fn(),
+    getIpSlaConfig: vi.fn(),
+    listAccessPoints: vi.fn(),
+  },
 }));
 
 vi.mock('./DeviceGraphs', () => ({ default: () => null }));
@@ -103,6 +110,7 @@ describe('DeviceDetailView client navigation', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'edge-42' })).toBeInTheDocument();
     expect(api.getDevice).toHaveBeenCalledTimes(1);
     expect(api.getDevice).toHaveBeenCalledWith('42');
+    expect(screen.getByRole('button', { name: /Controller config/ })).toBeInTheDocument();
     expect(screen.queryByText(/unknown device/i)).toBeNull();
   });
 

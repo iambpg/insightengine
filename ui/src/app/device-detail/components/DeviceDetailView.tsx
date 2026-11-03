@@ -200,7 +200,7 @@ export default function DeviceDetailView() {
                 Topology
               </Link>
               <ConfigButton label="IP SLA config" load={() => api.getIpSlaConfig(device.id || id)} />
-              <ConfigButton label="Telemetry subscription" load={() => api.getTelemetryConfig(device.id || id)} />
+              <ConfigButton label="Controller config" load={() => api.getTelemetryConfig(device.id || id)} />
             </div>
             <div className="basis-full">
               <DeviceDiscoveryStatus job={discoveryJob} />

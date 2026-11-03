@@ -416,6 +416,9 @@ def page_rows(rows: list[dict], *, page: int, page_size: int, q: str = "", wlc: 
                 str(row.get("mac") or ""),
                 str(row.get("wlc") or ""),
                 str(row.get("site") or ""),
+                str(row.get("netboxSite") or ""),
+                str(row.get("model") or ""),
+                str(row.get("neighborSwitch") or ""),
             ]).lower()
             if needle not in blob:
                 continue

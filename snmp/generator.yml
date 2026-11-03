@@ -183,9 +183,11 @@ modules:
         lookup: entPhysicalDescr
         drop_source_indexes: false
 
-  # AireOS controller system stats and WLC-level counts. No AP table: per-AP
-  # rows are Telegraf. bsnGlobalDot11SystemMobileStations is the client total.
-  # Joined AP count is count() of the Telegraf bsnAPOperationStatus series.
+  # AireOS controller system stats and WLC-level counts. No AP table and no
+  # client table: per-AP rows are Telegraf, client RSSI is 9800 MDT.
+  # bsnGlobalDot11SystemMobileStations is the client total.
+  # HA scalars (cRFStatusUnitState) are numeric in snmp/out/snmp.yml because
+  # CISCO-RF-MIB is not vendored for the generator.
   cisco_wlc_aireos:
     walk:
       - agentCurrentCPUUtilization
@@ -195,12 +197,15 @@ modules:
       - agentSwitchInfoPowerSupply1Operational
       - agentSwitchInfoPowerSupply2Present
       - agentSwitchInfoPowerSupply2Operational
+      - agentRadioUpDownTrapCount
+      - agentApAssociateDisassociateTrapCount
       - bsnGlobalDot11SystemMobileStations
 
-  # Catalyst 9800 controller summary. One scalar for joined APs. CPU, memory,
-  # fans, PSUs and temperature come from cisco_pro, cisco_enhanced_mem,
-  # cisco_entity_sensor and cisco_fru on the same scrape. Per-AP tables are
-  # not walked here (a single 9800 can hold ~5000 APs).
+  # Catalyst 9800 controller summary. Joined APs and total clients are scalars.
+  # CPU, memory, fans, PSUs and temperature come from cisco_pro,
+  # cisco_enhanced_mem, cisco_entity_sensor and cisco_fru on the same scrape.
+  # Per-AP and per-client tables are not walked (a single 9800 can hold ~5000 APs).
   cisco_wlc_iosxe:
     walk:
       - cLApGlobalAPConnectCount
+      - cLMobilityExtMCTotalClientCount

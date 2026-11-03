@@ -19,6 +19,18 @@ groups:
       - record: ie:site_wifi_channel_util
         expr: avg by (site) (ie_wlc_radio_channel_util)
 
+      - record: ie:site_wifi_interference
+        expr: avg by (site) (ie_wlc_radio_interference)
+
+      - record: ie:wlc_ap_down
+        expr: count by (wlc, site) (ie_wlc_ap_oper_up == 0)
+
+      - record: ie:wlc_clients
+        expr: sum by (wlc) (ie_wlc_client_radio_clients) or max by (wlc) (bsnGlobalDot11SystemMobileStations) or max by (wlc) (cLMobilityExtMCTotalClientCount)
+
+      - record: ie:wlc_ha_state
+        expr: cRFStatusUnitState
+
       - record: ie:sdwan_tunnel_loss_ratio
         expr: ie_sdwan_tunnel_loss_ratio
 
@@ -101,6 +113,36 @@ groups:
         annotations:
           summary: "AP {{ $labels.ap }} is down"
           description: "AP {{ $labels.ap }} on {{ $labels.wlc }} has not been up for 5 minutes. Reboot reason {{ $labels.reboot_reason }}."
+
+      - alert: WifiInterferenceHigh
+        expr: ie_wlc_radio_interference > 50
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: wireless
+        annotations:
+          summary: "High interference on {{ $labels.ap }} radio {{ $labels.radio }}"
+          description: "Interference on {{ $labels.ap }} ({{ $labels.wlc }}) has been above 50% for 10 minutes."
+
+      - alert: WifiPoorSnrClients
+        expr: ie_wlc_radio_poor_snr_clients > 0
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: wireless
+        annotations:
+          summary: "Poor SNR clients on {{ $labels.ap }} radio {{ $labels.radio }}"
+          description: "AireOS reports clients with poor SNR on {{ $labels.ap }}. Per-client RSSI is not walked over SNMP."
+
+      - alert: WlcHaStateChange
+        expr: changes(cRFStatusUnitState[15m]) > 0 or changes(cRFStatusPeerUnitState[15m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          whatisdown: wireless
+        annotations:
+          summary: "Wireless controller HA state changed"
+          description: "CISCO-RF-MIB unit or peer state changed on {{ $labels.hostname }} {{ $labels.instance }}. Active is 7."
 
       - alert: SdwanTunnelLoss
         expr: ie:sdwan_tunnel_loss_ratio > 0.02

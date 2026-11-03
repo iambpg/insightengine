@@ -56,6 +56,15 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
   return request(`${API}/devices/${encodeURIComponent(form)}`);
 }
 
+export async function getAccessPointDetail(wlc: string, name: string) {
+  const params = new URLSearchParams();
+  if (wlc) params.set('wlc', wlc);
+  if (name) params.set('name', name);
+  return request<{ accessPoint: import('@/lib/types').AccessPointRow; events: import('@/lib/types').AccessPointEvent[]; degraded?: string[] }>(
+    `${API}/access-points/detail?${params.toString()}`,
+  );
+}
+
 export async function listAccessPoints(query: { wlc?: string; site?: string; q?: string; status?: string; page?: number; pageSize?: number }) {
   const params = new URLSearchParams();
   if (query.wlc) params.set('wlc', query.wlc);
