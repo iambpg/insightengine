@@ -51,7 +51,7 @@ describe('AccessPointList', () => {
     const user = userEvent.setup();
     render(<AccessPointList wlc="wlc-9800" />);
     const link = await screen.findByRole('link', { name: 'ap-ams01-114' });
-    expect(link).toHaveAttribute('href', '/device-detail?id=ap%3Aap-ams01-114&form=ceiling-ap');
+    expect(link).toHaveAttribute('href', '/device-detail?id=ap%3A00%3A11%3A22%3A33%3A44%3A55&form=ceiling-ap');
     expect(screen.getByText('sw-ams01 Gi1/0/14')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Healthy/ })).toHaveAttribute('href', expect.stringContaining('tab=health'));
     await user.click(screen.getByRole('button', { name: 'Add to NetBox' }));

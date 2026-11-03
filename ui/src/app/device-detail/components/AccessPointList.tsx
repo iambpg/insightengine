@@ -50,9 +50,10 @@ export default function AccessPointList({ wlc }: { wlc: string }) {
   const rows = body?.rows ?? [];
   const total = body?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE));
+  const rowId = (row: AccessPointRow) => row.mac || row.name;
   const selectable = rows.filter((row) => !row.inNetbox);
-  const allOn = selectable.length > 0 && selectable.every((row) => picked.includes(row.name));
-  const chosen = rows.filter((row) => picked.includes(row.name) && !row.inNetbox);
+  const allOn = selectable.length > 0 && selectable.every((row) => picked.includes(rowId(row)));
+  const chosen = rows.filter((row) => picked.includes(rowId(row)) && !row.inNetbox);
   return (
     <section className="rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card" aria-labelledby="ap-list-title">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -96,7 +97,7 @@ export default function AccessPointList({ wlc }: { wlc: string }) {
                   type="checkbox"
                   aria-label="Select access points"
                   checked={allOn}
-                  onChange={() => setPicked(allOn ? [] : selectable.map((row) => row.name))}
+                  onChange={() => setPicked(allOn ? [] : selectable.map((row) => row.mac || row.name))}
                 />
               </th>
               <th className="py-1.5 pr-3 font-semibold">Name</th>
@@ -111,9 +112,11 @@ export default function AccessPointList({ wlc }: { wlc: string }) {
           <tbody>
             {rows.map((row: AccessPointRow) => {
               const health = apHealth(row.status);
-              const href = devicePath(accessPointId(row.netboxId, row.name), 'ceiling-ap');
+              const identity = row.mac || row.name;
+              const href = devicePath(accessPointId(row.netboxId, identity), 'ceiling-ap');
+              const pickedOn = picked.includes(identity);
               return (
-                <tr key={`${row.wlc}-${row.name}-${row.mac}`} className="border-b border-border/70">
+                <tr key={`${row.wlc}-${identity}`} className="border-b border-border/70">
                   <td className="py-1.5 pr-3">
                     {row.inNetbox ? (
                       <span className="text-xs text-muted-foreground">In NetBox</span>
@@ -121,23 +124,23 @@ export default function AccessPointList({ wlc }: { wlc: string }) {
                       <input
                         type="checkbox"
                         aria-label={`Select ${row.name}`}
-                        checked={picked.includes(row.name)}
-                        onChange={() => setPicked((current) => current.includes(row.name) ? current.filter((item) => item !== row.name) : [...current, row.name])}
+                        checked={pickedOn}
+                        onChange={() => setPicked((current) => pickedOn ? current.filter((item) => item !== identity) : [...current, identity])}
                       />
                     )}
                   </td>
                   <td className="py-1.5 pr-3">
                     <Link href={href} className="font-medium text-primary hover:underline">{row.name}</Link>
-                    <span className="mt-0.5 block font-mono-data text-xs text-muted-foreground">{row.model || row.mac}</span>
+                    <span className="mt-0.5 block font-mono-data text-xs text-muted-foreground">{[row.model, row.mac].filter(Boolean).join(' · ') || '—'}</span>
                     {canWrite && !row.inNetbox ? (
                       <button type="button" className="mt-1 text-xs font-semibold" onClick={() => setAdding([draftOf(row)])}>Add to NetBox</button>
                     ) : null}
                   </td>
                   <td className="py-1.5 pr-3">
-                    <HealthBadge health={health} href={deviceHealthPath(accessPointId(row.netboxId, row.name), 'ceiling-ap', health)} />
+                    <HealthBadge health={health} href={deviceHealthPath(accessPointId(row.netboxId, identity), 'ceiling-ap', health)} />
                   </td>
                   <td className="py-1.5 pr-3">{row.netboxSite || row.site || '—'}</td>
-                  <td className="py-1.5 pr-3">{row.status}</td>
+                  <td className="py-1.5 pr-3">{row.status === 'up' ? 'Up' : row.status === 'down' ? 'Offline' : row.status || 'Unknown'}</td>
                   <td className="py-1.5 pr-3 tabular">{row.clients ?? '—'}</td>
                   <td className="py-1.5 pr-3 text-xs">
                     {row.neighborSwitch ? `${row.neighborSwitch} ${row.neighborPort || ''}`.trim() : '—'}
