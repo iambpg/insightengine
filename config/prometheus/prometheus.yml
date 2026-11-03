@@ -20,6 +20,7 @@ global:
 rule_files:
   - /etc/prometheus/alert-rules.yml
   - /etc/prometheus/health-rules.yml
+  - /etc/prometheus/experience-rules.yml
 
 alerting:
   alertmanagers:
@@ -343,3 +344,79 @@ scrape_configs:
         target_label: __param_auth
       - target_label: __address__
         replacement: scrape-lb:9116
+
+  # Service experience. HTTP SD refresh is 5m, so a new bank, third party
+  # or VBS address is probed within 5 minutes. No targets are seeded.
+  - job_name: blackbox-third-party-icmp
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - <<: *netbox_sd
+        url: https://caddy:8443/api/plugins/lists/prometheus-services/?tag=third-party&probe=icmp
+        refresh_interval: 5m
+    relabel_configs: &probe_relabels
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__meta_netbox_name]
+        target_label: name
+      - source_labels: [__meta_netbox_site_name]
+        target_label: site
+      - source_labels: [__meta_netbox_kind]
+        target_label: target_kind
+      - source_labels: [__meta_netbox_probe]
+        target_label: probe
+      - target_label: __address__
+        replacement: scrape-lb:9115
+
+  - job_name: blackbox-third-party-tcp
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    http_sd_configs:
+      - <<: *netbox_sd
+        url: https://caddy:8443/api/plugins/lists/prometheus-services/?tag=third-party&probe=tcp
+        refresh_interval: 5m
+    relabel_configs: *probe_relabels
+
+  - job_name: blackbox-bank-icmp
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - <<: *netbox_sd
+        url: https://caddy:8443/api/plugins/lists/prometheus-services/?tag=bank&probe=icmp
+        refresh_interval: 5m
+    relabel_configs: *probe_relabels
+
+  - job_name: blackbox-bank-tcp
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    http_sd_configs:
+      - <<: *netbox_sd
+        url: https://caddy:8443/api/plugins/lists/prometheus-services/?tag=bank&probe=tcp
+        refresh_interval: 5m
+    relabel_configs: *probe_relabels
+
+  - job_name: blackbox-vbs-icmp
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - <<: *netbox_sd
+        url: https://caddy:8443/api/plugins/lists/prometheus-vbs/
+        refresh_interval: 5m
+    relabel_configs: *probe_relabels

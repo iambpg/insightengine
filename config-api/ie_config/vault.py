@@ -108,7 +108,7 @@ GROUPS: tuple[Group, ...] = (
         (),
         (
             Endpoint("blackbox exporter", "PORT_BLACKBOX", "9115", "http"),
-            Endpoint("Telegraf", "PORT_TELEGRAF", "57500", "http"),
+            Endpoint("Telegraf", "PORT_TELEGRAF", "57501", "http"),
             Endpoint("syslog", "PORT_SYSLOG", "514", "tcp"),
         ),
     ),

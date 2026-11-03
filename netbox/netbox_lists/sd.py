@@ -111,3 +111,97 @@ def target_for(device: dict, mapping: dict, auth_by_ip: dict | None = None) -> d
 
 def default_map_path() -> str:
     return os.environ.get("IE_MODULE_MAP", "/etc/ie/module-map.yml")
+
+
+def _kind(tags) -> str:
+    slugs = []
+    for tag in tags or []:
+        if isinstance(tag, dict):
+            slugs.append(str(tag.get("slug") or tag.get("name") or "").lower())
+        else:
+            slugs.append(str(tag).lower())
+    if "bank" in slugs:
+        return "bank"
+    if "third-party" in slugs:
+        return "third-party"
+    return ""
+
+
+def service_target(service: dict) -> dict | None:
+    """One blackbox target. Services without a third-party or bank tag are skipped.
+
+    probe is the service custom field (icmp or tcp). Address is custom field
+    target, otherwise the parent address the view already copied. TCP needs a port.
+    """
+    kind = _kind(service.get("tags"))
+    if not kind:
+        return None
+    probe = str(service.get("probe") or "").strip().lower()
+    if probe not in ("icmp", "tcp"):
+        return None
+    host = str(service.get("address") or "").strip()
+    port = str(service.get("port") or "").strip()
+    if not host:
+        return None
+    if probe == "tcp":
+        if not port:
+            return None
+        target = "%s:%s" % (host, port)
+    else:
+        target = host.split("/")[0]
+    labels = {
+        "__meta_netbox_name": _slug(service.get("name")),
+        "__meta_netbox_site_name": _slug(service.get("site")),
+        "__meta_netbox_probe": probe,
+        "__meta_netbox_kind": kind,
+        "__meta_netbox_port": port,
+    }
+    return {"targets": [target], "labels": labels}
+
+
+def service_targets(services: list, tag: str = "", probe: str = "") -> list[dict]:
+    wanted_tag = (tag or "").strip().lower()
+    wanted_probe = (probe or "").strip().lower()
+    rows = []
+    for service in services or []:
+        if not isinstance(service, dict):
+            continue
+        item = service_target(service)
+        if not item:
+            continue
+        if wanted_tag and item["labels"]["__meta_netbox_kind"] != wanted_tag:
+            continue
+        if wanted_probe and item["labels"]["__meta_netbox_probe"] != wanted_probe:
+            continue
+        rows.append(item)
+    return rows
+
+
+def vbs_target(site: dict) -> dict | None:
+    """Blackbox ICMP to the site VBS server. No address means the site is not a target."""
+    if not isinstance(site, dict):
+        return None
+    ip = str(site.get("vbs_server_ip") or "").strip()
+    if not ip:
+        return None
+    host = ip.split("/")[0]
+    name = _slug(site.get("name"))
+    return {
+        "targets": [host],
+        "labels": {
+            "__meta_netbox_name": name,
+            "__meta_netbox_site_name": name,
+            "__meta_netbox_probe": "icmp",
+            "__meta_netbox_kind": "vbs",
+            "__meta_netbox_port": _slug(site.get("vbs_server_port") or "9999"),
+        },
+    }
+
+
+def vbs_targets(sites: list) -> list[dict]:
+    rows = []
+    for site in sites or []:
+        item = vbs_target(site)
+        if item:
+            rows.append(item)
+    return rows

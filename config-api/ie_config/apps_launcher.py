@@ -27,7 +27,7 @@ _APPS = (
     ("oxidized", "Oxidized", "PORT_OXIDIZED", "8888", "https", "http://oxidized:8888/nodes"),
     ("snmp-exporter", "SNMP exporter", "PORT_SNMP_EXPORTER", "9116", "http", "http://snmp-exporter-1:9116/-/healthy"),
     ("blackbox", "blackbox exporter", "PORT_BLACKBOX", "9115", "http", "http://blackbox-exporter-1:9115/-/healthy"),
-    ("telegraf", "Telegraf", "PORT_TELEGRAF", "57500", "http", "http://telegraf-host:9273/metrics"),
+    ("telegraf", "Telegraf", "PORT_TELEGRAF", "57501", "http", "http://telegraf-host:9273/metrics"),
 )
 
 

@@ -199,6 +199,8 @@ export default function DeviceDetailView() {
                 <Icon name="ShareIcon" size={16} />
                 Topology
               </Link>
+              <ConfigButton label="IP SLA config" load={() => api.getIpSlaConfig(device.id || id)} />
+              <ConfigButton label="Telemetry subscription" load={() => api.getTelemetryConfig(device.id || id)} />
             </div>
             <div className="basis-full">
               <DeviceDiscoveryStatus job={discoveryJob} />
@@ -413,6 +415,68 @@ function Inventory({ device }: { device: DeviceDetailData }) {
         )}
       </div>
     </section>
+  );
+}
+
+function ConfigButton({ label, load }: { label: string; load: () => Promise<{ configured: boolean; reason: string; config: string; pushed?: boolean }> }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const show = () => {
+    setBusy(true);
+    load()
+      .then((body) => {
+        setText(body.config || '');
+        setNote(body.configured ? 'Generated for paste. Nothing is pushed to the device.' : body.reason || 'not configured');
+        setOpen(true);
+      })
+      .catch((error) => {
+        toast.error(isApiError(error) ? error.message : 'Could not load the config.');
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Copied.');
+    } catch {
+      toast.error('Copy failed.');
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={show}
+        disabled={busy}
+        className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+      >
+        <Icon name="ClipboardDocumentIcon" size={16} />
+        {busy ? 'Loading…' : label}
+      </button>
+      {open ? (
+        <div className="basis-full rounded-md border border-border bg-muted/40 p-3" role="region" aria-label={label}>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">{note}</p>
+            <div className="flex gap-2">
+              {text ? (
+                <button type="button" onClick={copy} className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+                  Copy
+                </button>
+              ) : null}
+              <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-border px-3 py-1 text-xs font-semibold">
+                Close
+              </button>
+            </div>
+          </div>
+          {text ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono-data text-xs">{text}</pre> : null}
+        </div>
+      ) : null}
+    </>
   );
 }
 

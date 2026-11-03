@@ -29,6 +29,7 @@ const NAV: Entry[] = [
   { id: 'cmd-dev', label: 'All devices', hint: 'Device list', href: '/', icon: 'ServerStackIcon' },
   { id: 'cmd-site', label: 'Sites', hint: 'Site list', href: '/site-view', icon: 'BuildingOffice2Icon' },
   { id: 'cmd-alerts', label: 'Alerts', hint: 'Open alerts', href: '/alerts', icon: 'BellAlertIcon' },
+  { id: 'cmd-experience', label: 'Service Experience', hint: 'Wireless, SD-WAN, VBS, banks', href: '/service-experience', icon: 'SignalIcon' },
   { id: 'cmd-nib', label: 'Not in NetBox', hint: 'Discovered devices awaiting approval', href: '/not-in-net-box', icon: 'QuestionMarkCircleIcon' },
   { id: 'cmd-set', label: 'Settings', hint: 'Applications, roles, webhook', href: '/settings', icon: 'Cog6ToothIcon' },
 ];

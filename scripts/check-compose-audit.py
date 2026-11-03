@@ -488,6 +488,7 @@ def stack_fix_errors(services: dict) -> list[str]:
         errors.append("netbox-worker pull_policy must be never")
     errors.extend(one_shot_netbox_errors(services, "netbox-device-types", ("netbox-component-backfill",)))
     errors.extend(one_shot_netbox_errors(services, "netbox-regions"))
+    errors.extend(one_shot_netbox_errors(services, "netbox-experience-fields"))
     errors.extend(one_shot_netbox_errors(services, "netbox-component-backfill"))
     backfill = services.get("netbox-component-backfill") if isinstance(services.get("netbox-component-backfill"), dict) else {}
     waited = (backfill.get("depends_on") or {}).get("netbox-device-types")

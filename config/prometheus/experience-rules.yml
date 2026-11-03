@@ -1,0 +1,203 @@
+# Service experience. Per-client wireless series are not stored.
+# Telegraf already aggregated them to per-AP/per-radio.
+groups:
+  - name: insightengine-experience-recordings
+    interval: 60s
+    rules:
+      - record: ie:site_wifi_rssi_avg
+        expr: avg by (site) (ie_wlc_client_radio_rssi_avg)
+
+      - record: ie:site_wifi_rssi_min
+        expr: min by (site) (ie_wlc_client_radio_rssi_min)
+
+      - record: ie:site_wifi_snr_avg
+        expr: avg by (site) (ie_wlc_client_radio_snr_avg)
+
+      - record: ie:site_wifi_clients
+        expr: sum by (site) (ie_wlc_client_radio_clients)
+
+      - record: ie:site_wifi_channel_util
+        expr: avg by (site) (ie_wlc_radio_channel_util)
+
+      - record: ie:sdwan_tunnel_loss_ratio
+        expr: ie_sdwan_tunnel_loss_ratio
+
+      - record: ie:sdwan_tunnel_latency_ms
+        expr: ie_sdwan_tunnel_latency_ms
+
+      - record: ie:sdwan_tunnel_jitter_ms
+        expr: ie_sdwan_tunnel_jitter_ms
+
+      - record: ie:sdwan_tunnel_up
+        expr: ie_sdwan_tunnel_up
+
+      # 1 when the latest RTT completed ok (RttResponseSense ok = 1).
+      - record: ie:ipsla_ok
+        expr: rttMonLatestRttOperSense == 1
+
+      - record: ie:ipsla_rtt_ms
+        expr: rttMonLatestRttOperCompletionTime
+
+      - record: ie:ipsla_jitter_ms
+        expr: rttMonLatestJitterOperAvgJitter
+
+      - record: ie:ipsla_loss_ratio
+        expr: |
+          (
+            rttMonLatestJitterOperPacketLossSD
+            + rttMonLatestJitterOperPacketLossDS
+          )
+          /
+          clamp_min(
+            rttMonLatestJitterOperNumOfRTT
+            + rttMonLatestJitterOperPacketLossSD
+            + rttMonLatestJitterOperPacketLossDS
+          , 1)
+
+      - record: ie:probe_up
+        expr: probe_success{job=~"blackbox-(third-party|bank|vbs).*"}
+
+      - record: ie:probe_latency_seconds
+        expr: probe_duration_seconds{job=~"blackbox-(third-party|bank|vbs).*"}
+
+  - name: insightengine-experience-alerts
+    rules:
+      - alert: WifiRssiLow
+        expr: ie_wlc_client_radio_rssi_avg < -75
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: wireless
+        annotations:
+          summary: "Low RSSI on {{ $labels.ap }} radio {{ $labels.radio }}"
+          description: "Average client RSSI on {{ $labels.ap }} ({{ $labels.wlc }}, {{ $labels.site }}) has been below -75 dBm for 10 minutes."
+
+      - alert: WifiSnrLow
+        expr: ie_wlc_client_radio_snr_avg < 15
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: wireless
+        annotations:
+          summary: "Low SNR on {{ $labels.ap }} radio {{ $labels.radio }}"
+          description: "Average client SNR on {{ $labels.ap }} has been below 15 dB for 10 minutes."
+
+      - alert: WifiChannelBusy
+        expr: ie_wlc_radio_channel_util > 70
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: wireless
+        annotations:
+          summary: "Channel busy on {{ $labels.ap }} radio {{ $labels.radio }}"
+          description: "Channel utilization on {{ $labels.ap }} has been above 70% for 10 minutes."
+
+      - alert: WlcApDown
+        expr: ie_wlc_ap_oper_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: wireless
+        annotations:
+          summary: "AP {{ $labels.ap }} is down"
+          description: "AP {{ $labels.ap }} on {{ $labels.wlc }} has not been up for 5 minutes. Reboot reason {{ $labels.reboot_reason }}."
+
+      - alert: SdwanTunnelLoss
+        expr: ie:sdwan_tunnel_loss_ratio > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: sdwan
+        annotations:
+          summary: "SD-WAN loss on {{ $labels.local_color }} to {{ $labels.remote_color }}"
+          description: "Tunnel {{ $labels.local_color }} -> {{ $labels.remote_color }} on {{ $labels.wlc }} has had more than 2% loss for 10 minutes."
+
+      - alert: SdwanTunnelLatency
+        expr: ie:sdwan_tunnel_latency_ms > 150
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: sdwan
+        annotations:
+          summary: "SD-WAN latency on {{ $labels.local_color }} to {{ $labels.remote_color }}"
+          description: "Tunnel latency has been above 150 ms for 10 minutes."
+
+      - alert: SdwanTunnelJitter
+        expr: ie:sdwan_tunnel_jitter_ms > 30
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: sdwan
+        annotations:
+          summary: "SD-WAN jitter on {{ $labels.local_color }} to {{ $labels.remote_color }}"
+          description: "Tunnel jitter has been above 30 ms for 10 minutes."
+
+      - alert: SdwanTunnelDown
+        expr: ie:sdwan_tunnel_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: sdwan
+        annotations:
+          summary: "SD-WAN tunnel down {{ $labels.local_color }} to {{ $labels.remote_color }}"
+          description: "BFD for {{ $labels.local_color }} -> {{ $labels.remote_color }} on {{ $labels.wlc }} has been down for 5 minutes."
+
+      - alert: SdwanBfdSessionDown
+        expr: ciscoBfdSessState > 0 and ciscoBfdSessState != 4
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: sdwan
+        annotations:
+          summary: "BFD session down on {{ $labels.hostname }}"
+          description: "CISCO-IETF-BFD-MIB session state on {{ $labels.hostname }} is not up. Loss, latency and jitter for this tunnel come from MDT, not this MIB."
+
+      - alert: IpSlaHighLatency
+        expr: ie:ipsla_rtt_ms > 200
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: ipsla
+        annotations:
+          summary: "IP SLA latency high on {{ $labels.hostname }} ({{ $labels.rttMonCtrlAdminTag }})"
+          description: "Latest RTT has been above 200 ms for 10 minutes."
+
+      - alert: IpSlaLoss
+        expr: ie:ipsla_loss_ratio > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          whatisdown: ipsla
+        annotations:
+          summary: "IP SLA loss on {{ $labels.hostname }} ({{ $labels.rttMonCtrlAdminTag }})"
+          description: "Jitter operation loss has been above 5% for 10 minutes."
+
+      - alert: IpSlaDown
+        expr: ie:ipsla_ok == 0
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: ipsla
+        annotations:
+          summary: "IP SLA failed on {{ $labels.hostname }} ({{ $labels.rttMonCtrlAdminTag }})"
+          description: "The latest IP SLA operation has not completed ok for 5 minutes."
+
+      - alert: ThirdPartyProbeDown
+        expr: ie:probe_up{target_kind=~"third-party|bank"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: probe
+        annotations:
+          summary: "{{ $labels.target_kind }} probe down: {{ $labels.name }}"
+          description: "{{ $labels.name }} ({{ $labels.instance }}) has failed blackbox {{ $labels.probe }} for 5 minutes."
+
+      - alert: VbsPingDown
+        expr: ie:probe_up{target_kind="vbs"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          whatisdown: vbs
+        annotations:
+          summary: "VBS ping down at {{ $labels.site }}"
+          description: "Blackbox ICMP to the VBS server at {{ $labels.site }} ({{ $labels.instance }}) has failed for 5 minutes."

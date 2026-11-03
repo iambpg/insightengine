@@ -1,0 +1,125 @@
+{
+  "uid": "ie-service-experience",
+  "title": "Service Experience",
+  "tags": ["insightengine", "experience"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Wi-Fi clients",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "sum(ie_wlc_client_radio_clients) or vector(0)"}]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Radios below -75 dBm",
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie_wlc_client_radio_rssi_avg < -75) or vector(0)"}]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "SD-WAN tunnels down",
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie:sdwan_tunnel_up == 0) or vector(0)"}]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Probes down",
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie:probe_up == 0) or vector(0)"}]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "IP SLA not ok",
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "count(ie:ipsla_ok == 0) or vector(0)"}]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Per-radio average RSSI",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "dBm"}},
+      "targets": [{"refId": "A", "expr": "ie_wlc_client_radio_rssi_avg", "legendFormat": "{{ap}} r{{radio}}"}]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Channel utilization",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent"}},
+      "targets": [{"refId": "A", "expr": "ie_wlc_radio_channel_util", "legendFormat": "{{ap}} r{{radio}}"}]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "SD-WAN loss",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}},
+      "targets": [{"refId": "A", "expr": "ie:sdwan_tunnel_loss_ratio", "legendFormat": "{{local_color}} → {{remote_color}}"}]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "SD-WAN latency",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms"}},
+      "targets": [{"refId": "A", "expr": "ie:sdwan_tunnel_latency_ms", "legendFormat": "{{local_color}} → {{remote_color}}"}]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "SD-WAN jitter",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms"}},
+      "targets": [{"refId": "A", "expr": "ie:sdwan_tunnel_jitter_ms", "legendFormat": "{{local_color}} → {{remote_color}}"}]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "VBS IP SLA RTT",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms"}},
+      "targets": [{"refId": "A", "expr": "ie:ipsla_rtt_ms", "legendFormat": "{{hostname}} {{rttMonCtrlAdminTag}}"}]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "VBS IP SLA loss",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}},
+      "targets": [{"refId": "A", "expr": "ie:ipsla_loss_ratio", "legendFormat": "{{hostname}} {{rttMonCtrlAdminTag}}"}]
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Third parties, banks and VBS ping",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "expr": "ie:probe_up", "format": "table", "instant": true},
+        {"refId": "B", "expr": "ie:probe_latency_seconds", "format": "table", "instant": true}
+      ]
+    }
+  ]
+}

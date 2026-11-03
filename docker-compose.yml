@@ -468,6 +468,8 @@ services:
       NETBOX_URL: http://netbox:8080
       NETBOX_TOKEN_FILE: /opt/insightengine/secrets/prometheus/netbox.token
       PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
+      IE_MDT_RECEIVER: ${IE_MDT_RECEIVER:-}
+      IE_MDT_PORT: ${IE_MDT_PORT:-57500}
       ALERTMANAGER_URL: ${ALERTMANAGER_URL:-http://alertmanager:9093}
       IE_CA_FILE: /etc/ie-certs/ca.crt
       # App role password is NETDISCO_DB_PASS (see netdisco-initdb.sh), not the
@@ -510,7 +512,7 @@ services:
       PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
       PORT_SNMP_EXPORTER: ${PORT_SNMP_EXPORTER:-9116}
       PORT_BLACKBOX: ${PORT_BLACKBOX:-9115}
-      PORT_TELEGRAF: ${PORT_TELEGRAF:-57500}
+      PORT_TELEGRAF: ${PORT_TELEGRAF:-57501}
       ENV_FILE: /opt/insightengine/.env
     volumes:
       - ./config:/opt/insightengine/config
@@ -882,8 +884,20 @@ services:
       IE_WLC_TABLE: ${IE_WLC_TABLE:-all}
       IE_WLC_SHARD_COUNT: ${IE_WLC_SHARD_COUNT:-1}
       IE_WLC_SHARD_INDEX: ${IE_WLC_SHARD_INDEX:-0}
+      IE_WLC_STORE_CLIENTS: ${IE_WLC_STORE_CLIENTS:-0}
+      IE_WLC_MDT: ${IE_WLC_MDT:-}
+      IE_WLC_MDT_TRANSPORT: ${IE_WLC_MDT_TRANSPORT:-grpc}
+      IE_WLC_LEGACY_SNMP: ${IE_WLC_LEGACY_SNMP:-0}
+      IE_GNMI_USER: ${IE_GNMI_USER:-}
+      IE_GNMI_PASSWORD: ${IE_GNMI_PASSWORD:-}
+      IE_MDT_PORT: ${IE_MDT_PORT:-57500}
+    ports:
+      # gRPC dial-out for 9800 and cEdge. gNMI dial-in uses the device port 9339, not this port.
+      # Host 57500. UI HTTPS is 57400 when 443 is taken. telegraf-host metrics
+      # are published on PORT_TELEGRAF (57501) -> container 9273, so they do not bind 57500.
+      - "${HOST_BIND:-0.0.0.0}:${PORT_MDT:-57500}:${IE_MDT_PORT:-57500}"
     volumes:
-      - ./config/telegraf/wlc/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./config/telegraf/wlc:/etc/telegraf:ro
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
     secrets:
       - source: netbox_token_prometheus
@@ -916,7 +930,8 @@ services:
       HOST_MOUNT_PREFIX: /hostfs
     ports:
       # Prometheus inside the network still scrapes telegraf-host:9273.
-      - "${HOST_BIND:-0.0.0.0}:${PORT_TELEGRAF:-57500}:9273"
+      # Host 57500 is the MDT dial-out listener (telegraf-wlc / PORT_MDT).
+      - "${HOST_BIND:-0.0.0.0}:${PORT_TELEGRAF:-57501}:9273"
     volumes:
       - ./config/telegraf/host:/etc/telegraf:ro
       # SECURITY FLAG: both mounts are read-only but still expose a lot. A read-only
@@ -1098,6 +1113,27 @@ services:
       NETBOX_URL: http://netbox:8080
       NETBOX_TOKEN_FILE: /run/secrets/netbox.token
       VENDORS: ${NETBOX_DEVICE_TYPE_VENDORS:-Cisco,Fortinet,Palo Alto Networks}
+    volumes:
+      - ./secrets/prometheus/netbox.token:/run/secrets/netbox.token:ro
+    depends_on:
+      netbox:
+        condition: service_healthy
+        required: false
+
+  # One-shot, idempotent site and service custom fields for service experience.
+  # Same failure isolation as netbox-regions: nothing else depends on it.
+  # It does not create services, so no bank or third party is seeded.
+  netbox-experience-fields:
+    build:
+      context: ./netbox/experience-fields
+    image: insightengine/netbox-experience-fields:local
+    pull_policy: never
+    restart: "no"
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      NETBOX_URL: http://netbox:8080
+      NETBOX_TOKEN_FILE: /run/secrets/netbox.token
     volumes:
       - ./secrets/prometheus/netbox.token:/run/secrets/netbox.token:ro
     depends_on:

@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Render Telegraf SNMP inputs for wireless controllers.
+"""Render Telegraf inputs for wireless controllers.
 
-One input per WLC per table. A Catalyst 9800 with ~5000 APs is split into
-status, client counts, radio identity and channel utilization, with staggered
-collection_offset values so the controller is not walked four ways at once.
+Catalyst 9800 (IOS-XE) per-AP and per-client data comes from model-driven
+telemetry (inputs.cisco_telemetry_mdt, gRPC dial-out). This renderer does not
+emit SNMP table walks for a 9800 unless IE_WLC_LEGACY_SNMP=1. snmp-exporter
+still collects 9800 chassis health and cLApGlobalAPConnectCount.
 
-NetBox HTTP SD (the same prometheus-devices list Prometheus uses) supplies
-targets. SNMP communities and v3 passwords come from the environment, the
-same variables snmp-exporter already uses. Nothing secret is written to git.
+AireOS has no MDT. It stays on SNMP: bsnAPTable, bsnAPIfLoadParametersTable
+(channel utilization and client count) and bsnMobileStation RSSI/SNR. The
+station walk is aggregated in Telegraf before Prometheus sees it.
 
-IE_WLC_TABLE=all|status|clients|radio|channel
-IE_WLC_SHARD_COUNT / IE_WLC_SHARD_INDEX split controllers across processes.
-The 5000-AP 9800 should be the only controller on its Telegraf (shard it
-alone, or run IE_WLC_TABLE as four processes).
+IE_WLC_MDT_TRANSPORT=gnmi renders inputs.gnmi dial-in for each 9800 instead
+of relying on dial-out. Username and password come from the environment and
+are not written to git.
+
+IE_WLC_TABLE=all|status|clients|radio|channel|stations
+IE_WLC_SHARD_COUNT / IE_WLC_SHARD_INDEX split AireOS controllers.
 """
 
 from __future__ import annotations
@@ -100,6 +103,7 @@ AIREOS = {
         ],
     },
     "channel": {
+        # bsnAPIfLoadParametersTable. AireOS has no RRM MDT stream.
         "measurement": "ie_wlc_radio",
         "interval": "10m",
         "offset": "300s",
@@ -108,7 +112,32 @@ AIREOS = {
             ("channel_util", "1.3.6.1.4.1.14179.2.2.13.1.3", False),
         ],
     },
+    "stations": {
+        # bsnMobileStationTable (AP MAC, radio slot) joined with
+        # bsnMobileStationStatsTable (RSSI, SNR). Same client-MAC index.
+        # Telegraf drops the client identity before Prometheus. See normalize.star.
+        "measurement": "ie_wlc_station",
+        "interval": "5m",
+        "offset": "150s",
+        "timeout": "180s",
+        "fields": [
+            ("ap_mac", "1.3.6.1.4.1.14179.2.1.4.1.4", True),
+            ("radio", "1.3.6.1.4.1.14179.2.1.4.1.5", True),
+            ("rssi", "1.3.6.1.4.1.14179.2.1.6.1.1", False),
+            ("snr", "1.3.6.1.4.1.14179.2.1.6.1.26", False),
+        ],
+    },
 }
+
+# gNMI dial-in paths. Used only when IE_WLC_MDT_TRANSPORT=gnmi.
+GNMI_SUBS = (
+    ("ie_wlc_client_raw", "/wireless-client-oper:client-oper-data/traffic-stats", "sample", "60s"),
+    ("ie_wlc_client_common", "/wireless-client-oper:client-oper-data/common-oper-data", "sample", "60s"),
+    ("ie_wlc_rrm", "/wireless-rrm-oper:rrm-oper-data/rrm-measurement", "sample", "60s"),
+    ("ie_wlc_ap_mdt", "/wireless-access-point-oper:access-point-oper-data/capwap-data", "on_change", "60s"),
+    ("ie_wlc_radio_mdt", "/wireless-access-point-oper:access-point-oper-data/radio-oper-data", "sample", "60s"),
+    ("ie_wlc_ssid", "/wireless-access-point-oper:access-point-oper-data/ssid-counters", "sample", "60s"),
+)
 
 
 def _toml(value: str) -> str:
@@ -144,6 +173,10 @@ def load_targets(path: str | None, url: str, token: str, ca: str) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
+def _truthy(value: str) -> bool:
+    return (value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _input(agent: str, kind: str, table: str, spec: dict, tags: dict, auth: dict) -> str:
     lines = [
         "[[inputs.snmp]]",
@@ -173,6 +206,10 @@ def _input(agent: str, kind: str, table: str, spec: dict, tags: dict, auth: dict
         "    platform = %s" % _toml(tags["platform"]),
         "    device_role = %s" % _toml(tags["role"]),
         "    wlc_table = %s" % _toml(table),
+    ])
+    if tags.get("store_clients"):
+        lines.append("    store_clients = %s" % _toml(tags["store_clients"]))
+    lines.extend([
         "  [[inputs.snmp.table]]",
         "    name = %s" % _toml(spec["measurement"]),
         "    index_as_tag = true",
@@ -202,9 +239,42 @@ def auth_for(name: str, env: dict) -> dict:
     return {"version": 2, "community": env.get("SNMP_V2_COMMUNITY") or ""}
 
 
+def _gnmi(agent: str, tags: dict, env: dict) -> str:
+    user = env.get("IE_GNMI_USER") or ""
+    password = env.get("IE_GNMI_PASSWORD") or ""
+    if not user or not password:
+        return "# %s: gNMI dial-in skipped, IE_GNMI_USER or IE_GNMI_PASSWORD is empty\n" % tags["wlc"]
+    lines = [
+        "[[inputs.gnmi]]",
+        "  addresses = [%s]" % _toml(agent),
+        "  username = %s" % _toml(user),
+        "  password = %s" % _toml(password),
+        "  redial = \"30s\"",
+        "  [inputs.gnmi.tags]",
+        "    wlc = %s" % _toml(tags["wlc"]),
+        "    site = %s" % _toml(tags["site"]),
+        "    platform = %s" % _toml(tags["platform"]),
+        "    device_role = %s" % _toml(tags["role"]),
+        "    store_clients = %s" % _toml(tags.get("store_clients") or "0"),
+    ]
+    for name, path, mode, interval in GNMI_SUBS:
+        lines.extend([
+            "  [[inputs.gnmi.subscription]]",
+            "    name = %s" % _toml(name),
+            "    path = %s" % _toml(path),
+            "    subscription_mode = %s" % _toml(mode),
+            "    sample_interval = %s" % _toml(interval),
+        ])
+    lines.append("")
+    return "\n".join(lines)
+
+
 def render(targets: list[dict], env: dict) -> str:
     table = (env.get("IE_WLC_TABLE") or "all").strip().lower()
-    wanted = ["status", "clients", "radio", "channel"] if table in ("", "all") else [table]
+    wanted = ["status", "clients", "radio", "channel", "stations"] if table in ("", "all") else [table]
+    transport = (env.get("IE_WLC_MDT_TRANSPORT") or "grpc").strip().lower()
+    legacy = _truthy(env.get("IE_WLC_LEGACY_SNMP") or "")
+    store = "1" if _truthy(env.get("IE_WLC_STORE_CLIENTS") or "") else "0"
     try:
         count = int(env.get("IE_WLC_SHARD_COUNT") or "1")
         index = int(env.get("IE_WLC_SHARD_INDEX") or "0")
@@ -212,7 +282,8 @@ def render(targets: list[dict], env: dict) -> str:
         count, index = 1, 0
     chunks = [
         "# Generated from NetBox. Do not commit this file.",
-        "# max_repetitions=10, retries=1, staggered offsets. See docs/health-metrics.md.",
+        "# 9800 per-AP data is MDT unless IE_WLC_LEGACY_SNMP=1.",
+        "# AireOS stays on SNMP, including bsnMobileStation RSSI/SNR.",
         "",
     ]
     for item in targets:
@@ -231,21 +302,34 @@ def render(targets: list[dict], env: dict) -> str:
         tables = IOSXE if kind == "iosxe" else AIREOS
         auth_name = str(labels.get("__meta_netbox_snmp_auth") or "ie_wlc_v2")
         auth = auth_for(auth_name, env)
-        if auth["version"] == 2 and not auth.get("community"):
-            continue
-        if auth["version"] == 3 and not auth.get("user"):
-            continue
         tags = {
             "wlc": str(labels.get("__meta_netbox_name") or ip),
             "site": str(labels.get("__meta_netbox_site_name") or ""),
             "platform": platform or kind,
             "role": role or "wireless-controller",
         }
+        if kind == "iosxe" and transport == "gnmi":
+            chunks.append(_gnmi("%s:9339" % ip, dict(tags, store_clients=store), env))
+            continue
+        if kind == "iosxe" and not legacy:
+            chunks.append(
+                "# %s (%s): MDT supersedes SNMP AP tables. "
+                "Chassis health and AP count stay on snmp-exporter.\n"
+                % (tags["wlc"], ip)
+            )
+            continue
+        if auth["version"] == 2 and not auth.get("community"):
+            continue
+        if auth["version"] == 3 and not auth.get("user"):
+            continue
         for name in wanted:
             spec = tables.get(name)
             if not spec:
                 continue
-            chunks.append(_input("udp://%s:161" % ip, kind, name, spec, tags, auth))
+            row_tags = dict(tags)
+            if name == "stations":
+                row_tags["store_clients"] = store
+            chunks.append(_input("udp://%s:161" % ip, kind, name, spec, row_tags, auth))
     return "\n".join(chunks)
 
 

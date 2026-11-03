@@ -4,7 +4,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from netbox_lists.sd import default_auth_map_path, default_map_path, load_auth_map, load_map, target_for
+from netbox_lists.sd import (
+    default_auth_map_path,
+    default_map_path,
+    load_auth_map,
+    load_map,
+    service_targets,
+    target_for,
+    vbs_targets,
+)
 
 
 def _text(value):
@@ -65,3 +73,68 @@ class PrometheusDevicesView(APIView):
             if item:
                 targets.append(item)
         return Response(targets)
+
+
+def _service_dict(service):
+    custom = getattr(service, "custom_field_data", None) or {}
+    tags = []
+    try:
+        tags = [tag.slug for tag in service.tags.all()]
+    except Exception:
+        tags = []
+    ports = list(getattr(service, "ports", None) or [])
+    parent = getattr(service, "parent", None)
+    address = _text(custom.get("target"))
+    site = ""
+    if parent is not None:
+        if not address:
+            ip4 = getattr(parent, "primary_ip4", None)
+            if ip4 is not None and getattr(ip4, "address", None) is not None:
+                address = str(ip4.address.ip)
+        parent_site = getattr(parent, "site", None)
+        if parent_site is not None:
+            site = _text(getattr(parent_site, "name", ""))
+    return {
+        "name": _text(getattr(service, "name", "")),
+        "tags": tags,
+        "probe": _text(custom.get("probe")),
+        "address": address,
+        "port": ports[0] if ports else "",
+        "site": site,
+    }
+
+
+class PrometheusServicesView(APIView):
+    """Blackbox HTTP SD. tag=third-party|bank and probe=icmp|tcp."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from ipam.models import Service
+
+        tag = request.query_params.get("tag") or ""
+        probe = request.query_params.get("probe") or ""
+        qs = Service.objects.all()
+        if tag:
+            qs = qs.filter(tags__slug=tag)
+        services = [_service_dict(row) for row in qs.distinct()]
+        return Response(service_targets(services, tag, probe))
+
+
+class PrometheusVbsView(APIView):
+    """Blackbox ICMP HTTP SD for each site that has vbs_server_ip."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from dcim.models import Site
+
+        sites = []
+        for site in Site.objects.all():
+            custom = getattr(site, "custom_field_data", None) or {}
+            sites.append({
+                "name": _text(getattr(site, "name", "")),
+                "vbs_server_ip": _text(custom.get("vbs_server_ip")),
+                "vbs_server_port": custom.get("vbs_server_port") or 9999,
+            })
+        return Response(vbs_targets(sites))

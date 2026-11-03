@@ -268,7 +268,7 @@ def main() -> int:
     # snmp-wlc listens on 161 inside the network. render() writes udp://ip:161
     # so pass the docker DNS name as the address.
     for table in ("status", "clients", "radio", "channel"):
-        conf = render([target], {"IE_WLC_TABLE": table, "SNMP_V2_COMMUNITY": "public"})
+        conf = render([target], {"IE_WLC_TABLE": table, "SNMP_V2_COMMUNITY": "public", "IE_WLC_LEGACY_SNMP": "1"})
         conf = conf.replace("udp://127.0.0.1:161", "udp://127.0.0.1:1162")
         # Production staggers these tables. The timing run measures the walk, not the offset.
         conf = conf.replace('collection_offset = "180s"', 'collection_offset = "0s"')

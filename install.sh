@@ -339,7 +339,10 @@ plan_published_ports() {
   plan_one_port PORT_OXIDIZED 8888 18888 tcp
   plan_one_port PORT_SNMP_EXPORTER 9116 19116 tcp
   plan_one_port PORT_BLACKBOX 9115 19115 tcp
-  plan_one_port PORT_TELEGRAF 57500 57501 tcp
+  # 57500 is the MDT dial-out listener. Telegraf metrics take the next port.
+  # 57400 is left for UI HTTPS when 443 is taken; this planner does not use it.
+  plan_one_port PORT_MDT 57500 57510 tcp
+  plan_one_port PORT_TELEGRAF 57501 57502 tcp
   plan_one_port PORT_SYSLOG 514 5514 both
   plan_one_port PORT_TRAPS 162 1162 udp
 }
@@ -358,7 +361,7 @@ EOF
   else setenv HTTPS_PORT_SUFFIX ":${https}"; fi
 }
 print_port_table() {
-  local http https http3 grafana prom am ap nd ox nb snmp bb tel syslog traps origin
+  local http https http3 grafana prom am ap nd ox nb snmp bb tel mdt syslog traps origin
   http="$(getenv_val PORT_HTTP)"; http="${http:-18086}"
   https="$(getenv_val PORT_HTTPS)"; https="${https:-443}"
   http3="$(getenv_val PORT_HTTP3)"; http3="${http3:-443}"
@@ -371,7 +374,8 @@ print_port_table() {
   nb="$(getenv_val PORT_NETBOX)"; nb="${nb:-8092}"
   snmp="$(getenv_val PORT_SNMP_EXPORTER)"; snmp="${snmp:-9116}"
   bb="$(getenv_val PORT_BLACKBOX)"; bb="${bb:-9115}"
-  tel="$(getenv_val PORT_TELEGRAF)"; tel="${tel:-57500}"
+  tel="$(getenv_val PORT_TELEGRAF)"; tel="${tel:-57501}"
+  mdt="$(getenv_val PORT_MDT)"; mdt="${mdt:-57500}"
   syslog="$(getenv_val PORT_SYSLOG)"; syslog="${syslog:-514}"
   traps="$(getenv_val PORT_TRAPS)"; traps="${traps:-162}"
   if [ "$https" = 443 ]; then origin="https://${PUBLIC_HOST}"; else origin="https://${PUBLIC_HOST}:${https}"; fi
@@ -386,7 +390,8 @@ print_port_table() {
   say "  NetBox            https://${PUBLIC_HOST}:${nb}/"
   say "  SNMP exporter     http://${PUBLIC_HOST}:${snmp}/"
   say "  blackbox exporter http://${PUBLIC_HOST}:${bb}/"
-  say "  Telegraf          http://${PUBLIC_HOST}:${tel}/metrics"
+  say "  Telegraf metrics  http://${PUBLIC_HOST}:${tel}/metrics"
+  say "  Telegraf MDT      tcp ${mdt} (9800 and cEdge dial-out; not UI HTTPS)"
   say "  syslog            ${syslog}/tcp+udp"
   say "  SNMP traps        ${traps}/udp"
 }
@@ -442,7 +447,10 @@ align_published_ports() {
   align_key PORT_OXIDIZED 8888
   align_key PORT_SNMP_EXPORTER 9116
   align_key PORT_BLACKBOX 9115
-  align_key PORT_TELEGRAF 57500
+  align_key PORT_MDT 57500
+  align_key IE_MDT_PORT 57500
+  # 57500 used to be the telegraf-host metrics publish. It is the MDT listener now.
+  align_key PORT_TELEGRAF 57501 57500
   local https
   https="$(getenv_val PORT_HTTPS)"
   if [ -z "$https" ]; then
