@@ -5,6 +5,13 @@
 # not open the dial-out port.
 set -eu
 umask 077
+# The host NetBox token is often root:root mode 0600. Stage a 0400 copy for
+# uid 10001, then continue this script as that user. Telegraf is not root.
+if [ "$(id -u)" -eq 0 ]; then
+  export IE_RUN_UID="${IE_RUN_UID:-10001}"
+  export IE_RUN_GID="${IE_RUN_GID:-10001}"
+  exec /usr/local/bin/drop-priv.sh /entrypoint.sh "$@"
+fi
 # catalog.py is copied next to render_wlc.py and is also on the /etc/telegraf
 # checkout mount (compose and upgrade.sh).
 export PYTHONPATH="/usr/local/bin:/etc/telegraf${PYTHONPATH:+:$PYTHONPATH}"

@@ -22,7 +22,7 @@ Source: the sanitized tree in `reference/ntt-real-stack/`. Nothing in that tree 
 | Topic | Real stack | This bundle |
 |---|---|---|
 | NetBox image | `hishaam02/netbox-lists:v4.6-5.0.0` (private) | Default is a local build `insightengine/netbox-lists:local` from `netboxcommunity/netbox:v4.6.3` plus `netbox/netbox_lists`. Set `NETBOX_IMAGE` to the private tag to pull it instead. `install.sh` will not rebuild over that tag. |
-| Prometheus → NetBox | Direct `http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/` and a token file on the Prometheus container | Same plugin URL, through Caddy `https://caddy:8443`, token at `/run/secrets/netbox_token`, CA file for that TLS hop. |
+| Prometheus → NetBox | Direct `http://netbox-ntt:8080/api/plugins/lists/prometheus-devices/` and a token file on the Prometheus container | Same plugin URL, through Caddy `https://caddy:8443`, token copied to `/run/ie-secrets/netbox_token` (mode 0400) from the root-only secret, CA file for that TLS hop. |
 | Exporters | One `blackbox-exporter-ntt` and one `snmp-exporter-ntt` | `scrape-lb` in front of two (or more, profile `scale`) exporters. |
 | Alert delivery | Webhook to an external insights-engine host with a bearer token file | Internal `alert-relay` and `destinations.json`. The external webhook was not copied. |
 | Grafana image | `grafana/grafana:13.1.0-25027462778` | Public `grafana/grafana:13.0.11`. |

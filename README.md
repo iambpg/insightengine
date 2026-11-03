@@ -139,7 +139,7 @@ Re-measure after the first week with `prometheus_tsdb_head_series` and container
 
 Your pattern is kept: Prometheus calls the plugin list endpoint through Caddy
 (`https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=<role>`) with `Authorization: Bearer` read from a
-**token file** (`credentials_file`), and verifies TLS with the CA mounted at `/etc/ie-certs/ca.crt` (`ca_file`; the host file is `certs/ca.crt`, outside the read-only `/etc/prometheus` directory, `server_name: caddy`).
+**token file** (`credentials_file` at `/run/ie-secrets/netbox_token`, a mode-0400 copy of the root-only secret), and verifies TLS with the CA mounted at `/etc/ie-certs/ca.crt` (`ca_file`; the host file is `certs/ca.crt`, outside the read-only `/etc/prometheus` directory, `server_name: caddy`).
 **This endpoint is "as used in your current stack"** — I did not verify or invent any plugin details, and the label names
 `__meta_netbox_*` used in relabelling are my assumption of that plugin's output. Compare with `curl` output from your real plugin.
 Roles are one job each (`icmp-*` and `snmp-*`) so each class gets its own interval, timeout and `sample_limit`.

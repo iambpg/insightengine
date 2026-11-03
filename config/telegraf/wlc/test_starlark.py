@@ -113,17 +113,21 @@ class CatalogPackagingTests(unittest.TestCase):
         text = (WLC / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("COPY catalog.py /usr/local/bin/catalog.py", text)
         self.assertIn("COPY render_wlc.py /usr/local/bin/render_wlc.py", text)
+        self.assertIn("COPY drop-priv.sh /usr/local/bin/drop-priv.sh", text)
         self.assertIn("ENV PYTHONPATH=/usr/local/bin:/etc/telegraf", text)
+        self.assertNotIn("USER 10001", text)
 
     def test_compose_mounts_catalog_and_sets_pythonpath(self) -> None:
         block = _service_block("telegraf-wlc", "telegraf-host")
         self.assertIn("PYTHONPATH: /usr/local/bin:/etc/telegraf", block)
         self.assertIn("./config/telegraf/wlc:/etc/telegraf:ro", block)
         self.assertIn("./config/telegraf/wlc/catalog.py:/usr/local/bin/catalog.py:ro", block)
+        self.assertIn('user: "0:0"', block)
 
     def test_entrypoint_puts_both_directories_on_pythonpath(self) -> None:
         text = (WLC / "entrypoint.sh").read_text(encoding="utf-8")
         self.assertIn('PYTHONPATH="/usr/local/bin:/etc/telegraf', text)
+        self.assertIn("/usr/local/bin/drop-priv.sh", text)
 
     def test_render_imports_catalog_from_the_script_dir_or_an_extra_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

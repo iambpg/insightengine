@@ -24,4 +24,12 @@ case "$HANDLER" in
 esac
 printf 'traphandle default %s\n' "$HANDLER" >> "$CONF"
 export SNMPCONFPATH=/var/lib/trapd
-exec snmptrapd -f -n -Lo -C -c "$CONF" -M /usr/share/snmp/mibs:/usr/share/snmp/mibs/custom -m ALL udp:1162
+set -- snmptrapd -f -n -Lo -C -c "$CONF" -M /usr/share/snmp/mibs:/usr/share/snmp/mibs/custom -m ALL udp:1162
+# Host secret files are often root:root mode 0600. Read them as root above,
+# then run the daemon as trapd. The conf is mode 0400, not world-readable.
+if [ "$(id -u)" -eq 0 ]; then
+  chown trapd:trapd "$CONF"
+  chmod 0400 "$CONF"
+  exec su-exec trapd "$@"
+fi
+exec "$@"
