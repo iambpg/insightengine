@@ -512,7 +512,6 @@ services:
       PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
       PORT_SNMP_EXPORTER: ${PORT_SNMP_EXPORTER:-9116}
       PORT_BLACKBOX: ${PORT_BLACKBOX:-9115}
-      PORT_TELEGRAF: ${PORT_TELEGRAF:-57501}
       ENV_FILE: /opt/insightengine/.env
     volumes:
       - ./config:/opt/insightengine/config
@@ -866,7 +865,9 @@ services:
     build:
       context: ./config/telegraf/wlc
       dockerfile: Dockerfile
-    image: insightengine/telegraf-wlc:${TELEGRAF_IMAGE:-1.38.3}
+    # Local tag only. TELEGRAF_IMAGE is the upstream image (telegraf:1.38.3) and
+    # is not a valid tag here. The Dockerfile pins the same upstream image.
+    image: insightengine/telegraf-wlc:1.38.3
     container_name: telegraf-wlc-${CLIENT_SLUG}
     restart: unless-stopped
     logging: *default-logging
@@ -893,8 +894,8 @@ services:
       IE_MDT_PORT: ${IE_MDT_PORT:-57500}
     ports:
       # gRPC dial-out for 9800 and cEdge. gNMI dial-in uses the device port 9339, not this port.
-      # Host 57500. UI HTTPS is 57400 when 443 is taken. telegraf-host metrics
-      # are published on PORT_TELEGRAF (57501) -> container 9273, so they do not bind 57500.
+      # Host 57500 is the only Telegraf publish. UI HTTPS is 57400 when 443 is taken.
+      # Prometheus scrapes telegraf-host:9273 and telegraf-wlc:9273 on the docker network.
       - "${HOST_BIND:-0.0.0.0}:${PORT_MDT:-57500}:${IE_MDT_PORT:-57500}"
     volumes:
       - ./config/telegraf/wlc:/etc/telegraf:ro
@@ -928,10 +929,8 @@ services:
       HOST_VAR: /hostfs/var
       HOST_RUN: /hostfs/run
       HOST_MOUNT_PREFIX: /hostfs
-    ports:
-      # Prometheus inside the network still scrapes telegraf-host:9273.
-      # Host 57500 is the MDT dial-out listener (telegraf-wlc / PORT_MDT).
-      - "${HOST_BIND:-0.0.0.0}:${PORT_TELEGRAF:-57501}:9273"
+    # No host ports. Prometheus scrapes telegraf-host:9273 on the docker network.
+    # Host 57500 belongs to telegraf-wlc (PORT_MDT), the dial-out listener.
     volumes:
       - ./config/telegraf/host:/etc/telegraf:ro
       # SECURITY FLAG: both mounts are read-only but still expose a lot. A read-only

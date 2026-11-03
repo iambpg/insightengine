@@ -73,7 +73,8 @@ def test_public_urls_use_the_published_ports(monkeypatch):
     assert urls["netbox"] == "https://monitor.example.com:18444/"
     assert urls["snmp-exporter"] == "http://monitor.example.com:9116/"
     assert urls["blackbox"] == "http://monitor.example.com:9115/"
-    assert urls["telegraf"] == "http://monitor.example.com:57501/"
+    assert "telegraf" not in urls
+    assert all("57501" not in row["url"] for row in body["apps"])
     assert all(row["status"] == "up" for row in body["apps"])
     assert public_base("bad host", "443") == ""
     assert "device-secret" not in json.dumps(body)
