@@ -108,7 +108,8 @@ def test_telemetry_cli_for_9800_is_paste_only():
     assert "update-policy on-change" in body["config"]
     assert "update-policy periodic 6000" in body["config"]
     assert "10.1.1.50" in body["config"]
-    assert "receiver ip address" in body["config"]
+    assert "receiver ip address 10.1.1.50 57500 protocol grpc-tcp" in body["config"]
+    assert "57000" not in body["config"]
 
 
 def test_aireos_telemetry_says_snmp():

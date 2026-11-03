@@ -323,6 +323,7 @@ def main() -> int:
         "sudo", "docker", "run", "-d", "--name", "ie-exp-mdt", "--network", "host",
         "-e", "CLIENT_SLUG=lab",
         "-e", "IE_WLC_STORE_CLIENTS=0",
+        "-e", "IE_MDT_PORT=57500",
         "-v", "%s:/etc/telegraf/telegraf.conf:ro" % conf,
         "-v", "%s:/etc/telegraf/mdt.conf:ro" % (ROOT / "config" / "telegraf" / "wlc" / "mdt.conf"),
         "-v", "%s:/etc/telegraf/normalize.star:ro" % (ROOT / "config" / "telegraf" / "wlc" / "normalize.star"),

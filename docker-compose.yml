@@ -469,7 +469,7 @@ services:
       NETBOX_TOKEN_FILE: /opt/insightengine/secrets/prometheus/netbox.token
       PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
       IE_MDT_RECEIVER: ${IE_MDT_RECEIVER:-}
-      IE_MDT_PORT: ${IE_MDT_PORT:-57000}
+      IE_MDT_PORT: ${IE_MDT_PORT:-57500}
       ALERTMANAGER_URL: ${ALERTMANAGER_URL:-http://alertmanager:9093}
       IE_CA_FILE: /etc/ie-certs/ca.crt
       # App role password is NETDISCO_DB_PASS (see netdisco-initdb.sh), not the
@@ -512,7 +512,7 @@ services:
       PORT_OXIDIZED: ${PORT_OXIDIZED:-8888}
       PORT_SNMP_EXPORTER: ${PORT_SNMP_EXPORTER:-9116}
       PORT_BLACKBOX: ${PORT_BLACKBOX:-9115}
-      PORT_TELEGRAF: ${PORT_TELEGRAF:-57500}
+      PORT_TELEGRAF: ${PORT_TELEGRAF:-57501}
       ENV_FILE: /opt/insightengine/.env
     volumes:
       - ./config:/opt/insightengine/config
@@ -890,9 +890,12 @@ services:
       IE_WLC_LEGACY_SNMP: ${IE_WLC_LEGACY_SNMP:-0}
       IE_GNMI_USER: ${IE_GNMI_USER:-}
       IE_GNMI_PASSWORD: ${IE_GNMI_PASSWORD:-}
+      IE_MDT_PORT: ${IE_MDT_PORT:-57500}
     ports:
-      # 9800 and cEdge gRPC dial-out. gNMI dial-in does not use this port.
-      - "${HOST_BIND:-0.0.0.0}:${PORT_MDT:-57000}:57000"
+      # gRPC dial-out for 9800 and cEdge. gNMI dial-in uses the device port 9339, not this port.
+      # Host 57500. UI HTTPS is 57400 when 443 is taken. telegraf-host metrics
+      # are published on PORT_TELEGRAF (57501) -> container 9273, so they do not bind 57500.
+      - "${HOST_BIND:-0.0.0.0}:${PORT_MDT:-57500}:${IE_MDT_PORT:-57500}"
     volumes:
       - ./config/telegraf/wlc:/etc/telegraf:ro
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
@@ -927,7 +930,8 @@ services:
       HOST_MOUNT_PREFIX: /hostfs
     ports:
       # Prometheus inside the network still scrapes telegraf-host:9273.
-      - "${HOST_BIND:-0.0.0.0}:${PORT_TELEGRAF:-57500}:9273"
+      # Host 57500 is the MDT dial-out listener (telegraf-wlc / PORT_MDT).
+      - "${HOST_BIND:-0.0.0.0}:${PORT_TELEGRAF:-57501}:9273"
     volumes:
       - ./config/telegraf/host:/etc/telegraf:ro
       # SECURITY FLAG: both mounts are read-only but still expose a lot. A read-only

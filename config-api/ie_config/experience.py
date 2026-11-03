@@ -76,13 +76,13 @@ def sla_ids(name: str) -> int:
 
 def _receiver(explicit: str | None = None) -> tuple[str, int, bool]:
     host = (explicit if explicit is not None else os.environ.get("IE_MDT_RECEIVER") or "").strip()
-    raw_port = (os.environ.get("IE_MDT_PORT") or "57000").strip()
+    raw_port = (os.environ.get("IE_MDT_PORT") or "57500").strip()
     try:
         port = int(raw_port)
     except ValueError:
-        port = 57000
+        port = 57500
     if port < 1 or port > 65535:
-        port = 57000
+        port = 57500
     return host, port, bool(host)
 
 

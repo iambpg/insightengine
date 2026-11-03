@@ -34,7 +34,9 @@ A site with no `vbs_server_ip` is not pinged and its routers show **not configur
 
 SNMP on a 9800 does not give useful per-client RSSI/SNR or per-radio noise and interference, and the per-AP walks in the health work are the wrong tool at 5,000 APs. Those Telegraf SNMP tables are no longer rendered for IOS-XE controllers. snmp-exporter still polls chassis health and `cLApGlobalAPConnectCount` (`cisco_wlc_iosxe`). `IE_WLC_LEGACY_SNMP=1` restores the old AP tables for a comparison; leave it unset in production.
 
-`telegraf-wlc` listens for gRPC dial-out on port **57000** (`inputs.cisco_telemetry_mdt`). Set `IE_MDT_RECEIVER` to an address the controller can route to, and publish `PORT_MDT` (default 57000) on that address.
+`telegraf-wlc` listens for gRPC dial-out on port **57500** (`inputs.cisco_telemetry_mdt`, `service_address = ":${IE_MDT_PORT}"`). `IE_MDT_PORT` and `PORT_MDT` default to 57500 and can be changed together. Set `IE_MDT_RECEIVER` to an address the controller can route to. The generated line is `receiver ip address <server> 57500`.
+
+Open **TCP 57500** on the collector for that dial-out. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. Host port 57500 used to publish telegraf-host `/metrics` (`PORT_TELEGRAF` → container 9273). That publish is now **57501**, so it does not bind the MDT port. Prometheus still scrapes `telegraf-host:9273` on the docker network. gNMI dial-in does not use 57500: Telegraf dials the controller on port 9339.
 
 On the device page, **Telemetry subscription** copies the IOS-XE CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you.
 
@@ -53,7 +55,7 @@ YANG modules: `Cisco-IOS-XE-wireless-client-oper`, `Cisco-IOS-XE-wireless-rrm-op
 
 gNMI dial-in is the other transport. Set `IE_WLC_MDT_TRANSPORT=gnmi`, `IE_GNMI_USER` and `IE_GNMI_PASSWORD`. Telegraf then dials each 9800 on port 9339. Do not also point the controller at the dial-out port for the same paths. The password is rendered into the container's temporary config and is not committed.
 
-Only shard 0 opens port 57000. Extra AireOS shards set `IE_WLC_SHARD_INDEX` and leave the listener to the 9800's Telegraf (`IE_WLC_MDT=0` on the extras, `IE_WLC_MDT=1` on the collector).
+Only shard 0 opens port 57500. Extra AireOS shards set `IE_WLC_SHARD_INDEX` and leave the listener to the 9800's Telegraf (`IE_WLC_MDT=0` on the extras, `IE_WLC_MDT=1` on the collector).
 
 ## AireOS
 

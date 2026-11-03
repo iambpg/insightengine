@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -112,7 +113,8 @@ def main() -> int:
         for index, row in enumerate(rows, 1):
             yield mdt_dialout_pb2.MdtDialoutArgs(ReqId=index, data=row.SerializeToString())
 
-    channel = grpc.insecure_channel("127.0.0.1:57000")
+    port = os.environ.get("IE_MDT_PORT") or "57500"
+    channel = grpc.insecure_channel("127.0.0.1:%s" % port)
     grpc.channel_ready_future(channel).result(timeout=20)
     stub = mdt_dialout_pb2_grpc.gRPCMdtDialoutStub(channel)
     call = stub.MdtDialout(generate(), timeout=20)

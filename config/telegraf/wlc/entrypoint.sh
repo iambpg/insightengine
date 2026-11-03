@@ -5,6 +5,9 @@
 # not open the dial-out port.
 set -eu
 umask 077
+# Dial-out port. 57500 is where Telegraf is reached. 57400 is UI HTTPS.
+IE_MDT_PORT="${IE_MDT_PORT:-57500}"
+export IE_MDT_PORT
 out=/tmp/wlc-generated.conf
 if ! python3 /usr/local/bin/render_wlc.py -o "$out"; then
   printf '%s\n' '# NetBox target render failed; no WLC inputs this start' > "$out"
