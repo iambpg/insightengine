@@ -1,0 +1,11 @@
+{
+  "name": "ISR1100-4GLTE Rear",
+  "vendor": "cisco",
+  "key": "isr1100-4glte",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/isr1100-4glte.rear.svg",
+  "width": 1224.0,
+  "height": 137.0,
+  "hotspots": [],
+  "source": "visio"
+}

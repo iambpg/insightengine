@@ -1,0 +1,40 @@
+{
+  "name": "FRPS-740 (R)",
+  "vendor": "fortinet",
+  "key": "frps-740-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/frps-740-r.front.svg",
+  "width": 1140.0,
+  "height": 106.0,
+  "hotspots": [
+    {
+      "prompt": "AC Input#2",
+      "x": 0.28963,
+      "y": 0.28298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "DC Output#2",
+      "x": 0.41314,
+      "y": 0.46298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "DC Output#1",
+      "x": 0.56686,
+      "y": 0.46298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "AC Input#1",
+      "x": 0.8593,
+      "y": 0.28298,
+      "w": 0.02,
+      "h": 0.35849
+    }
+  ],
+  "source": "visio"
+}

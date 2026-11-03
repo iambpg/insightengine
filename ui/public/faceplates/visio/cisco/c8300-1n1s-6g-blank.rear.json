@@ -1,0 +1,11 @@
+{
+  "name": "C8300-1N1S-6G Blank Rear",
+  "vendor": "cisco",
+  "key": "c8300-1n1s-6g-blank",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c8300-1n1s-6g-blank.rear.svg",
+  "width": 2284.0,
+  "height": 217.0,
+  "hotspots": [],
+  "source": "visio"
+}

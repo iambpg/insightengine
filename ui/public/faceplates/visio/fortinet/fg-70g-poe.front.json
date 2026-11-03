@@ -1,0 +1,103 @@
+{
+  "name": "FG-70G-POE",
+  "vendor": "fortinet",
+  "key": "fg-70g-poe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-70g-poe.front.svg",
+  "width": 512.0,
+  "height": 97.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.19099,
+      "y": 0.17437,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.19145,
+      "y": 0.43893,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE WAN Port#1",
+      "x": 0.28924,
+      "y": 0.05786,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE WAN Port#2",
+      "x": 0.28924,
+      "y": 0.41709,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE FortiLink A Port#1",
+      "x": 0.38842,
+      "y": 0.05786,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE FortiLink B Port#1",
+      "x": 0.38842,
+      "y": 0.41709,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE Port#5",
+      "x": 0.45912,
+      "y": 0.05786,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE Port#6",
+      "x": 0.45912,
+      "y": 0.41709,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE PoE Plus Port#4",
+      "x": 0.60054,
+      "y": 0.41709,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE PoE Plus Port#3",
+      "x": 0.60145,
+      "y": 0.05786,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE PoE Plus Port#1",
+      "x": 0.67216,
+      "y": 0.05786,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE PoE Plus Port#2",
+      "x": 0.67216,
+      "y": 0.41709,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Connector#1",
+      "x": 0.88015,
+      "y": 0.41223,
+      "w": 0.03125,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

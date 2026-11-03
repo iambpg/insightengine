@@ -1,0 +1,11 @@
+{
+  "name": "AIR-CT3504-K9 Front",
+  "vendor": "cisco",
+  "key": "air-ct3504-k9",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/air-ct3504-k9.front.svg",
+  "width": 1144.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

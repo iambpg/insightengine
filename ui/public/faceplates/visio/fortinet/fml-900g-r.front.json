@@ -1,0 +1,11 @@
+{
+  "name": "FML-900G (R)",
+  "vendor": "fortinet",
+  "key": "fml-900g-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fml-900g-r.front.svg",
+  "width": 1139.0,
+  "height": 104.0,
+  "hotspots": [],
+  "source": "visio"
+}

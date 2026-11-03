@@ -1,0 +1,11 @@
+{
+  "name": "C9200CX-8P-2X2G Front",
+  "vendor": "cisco",
+  "key": "c9200cx-8p-2x2g",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9200cx-8p-2x2g.front.svg",
+  "width": 1275.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

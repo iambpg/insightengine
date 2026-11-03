@@ -1,0 +1,236 @@
+{
+  "name": "FG-120/121G",
+  "vendor": "fortinet",
+  "key": "fg-120-121g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-120-121g.front.svg",
+  "width": 1143.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.25367,
+      "y": 0.48295,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.28675,
+      "y": 0.47625,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "HA Port#1",
+      "x": 0.32888,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.32929,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.37492,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.37533,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.40492,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.40533,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.43451,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.43492,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.46452,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.46493,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#9",
+      "x": 0.52411,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#10",
+      "x": 0.52453,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#11",
+      "x": 0.55412,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#12",
+      "x": 0.55453,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#13",
+      "x": 0.58371,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#14",
+      "x": 0.58412,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#15",
+      "x": 0.61372,
+      "y": 0.18607,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#16",
+      "x": 0.61413,
+      "y": 0.49857,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "10GE SFP Plus Slot#1",
+      "x": 0.64827,
+      "y": 0.27982,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "10GE SFP Plus Slot#2",
+      "x": 0.64827,
+      "y": 0.61911,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "10GE SFP Plus Slot#3",
+      "x": 0.67828,
+      "y": 0.27982,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "10GE SFP Plus Slot#4",
+      "x": 0.67828,
+      "y": 0.61911,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#17",
+      "x": 0.71732,
+      "y": 0.27982,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#18",
+      "x": 0.71732,
+      "y": 0.61911,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#19",
+      "x": 0.74692,
+      "y": 0.27982,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#20",
+      "x": 0.74692,
+      "y": 0.61911,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#21",
+      "x": 0.77651,
+      "y": 0.27982,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#22",
+      "x": 0.77651,
+      "y": 0.61911,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#23",
+      "x": 0.80651,
+      "y": 0.27982,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#24",
+      "x": 0.80651,
+      "y": 0.61911,
+      "w": 0.03309,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

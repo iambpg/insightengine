@@ -1,0 +1,54 @@
+{
+  "name": "FG-4200/4201F",
+  "vendor": "fortinet",
+  "key": "fg-4200-4201f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-4200-4201f.front.svg",
+  "width": 1140.0,
+  "height": 314.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.12111,
+      "y": 0.7646,
+      "w": 0.02,
+      "h": 0.12102
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.12111,
+      "y": 0.85279,
+      "w": 0.02,
+      "h": 0.12102
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.16797,
+      "y": 0.70631,
+      "w": 0.02,
+      "h": 0.12102
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.16797,
+      "y": 0.83486,
+      "w": 0.02,
+      "h": 0.12102
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.34701,
+      "y": 0.76532,
+      "w": 0.12,
+      "h": 0.13154
+    },
+    {
+      "prompt": "QSFP Port#1",
+      "x": 0.63523,
+      "y": 0.76607,
+      "w": 0.12,
+      "h": 0.13154
+    }
+  ],
+  "source": "visio"
+}

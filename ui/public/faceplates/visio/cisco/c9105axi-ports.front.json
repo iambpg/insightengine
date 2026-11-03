@@ -1,0 +1,11 @@
+{
+  "name": "C9105AXI Ports",
+  "vendor": "cisco",
+  "key": "c9105axi-ports",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9105axi-ports.front.svg",
+  "width": 718.0,
+  "height": 159.0,
+  "hotspots": [],
+  "source": "visio"
+}

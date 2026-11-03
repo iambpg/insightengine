@@ -1,0 +1,11 @@
+{
+  "name": "MX65-HW Rear",
+  "vendor": "meraki",
+  "key": "mx65-hw",
+  "view": "rear",
+  "file": "/faceplates/visio/meraki/mx65-hw.rear.svg",
+  "width": 1144.0,
+  "height": 131.0,
+  "hotspots": [],
+  "source": "visio"
+}

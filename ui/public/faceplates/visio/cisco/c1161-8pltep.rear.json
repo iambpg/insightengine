@@ -1,0 +1,11 @@
+{
+  "name": "C1161-8PLTEP Rear",
+  "vendor": "cisco",
+  "key": "c1161-8pltep",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c1161-8pltep.rear.svg",
+  "width": 1299.0,
+  "height": 215.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "C9200-24x Rear",
+  "vendor": "cisco",
+  "key": "c9200-24x",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9200-24x.rear.svg",
+  "width": 2283.0,
+  "height": 213.0,
+  "hotspots": [],
+  "source": "visio"
+}

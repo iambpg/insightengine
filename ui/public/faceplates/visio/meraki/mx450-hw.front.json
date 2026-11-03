@@ -1,0 +1,11 @@
+{
+  "name": "MX450-HW Front",
+  "vendor": "meraki",
+  "key": "mx450-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/mx450-hw.front.svg",
+  "width": 2283.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,166 @@
+{
+  "name": "FG-1800/1801F",
+  "vendor": "fortinet",
+  "key": "fg-1800-1801f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-1800-1801f.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.12892,
+      "y": 0.60483,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.12913,
+      "y": 0.73289,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.17208,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.17208,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.27196,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.27196,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.30319,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.30319,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.33402,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.33402,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.36526,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.36526,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#9",
+      "x": 0.40307,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#10",
+      "x": 0.40307,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#11",
+      "x": 0.43431,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#12",
+      "x": 0.43431,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#13",
+      "x": 0.46513,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#14",
+      "x": 0.46513,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#15",
+      "x": 0.49637,
+      "y": 0.55138,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#16",
+      "x": 0.49637,
+      "y": 0.70728,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.47175,
+      "y": 0.63474,
+      "w": 0.12,
+      "h": 0.17372
+    },
+    {
+      "prompt": "QSFP Port#1",
+      "x": 0.85724,
+      "y": 0.63363,
+      "w": 0.04301,
+      "h": 0.17595
+    }
+  ],
+  "source": "visio"
+}

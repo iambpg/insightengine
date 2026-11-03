@@ -1,0 +1,11 @@
+{
+  "name": "WS-C2960C-8PC-L Rear",
+  "vendor": "cisco",
+  "key": "ws-c2960c-8pc-l",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/ws-c2960c-8pc-l.rear.svg",
+  "width": 1022.0,
+  "height": 172.0,
+  "hotspots": [],
+  "source": "visio"
+}

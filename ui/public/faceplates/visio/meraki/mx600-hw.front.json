@@ -1,0 +1,11 @@
+{
+  "name": "MX600-HW Front",
+  "vendor": "meraki",
+  "key": "mx600-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/mx600-hw.front.svg",
+  "width": 2284.0,
+  "height": 409.0,
+  "hotspots": [],
+  "source": "visio"
+}

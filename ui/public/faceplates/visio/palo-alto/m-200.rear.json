@@ -1,0 +1,11 @@
+{
+  "name": "M-200 Rear",
+  "vendor": "palo-alto",
+  "key": "m-200",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/m-200.rear.svg",
+  "width": 2284.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,82 @@
+{
+  "name": "FSA-2000E",
+  "vendor": "fortinet",
+  "key": "fsa-2000e",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsa-2000e.front.svg",
+  "width": 1140.0,
+  "height": 208.0,
+  "hotspots": [
+    {
+      "prompt": "Management Port#1",
+      "x": 0.20578,
+      "y": 0.51901,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20578,
+      "y": 0.72847,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.24915,
+      "y": 0.5269,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.24915,
+      "y": 0.75663,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.4637,
+      "y": 0.73748,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.49658,
+      "y": 0.73748,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.52946,
+      "y": 0.73748,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.56234,
+      "y": 0.73748,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "SFP Plus Slot#5",
+      "x": 0.6491,
+      "y": 0.82082,
+      "w": 0.03309,
+      "h": 0.18269
+    },
+    {
+      "prompt": "SFP Plus Slot#6",
+      "x": 0.69513,
+      "y": 0.82082,
+      "w": 0.03309,
+      "h": 0.18269
+    }
+  ],
+  "source": "visio"
+}

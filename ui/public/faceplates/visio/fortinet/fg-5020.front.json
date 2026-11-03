@@ -1,0 +1,40 @@
+{
+  "name": "FG-5020",
+  "vendor": "fortinet",
+  "key": "fg-5020",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-5020.front.svg",
+  "width": 1138.0,
+  "height": 314.0,
+  "hotspots": [
+    {
+      "prompt": "Slot#1",
+      "x": 0.22036,
+      "y": 0.29076,
+      "w": 0.12,
+      "h": 0.12102
+    },
+    {
+      "prompt": "Slot#3",
+      "x": 0.35005,
+      "y": 0.61214,
+      "w": 0.12,
+      "h": 0.12102
+    },
+    {
+      "prompt": "Slot#4",
+      "x": 0.35005,
+      "y": 0.84233,
+      "w": 0.12,
+      "h": 0.12102
+    },
+    {
+      "prompt": "Slot#2",
+      "x": 0.51884,
+      "y": 0.29076,
+      "w": 0.12,
+      "h": 0.12102
+    }
+  ],
+  "source": "visio"
+}

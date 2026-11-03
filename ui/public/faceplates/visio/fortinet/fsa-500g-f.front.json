@@ -1,0 +1,61 @@
+{
+  "name": "FSA-500G (F)",
+  "vendor": "fortinet",
+  "key": "fsa-500g-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsa-500g-f.front.svg",
+  "width": 1143.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.35416,
+      "y": 0.46865,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.40081,
+      "y": 0.36279,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.40081,
+      "y": 0.56099,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.62605,
+      "y": 0.46865,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.65893,
+      "y": 0.46865,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.6914,
+      "y": 0.46865,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.72428,
+      "y": 0.46865,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

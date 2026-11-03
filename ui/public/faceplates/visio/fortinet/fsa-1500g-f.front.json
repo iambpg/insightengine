@@ -1,0 +1,82 @@
+{
+  "name": "FSA-1500G (F)",
+  "vendor": "fortinet",
+  "key": "fsa-1500g-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsa-1500g-f.front.svg",
+  "width": 1143.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.11639,
+      "y": 0.48441,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.13694,
+      "y": 0.48441,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20702,
+      "y": 0.46865,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "VGA Connector#1",
+      "x": 0.25305,
+      "y": 0.37405,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.30628,
+      "y": 0.54072,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.33916,
+      "y": 0.54072,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.37204,
+      "y": 0.54072,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.40492,
+      "y": 0.54072,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#5",
+      "x": 0.48798,
+      "y": 0.66685,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#6",
+      "x": 0.54018,
+      "y": 0.66685,
+      "w": 0.03309,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

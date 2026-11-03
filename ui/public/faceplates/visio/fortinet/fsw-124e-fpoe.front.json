@@ -1,0 +1,215 @@
+{
+  "name": "FSW-124E-FPOE",
+  "vendor": "fortinet",
+  "key": "fsw-124e-fpoe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-124e-fpoe.front.svg",
+  "width": 1050.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.04846,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#1",
+      "x": 0.39183,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#2",
+      "x": 0.39183,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#3",
+      "x": 0.42574,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#4",
+      "x": 0.42574,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#5",
+      "x": 0.45966,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#6",
+      "x": 0.45966,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#7",
+      "x": 0.49357,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#8",
+      "x": 0.49357,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#9",
+      "x": 0.52748,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#10",
+      "x": 0.52748,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#11",
+      "x": 0.5614,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#12",
+      "x": 0.5614,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#13",
+      "x": 0.61718,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#14",
+      "x": 0.61718,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#15",
+      "x": 0.65109,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#16",
+      "x": 0.65109,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#17",
+      "x": 0.685,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#18",
+      "x": 0.685,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#19",
+      "x": 0.71892,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#20",
+      "x": 0.71892,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#21",
+      "x": 0.75283,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#22",
+      "x": 0.75283,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#23",
+      "x": 0.78674,
+      "y": 0.17586,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet/PoE Port#24",
+      "x": 0.78674,
+      "y": 0.47315,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#25",
+      "x": 0.8533,
+      "y": 0.26144,
+      "w": 0.03592,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#26",
+      "x": 0.8533,
+      "y": 0.59477,
+      "w": 0.03592,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#27",
+      "x": 0.92381,
+      "y": 0.26144,
+      "w": 0.03592,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#28",
+      "x": 0.92381,
+      "y": 0.59477,
+      "w": 0.03592,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

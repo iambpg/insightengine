@@ -1,0 +1,229 @@
+{
+  "name": "FSW-624F/-FPOE",
+  "vendor": "fortinet",
+  "key": "fsw-624f-fpoe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-624f-fpoe.front.svg",
+  "width": 1258.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "2.5Gbps Ethernet Port#1",
+      "x": 0.41211,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#2",
+      "x": 0.41211,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#3",
+      "x": 0.44129,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#4",
+      "x": 0.44129,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#5",
+      "x": 0.47007,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#6",
+      "x": 0.47007,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#7",
+      "x": 0.49925,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#8",
+      "x": 0.49925,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#9",
+      "x": 0.54528,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#10",
+      "x": 0.54528,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#11",
+      "x": 0.57446,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#12",
+      "x": 0.57446,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#13",
+      "x": 0.60323,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#14",
+      "x": 0.60323,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#15",
+      "x": 0.63242,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#16",
+      "x": 0.63242,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#17",
+      "x": 0.6616,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#18",
+      "x": 0.6616,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#19",
+      "x": 0.69078,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#20",
+      "x": 0.69078,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#21",
+      "x": 0.71955,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#22",
+      "x": 0.71955,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#23",
+      "x": 0.74873,
+      "y": 0.21286,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5Gbps Ethernet Port#24",
+      "x": 0.74873,
+      "y": 0.52536,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#25",
+      "x": 0.7872,
+      "y": 0.30661,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#26",
+      "x": 0.7872,
+      "y": 0.65036,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#27",
+      "x": 0.8172,
+      "y": 0.30661,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP28 Slot#28",
+      "x": 0.8172,
+      "y": 0.65036,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.89958,
+      "y": 0.13696,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.89958,
+      "y": 0.59679,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.89978,
+      "y": 0.36688,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

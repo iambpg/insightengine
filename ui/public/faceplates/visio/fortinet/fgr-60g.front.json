@@ -1,0 +1,68 @@
+{
+  "name": "FGR-60G",
+  "vendor": "fortinet",
+  "key": "fgr-60g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fgr-60g.front.svg",
+  "width": 510.0,
+  "height": 101.0,
+  "hotspots": [
+    {
+      "prompt": "GE LAN Bypass#1",
+      "x": 0.26439,
+      "y": 0.48204,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE LAN Bypass#2",
+      "x": 0.33142,
+      "y": 0.48204,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE LAN#3",
+      "x": 0.39937,
+      "y": 0.48204,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE LAN#4",
+      "x": 0.46641,
+      "y": 0.48204,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE WAN#1",
+      "x": 0.65557,
+      "y": 0.48204,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE WAN#2",
+      "x": 0.72261,
+      "y": 0.48204,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#1",
+      "x": 0.88453,
+      "y": 0.24593,
+      "w": 0.07392,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#2",
+      "x": 0.88453,
+      "y": 0.6163,
+      "w": 0.07392,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

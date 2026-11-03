@@ -1,0 +1,11 @@
+{
+  "name": "PA-550 Rear",
+  "vendor": "palo-alto",
+  "key": "pa-550",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/pa-550.rear.svg",
+  "width": 1563.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

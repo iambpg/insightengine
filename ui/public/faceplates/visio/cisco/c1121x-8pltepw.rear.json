@@ -1,0 +1,11 @@
+{
+  "name": "C1121X-8PLTEPW Rear",
+  "vendor": "cisco",
+  "key": "c1121x-8pltepw",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c1121x-8pltepw.rear.svg",
+  "width": 1527.0,
+  "height": 215.0,
+  "hotspots": [],
+  "source": "visio"
+}

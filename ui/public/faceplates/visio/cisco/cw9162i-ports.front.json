@@ -1,0 +1,11 @@
+{
+  "name": "CW9162I Ports",
+  "vendor": "cisco",
+  "key": "cw9162i-ports",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/cw9162i-ports.front.svg",
+  "width": 946.0,
+  "height": 244.0,
+  "hotspots": [],
+  "source": "visio"
+}

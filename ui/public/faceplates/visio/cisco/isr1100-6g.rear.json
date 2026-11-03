@@ -1,0 +1,11 @@
+{
+  "name": "ISR1100-6G Rear",
+  "vendor": "cisco",
+  "key": "isr1100-6g",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/isr1100-6g.rear.svg",
+  "width": 1224.0,
+  "height": 137.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "EHWIC-4ESG",
+  "vendor": "cisco",
+  "key": "ehwic-4esg",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/ehwic-4esg.front.svg",
+  "width": 372.0,
+  "height": 102.0,
+  "hotspots": [],
+  "source": "visio"
+}

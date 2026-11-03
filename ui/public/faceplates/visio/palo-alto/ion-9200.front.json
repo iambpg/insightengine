@@ -1,0 +1,11 @@
+{
+  "name": "ION 9200 Front",
+  "vendor": "palo-alto",
+  "key": "ion-9200",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/ion-9200.front.svg",
+  "width": 2283.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

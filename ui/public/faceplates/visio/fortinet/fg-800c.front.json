@@ -1,0 +1,243 @@
+{
+  "name": "FG-800C",
+  "vendor": "fortinet",
+  "key": "fg-800c",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-800c.front.svg",
+  "width": 1140.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.12877,
+      "y": 0.44723,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB Management#1",
+      "x": 0.16311,
+      "y": 0.44723,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20135,
+      "y": 0.44054,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.27228,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.27228,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port 1#1",
+      "x": 0.31545,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port 1#2",
+      "x": 0.31545,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port 2#1",
+      "x": 0.35822,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port 2#2",
+      "x": 0.35822,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.4018,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.4018,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.43223,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.43223,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.46307,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.46307,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#9",
+      "x": 0.4935,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#10",
+      "x": 0.4935,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#11",
+      "x": 0.52433,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#12",
+      "x": 0.52433,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#13",
+      "x": 0.55476,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#14",
+      "x": 0.55476,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#15",
+      "x": 0.59835,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#16",
+      "x": 0.59835,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#17",
+      "x": 0.64234,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#18",
+      "x": 0.64234,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Bypass Interface#19",
+      "x": 0.74802,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Bypass Interface#20",
+      "x": 0.74802,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Bypass Interface#21",
+      "x": 0.78667,
+      "y": 0.05661,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "10/100/1000 Bypass Interface#22",
+      "x": 0.78667,
+      "y": 0.445,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#19",
+      "x": 0.81589,
+      "y": 0.17714,
+      "w": 0.0331,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#20",
+      "x": 0.81589,
+      "y": 0.52536,
+      "w": 0.0331,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#21",
+      "x": 0.85002,
+      "y": 0.17714,
+      "w": 0.0331,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#22",
+      "x": 0.85002,
+      "y": 0.52536,
+      "w": 0.0331,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

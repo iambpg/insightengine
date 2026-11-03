@@ -1,0 +1,40 @@
+{
+  "name": "FNR-3500F (F)",
+  "vendor": "fortinet",
+  "key": "fnr-3500f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fnr-3500f-f.front.svg",
+  "width": 1143.0,
+  "height": 205.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.95034,
+      "y": 0.21122,
+      "w": 0.02,
+      "h": 0.18537
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.95034,
+      "y": 0.52544,
+      "w": 0.02,
+      "h": 0.18537
+    },
+    {
+      "prompt": "Micro USB#1",
+      "x": 0.95095,
+      "y": 0.70892,
+      "w": 0.02,
+      "h": 0.18537
+    },
+    {
+      "prompt": "VGA Connector#1",
+      "x": 0.97356,
+      "y": 0.21236,
+      "w": 0.02,
+      "h": 0.18537
+    }
+  ],
+  "source": "visio"
+}

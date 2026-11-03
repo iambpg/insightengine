@@ -1,0 +1,11 @@
+{
+  "name": "PAN-PA-7000-100G-NPC-A",
+  "vendor": "palo-alto",
+  "key": "pan-pa-7000-100g-npc-a",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pan-pa-7000-100g-npc-a.front.svg",
+  "width": 1638.0,
+  "height": 169.0,
+  "hotspots": [],
+  "source": "visio"
+}

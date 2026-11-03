@@ -1,0 +1,236 @@
+{
+  "name": "FG-200/201G",
+  "vendor": "fortinet",
+  "key": "fg-200-201g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-200-201g.front.svg",
+  "width": 1143.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.184,
+      "y": 0.26643,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.1842,
+      "y": 0.5633,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "HA Port#1",
+      "x": 0.22921,
+      "y": 0.15036,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.22921,
+      "y": 0.52982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.33566,
+      "y": 0.15036,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.33566,
+      "y": 0.52982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.36649,
+      "y": 0.15036,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.36649,
+      "y": 0.52982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.39691,
+      "y": 0.15036,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.39691,
+      "y": 0.52982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.42773,
+      "y": 0.15036,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.42773,
+      "y": 0.52982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#9",
+      "x": 0.47788,
+      "y": 0.16375,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#10",
+      "x": 0.47788,
+      "y": 0.51196,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#11",
+      "x": 0.50788,
+      "y": 0.16375,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#12",
+      "x": 0.50788,
+      "y": 0.51196,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#13",
+      "x": 0.53829,
+      "y": 0.16375,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#14",
+      "x": 0.53829,
+      "y": 0.51196,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#15",
+      "x": 0.5683,
+      "y": 0.16375,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "5G Gigabit Ethernet Port#16",
+      "x": 0.5683,
+      "y": 0.51196,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#1",
+      "x": 0.65033,
+      "y": 0.26643,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#2",
+      "x": 0.65033,
+      "y": 0.6325,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#3",
+      "x": 0.68115,
+      "y": 0.26643,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#4",
+      "x": 0.68115,
+      "y": 0.6325,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#5",
+      "x": 0.71198,
+      "y": 0.26643,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#6",
+      "x": 0.71198,
+      "y": 0.6325,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#7",
+      "x": 0.74281,
+      "y": 0.26643,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot X#8",
+      "x": 0.74281,
+      "y": 0.6325,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet SFP Slot#17",
+      "x": 0.79048,
+      "y": 0.26643,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet SFP Slot#18",
+      "x": 0.79048,
+      "y": 0.6325,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet SFP Slot#19",
+      "x": 0.8209,
+      "y": 0.26643,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet SFP Slot#20",
+      "x": 0.8209,
+      "y": 0.6325,
+      "w": 0.03309,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

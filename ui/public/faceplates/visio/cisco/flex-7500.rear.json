@@ -1,0 +1,11 @@
+{
+  "name": "Flex 7500 Rear",
+  "vendor": "cisco",
+  "key": "flex-7500",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/flex-7500.rear.svg",
+  "width": 1827.0,
+  "height": 166.0,
+  "hotspots": [],
+  "source": "visio"
+}

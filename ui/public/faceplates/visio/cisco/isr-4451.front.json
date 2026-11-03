@@ -1,0 +1,11 @@
+{
+  "name": "ISR 4451 Front",
+  "vendor": "cisco",
+  "key": "isr-4451",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/isr-4451.front.svg",
+  "width": 1830.0,
+  "height": 342.0,
+  "hotspots": [],
+  "source": "visio"
+}

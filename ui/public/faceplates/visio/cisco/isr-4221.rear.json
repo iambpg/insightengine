@@ -1,0 +1,11 @@
+{
+  "name": "ISR 4221 Rear",
+  "vendor": "cisco",
+  "key": "isr-4221",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/isr-4221.rear.svg",
+  "width": 1534.0,
+  "height": 218.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "MS120-8LP-HW Front",
+  "vendor": "meraki",
+  "key": "ms120-8lp-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms120-8lp-hw.front.svg",
+  "width": 1053.0,
+  "height": 135.0,
+  "hotspots": [],
+  "source": "visio"
+}

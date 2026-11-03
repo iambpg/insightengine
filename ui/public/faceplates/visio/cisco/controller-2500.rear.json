@@ -1,0 +1,11 @@
+{
+  "name": "Controller 2500 Rear",
+  "vendor": "cisco",
+  "key": "controller-2500",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/controller-2500.rear.svg",
+  "width": 772.0,
+  "height": 170.0,
+  "hotspots": [],
+  "source": "visio"
+}

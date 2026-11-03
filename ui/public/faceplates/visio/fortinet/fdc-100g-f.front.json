@@ -1,0 +1,11 @@
+{
+  "name": "FDC-100G (F)",
+  "vendor": "fortinet",
+  "key": "fdc-100g-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fdc-100g-f.front.svg",
+  "width": 512.0,
+  "height": 90.0,
+  "hotspots": [],
+  "source": "visio"
+}

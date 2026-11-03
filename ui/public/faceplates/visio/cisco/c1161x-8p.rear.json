@@ -1,0 +1,11 @@
+{
+  "name": "C1161X-8P Rear",
+  "vendor": "cisco",
+  "key": "c1161x-8p",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c1161x-8p.rear.svg",
+  "width": 1299.0,
+  "height": 215.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,47 @@
+{
+  "name": "FG/FWF-30G",
+  "vendor": "fortinet",
+  "key": "fg-fwf-30g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-fwf-30g.front.svg",
+  "width": 337.0,
+  "height": 107.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.18378,
+      "y": 0.34225,
+      "w": 0.04748,
+      "h": 0.35514
+    },
+    {
+      "prompt": "GE WAN Port#1",
+      "x": 0.55008,
+      "y": 0.38631,
+      "w": 0.04748,
+      "h": 0.35514
+    },
+    {
+      "prompt": "GE Port#1",
+      "x": 0.64896,
+      "y": 0.38631,
+      "w": 0.04748,
+      "h": 0.35514
+    },
+    {
+      "prompt": "GE Port#2",
+      "x": 0.74785,
+      "y": 0.38631,
+      "w": 0.04748,
+      "h": 0.35514
+    },
+    {
+      "prompt": "GE FortiLink A Port#1",
+      "x": 0.84673,
+      "y": 0.38631,
+      "w": 0.04748,
+      "h": 0.35514
+    }
+  ],
+  "source": "visio"
+}

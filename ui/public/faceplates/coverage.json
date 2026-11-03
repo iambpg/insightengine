@@ -1,0 +1,33 @@
+{
+  "byVendor": {
+    "cisco": {
+      "visio": 119,
+      "photo": 256,
+      "vendor": 0,
+      "drawn": 570,
+      "devices": 945
+    },
+    "meraki": {
+      "visio": 17,
+      "photo": 10,
+      "vendor": 0,
+      "drawn": 59,
+      "devices": 86
+    },
+    "fortinet": {
+      "visio": 86,
+      "photo": 10,
+      "vendor": 0,
+      "drawn": 81,
+      "devices": 177
+    },
+    "palo-alto": {
+      "visio": 52,
+      "photo": 1,
+      "vendor": 0,
+      "drawn": 27,
+      "devices": 80
+    }
+  },
+  "devices": 1288
+}

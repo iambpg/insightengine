@@ -1,0 +1,75 @@
+{
+  "name": "FG-50G-DSL",
+  "vendor": "fortinet",
+  "key": "fg-50g-dsl",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-50g-dsl.front.svg",
+  "width": 512.0,
+  "height": 103.0,
+  "hotspots": [
+    {
+      "prompt": "DC Connector 12V#1",
+      "x": 0.06656,
+      "y": 0.41361,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.11798,
+      "y": 0.43416,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.19099,
+      "y": 0.43187,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "DSL Port#1",
+      "x": 0.52524,
+      "y": 0.47297,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.64002,
+      "y": 0.47297,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE FortiLink A Port#1",
+      "x": 0.70889,
+      "y": 0.47297,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE Ethernet Port#3",
+      "x": 0.77593,
+      "y": 0.47297,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE Ethernet Port#2",
+      "x": 0.84296,
+      "y": 0.47297,
+      "w": 0.03125,
+      "h": 0.36
+    },
+    {
+      "prompt": "GE Ethernet Port#1",
+      "x": 0.91091,
+      "y": 0.47297,
+      "w": 0.03125,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

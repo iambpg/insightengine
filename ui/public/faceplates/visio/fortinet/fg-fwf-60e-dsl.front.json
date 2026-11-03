@@ -1,0 +1,110 @@
+{
+  "name": "FG/FWF-60E-DSL",
+  "vendor": "fortinet",
+  "key": "fg-fwf-60e-dsl",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-fwf-60e-dsl.front.svg",
+  "width": 510.0,
+  "height": 103.0,
+  "hotspots": [
+    {
+      "prompt": "Grounding Screw#1",
+      "x": 0.00681,
+      "y": 0.40219,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Connector#1",
+      "x": 0.04538,
+      "y": 0.37023,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.10323,
+      "y": 0.40676,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.17072,
+      "y": 0.41361,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.27173,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "DMZ Port#1",
+      "x": 0.3406,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.40856,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.47743,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.54538,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.63904,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.70791,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.77587,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.84474,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "DSL Port#1",
+      "x": 0.92646,
+      "y": 0.41817,
+      "w": 0.03137,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

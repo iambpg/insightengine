@@ -1,0 +1,11 @@
+{
+  "name": "C9800-40-K9 Front",
+  "vendor": "cisco",
+  "key": "c9800-40-k9",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9800-40-k9.front.svg",
+  "width": 2281.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

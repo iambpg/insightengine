@@ -1,0 +1,11 @@
+{
+  "name": "PA-450R Rear",
+  "vendor": "palo-alto",
+  "key": "pa-450r",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/pa-450r.rear.svg",
+  "width": 1851.0,
+  "height": 207.0,
+  "hotspots": [],
+  "source": "visio"
+}

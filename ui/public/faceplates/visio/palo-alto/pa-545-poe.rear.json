@@ -1,0 +1,11 @@
+{
+  "name": "PA-545-POE Rear",
+  "vendor": "palo-alto",
+  "key": "pa-545-poe",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/pa-545-poe.rear.svg",
+  "width": 1935.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,68 @@
+{
+  "name": "FEX-511G",
+  "vendor": "fortinet",
+  "key": "fex-511g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fex-511g.front.svg",
+  "width": 540.0,
+  "height": 77.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.38814,
+      "y": 0.25558,
+      "w": 0.02963,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.45516,
+      "y": 0.26172,
+      "w": 0.02963,
+      "h": 0.36
+    },
+    {
+      "prompt": "2.5G WAN Port#1",
+      "x": 0.52827,
+      "y": 0.25558,
+      "w": 0.02963,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#1",
+      "x": 0.59595,
+      "y": 0.49178,
+      "w": 0.07006,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.70842,
+      "y": 0.25558,
+      "w": 0.02963,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.77805,
+      "y": 0.25558,
+      "w": 0.02963,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.8468,
+      "y": 0.25558,
+      "w": 0.02963,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.91643,
+      "y": 0.25558,
+      "w": 0.02963,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

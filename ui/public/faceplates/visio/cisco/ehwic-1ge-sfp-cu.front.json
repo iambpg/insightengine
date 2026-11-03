@@ -1,0 +1,11 @@
+{
+  "name": "EHWIC-1GE-SFP-CU",
+  "vendor": "cisco",
+  "key": "ehwic-1ge-sfp-cu",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/ehwic-1ge-sfp-cu.front.svg",
+  "width": 372.0,
+  "height": 102.0,
+  "hotspots": [],
+  "source": "visio"
+}

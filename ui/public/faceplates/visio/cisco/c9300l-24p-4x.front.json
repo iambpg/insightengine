@@ -1,0 +1,11 @@
+{
+  "name": "C9300L-24P-4X Front",
+  "vendor": "cisco",
+  "key": "c9300l-24p-4x",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9300l-24p-4x.front.svg",
+  "width": 2284.0,
+  "height": 217.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "WS-C2960X-STACK",
+  "vendor": "cisco",
+  "key": "ws-c2960x-stack",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/ws-c2960x-stack.front.svg",
+  "width": 486.0,
+  "height": 155.0,
+  "hotspots": [],
+  "source": "visio"
+}

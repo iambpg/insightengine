@@ -1,0 +1,1 @@
+{"slug": "cisco-ws-c4900m", "model": "Catalyst C4900M", "partNumber": "WS-C4900M", "manufacturer": "Cisco", "vendor": "cisco", "source": "photo", "front": "/faceplates/library/cisco/cisco-ws-c4900m.front.png", "rear": "", "width": 4091, "height": 747, "raster": true, "ports": [{"name": "FastEthernet1", "type": "100base-tx", "x": 0.08, "y": 0.38, "w": 0.04, "h": 0.28}]}

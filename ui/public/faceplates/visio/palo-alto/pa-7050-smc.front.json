@@ -1,0 +1,11 @@
+{
+  "name": "PA-7050-SMC",
+  "vendor": "palo-alto",
+  "key": "pa-7050-smc",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-7050-smc.front.svg",
+  "width": 1638.0,
+  "height": 169.0,
+  "hotspots": [],
+  "source": "visio"
+}

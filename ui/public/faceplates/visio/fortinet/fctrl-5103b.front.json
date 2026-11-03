@@ -1,0 +1,110 @@
+{
+  "name": "FCTRL-5103B",
+  "vendor": "fortinet",
+  "key": "fctrl-5103b",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fctrl-5103b.front.svg",
+  "width": 782.0,
+  "height": 69.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.26435,
+      "y": 0.29973,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.31021,
+      "y": 0.33689,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#1",
+      "x": 0.33288,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#2",
+      "x": 0.37545,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#3",
+      "x": 0.41862,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#4",
+      "x": 0.46178,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#5",
+      "x": 0.50674,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#6",
+      "x": 0.54931,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#7",
+      "x": 0.59248,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#8",
+      "x": 0.63564,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#9",
+      "x": 0.68061,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Plus Slot#10",
+      "x": 0.72317,
+      "y": 0.57,
+      "w": 0.04826,
+      "h": 0.36
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.79103,
+      "y": 0.37405,
+      "w": 0.02046,
+      "h": 0.36
+    },
+    {
+      "prompt": "RJ45#1",
+      "x": 0.84319,
+      "y": 0.37405,
+      "w": 0.02046,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

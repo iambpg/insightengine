@@ -1,0 +1,11 @@
+{
+  "name": "AIR-CT5520-K9 Rear",
+  "vendor": "cisco",
+  "key": "air-ct5520-k9",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/air-ct5520-k9.rear.svg",
+  "width": 2288.0,
+  "height": 216.0,
+  "hotspots": [],
+  "source": "visio"
+}

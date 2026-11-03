@@ -1,0 +1,201 @@
+{
+  "name": "FSW-124D-POE",
+  "vendor": "fortinet",
+  "key": "fsw-124d-poe",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fsw-124d-poe.front.svg",
+  "width": 1140.0,
+  "height": 103.0,
+  "hotspots": [
+    {
+      "prompt": "Management Port#1",
+      "x": 0.1766,
+      "y": 0.48667,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#1",
+      "x": 0.30484,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#2",
+      "x": 0.30484,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#3",
+      "x": 0.33649,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#4",
+      "x": 0.33649,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#5",
+      "x": 0.36855,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#6",
+      "x": 0.36855,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#7",
+      "x": 0.40019,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#8",
+      "x": 0.40019,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#9",
+      "x": 0.43225,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#10",
+      "x": 0.43225,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#11",
+      "x": 0.4639,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "PoE Port#12",
+      "x": 0.4639,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#13",
+      "x": 0.50706,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#14",
+      "x": 0.50706,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#15",
+      "x": 0.53871,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#16",
+      "x": 0.53871,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#17",
+      "x": 0.57076,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#18",
+      "x": 0.57076,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#19",
+      "x": 0.60241,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#20",
+      "x": 0.60241,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#21",
+      "x": 0.63447,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#22",
+      "x": 0.63447,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#23",
+      "x": 0.66612,
+      "y": 0.16703,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#24",
+      "x": 0.66612,
+      "y": 0.50493,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#25",
+      "x": 0.72185,
+      "y": 0.63735,
+      "w": 0.03309,
+      "h": 0.36
+    },
+    {
+      "prompt": "SFP Slot#26",
+      "x": 0.77815,
+      "y": 0.63735,
+      "w": 0.03309,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

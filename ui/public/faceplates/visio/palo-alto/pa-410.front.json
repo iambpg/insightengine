@@ -1,0 +1,11 @@
+{
+  "name": "PA-410 Front",
+  "vendor": "palo-alto",
+  "key": "pa-410",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-410.front.svg",
+  "width": 1148.0,
+  "height": 200.0,
+  "hotspots": [],
+  "source": "visio"
+}

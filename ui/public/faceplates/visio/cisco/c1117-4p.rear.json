@@ -1,0 +1,11 @@
+{
+  "name": "C1117-4P Rear",
+  "vendor": "cisco",
+  "key": "c1117-4p",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c1117-4p.rear.svg",
+  "width": 1528.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

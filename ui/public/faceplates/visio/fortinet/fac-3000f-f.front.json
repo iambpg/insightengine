@@ -1,0 +1,82 @@
+{
+  "name": "FAC-3000F (F)",
+  "vendor": "fortinet",
+  "key": "fac-3000f-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fac-3000f-f.front.svg",
+  "width": 1140.0,
+  "height": 208.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.13365,
+      "y": 0.74725,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.15173,
+      "y": 0.74725,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.1842,
+      "y": 0.73258,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.22222,
+      "y": 0.73258,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.30134,
+      "y": 0.76644,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.33423,
+      "y": 0.76644,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.36711,
+      "y": 0.76644,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.39999,
+      "y": 0.76644,
+      "w": 0.02,
+      "h": 0.18269
+    },
+    {
+      "prompt": "SFP Plus Slot#5",
+      "x": 0.65238,
+      "y": 0.84996,
+      "w": 0.03309,
+      "h": 0.18269
+    },
+    {
+      "prompt": "SFP Plus Slot#6",
+      "x": 0.69842,
+      "y": 0.84996,
+      "w": 0.03309,
+      "h": 0.18269
+    }
+  ],
+  "source": "visio"
+}

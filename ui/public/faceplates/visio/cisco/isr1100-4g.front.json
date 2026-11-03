@@ -1,0 +1,11 @@
+{
+  "name": "ISR1100-4G Front",
+  "vendor": "cisco",
+  "key": "isr1100-4g",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/isr1100-4g.front.svg",
+  "width": 1227.0,
+  "height": 137.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "C9200CX-12P-2X2G Rear",
+  "vendor": "cisco",
+  "key": "c9200cx-12p-2x2g",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9200cx-12p-2x2g.rear.svg",
+  "width": 1275.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

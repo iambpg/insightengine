@@ -1,0 +1,159 @@
+{
+  "name": "FG-400/401F",
+  "vendor": "fortinet",
+  "key": "fg-400-401f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-400-401f.front.svg",
+  "width": 1140.0,
+  "height": 106.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.19756,
+      "y": 0.27611,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.19777,
+      "y": 0.54174,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "HA Port#1",
+      "x": 0.23908,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.23908,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.30689,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.30689,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.33649,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.33649,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.36649,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.36649,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.39608,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.39608,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#9",
+      "x": 0.43801,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#10",
+      "x": 0.43801,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#11",
+      "x": 0.4676,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#12",
+      "x": 0.4676,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#13",
+      "x": 0.4976,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#14",
+      "x": 0.4976,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#15",
+      "x": 0.5272,
+      "y": 0.18683,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#16",
+      "x": 0.5272,
+      "y": 0.49933,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.66924,
+      "y": 0.35268,
+      "w": 0.12,
+      "h": 0.33929
+    }
+  ],
+  "source": "visio"
+}

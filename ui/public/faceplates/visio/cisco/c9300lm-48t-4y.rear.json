@@ -1,0 +1,11 @@
+{
+  "name": "C9300LM-48T-4Y Rear",
+  "vendor": "cisco",
+  "key": "c9300lm-48t-4y",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9300lm-48t-4y.rear.svg",
+  "width": 2283.0,
+  "height": 213.0,
+  "hotspots": [],
+  "source": "visio"
+}

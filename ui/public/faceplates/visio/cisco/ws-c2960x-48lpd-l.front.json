@@ -1,0 +1,11 @@
+{
+  "name": "WS-C2960X-48LPD-L Front",
+  "vendor": "cisco",
+  "key": "ws-c2960x-48lpd-l",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/ws-c2960x-48lpd-l.front.svg",
+  "width": 1830.0,
+  "height": 173.0,
+  "hotspots": [],
+  "source": "visio"
+}

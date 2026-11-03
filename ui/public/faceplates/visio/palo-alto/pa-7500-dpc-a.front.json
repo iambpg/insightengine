@@ -1,0 +1,11 @@
+{
+  "name": "PA-7500-DPC-A",
+  "vendor": "palo-alto",
+  "key": "pa-7500-dpc-a",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-7500-dpc-a.front.svg",
+  "width": 2097.0,
+  "height": 261.0,
+  "hotspots": [],
+  "source": "visio"
+}

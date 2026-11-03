@@ -1,0 +1,11 @@
+{
+  "name": "FMG-400G (F)",
+  "vendor": "fortinet",
+  "key": "fmg-400g-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fmg-400g-f.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [],
+  "source": "visio"
+}

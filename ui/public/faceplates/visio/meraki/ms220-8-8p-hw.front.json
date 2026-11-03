@@ -1,0 +1,11 @@
+{
+  "name": "MS220-8_8P-HW Front",
+  "vendor": "meraki",
+  "key": "ms220-8-8p-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms220-8-8p-hw.front.svg",
+  "width": 1096.0,
+  "height": 220.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "MS225-48-HW Rear",
+  "vendor": "meraki",
+  "key": "ms225-48-hw",
+  "view": "rear",
+  "file": "/faceplates/visio/meraki/ms225-48-hw.rear.svg",
+  "width": 2283.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

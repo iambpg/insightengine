@@ -1,0 +1,11 @@
+{
+  "name": "C9500-16X Rear",
+  "vendor": "cisco",
+  "key": "c9500-16x",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9500-16x.rear.svg",
+  "width": 2284.0,
+  "height": 216.0,
+  "hotspots": [],
+  "source": "visio"
+}

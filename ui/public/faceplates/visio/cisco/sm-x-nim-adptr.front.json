@@ -1,0 +1,11 @@
+{
+  "name": "SM-X-NIM-ADPTR",
+  "vendor": "cisco",
+  "key": "sm-x-nim-adptr",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/sm-x-nim-adptr.front.svg",
+  "width": 996.0,
+  "height": 214.0,
+  "hotspots": [],
+  "source": "visio"
+}

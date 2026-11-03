@@ -1,0 +1,11 @@
+{
+  "name": "PA-5430 Front",
+  "vendor": "palo-alto",
+  "key": "pa-5430",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-5430.front.svg",
+  "width": 2283.0,
+  "height": 418.0,
+  "hotspots": [],
+  "source": "visio"
+}

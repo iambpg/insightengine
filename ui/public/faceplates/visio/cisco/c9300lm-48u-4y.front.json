@@ -1,0 +1,11 @@
+{
+  "name": "C9300LM-48U-4Y Front",
+  "vendor": "cisco",
+  "key": "c9300lm-48u-4y",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9300lm-48u-4y.front.svg",
+  "width": 2284.0,
+  "height": 217.0,
+  "hotspots": [],
+  "source": "visio"
+}

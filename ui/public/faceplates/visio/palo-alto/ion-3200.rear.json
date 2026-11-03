@@ -1,0 +1,11 @@
+{
+  "name": "ION 3200 Rear",
+  "vendor": "palo-alto",
+  "key": "ion-3200",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/ion-3200.rear.svg",
+  "width": 1563.0,
+  "height": 203.0,
+  "hotspots": [],
+  "source": "visio"
+}

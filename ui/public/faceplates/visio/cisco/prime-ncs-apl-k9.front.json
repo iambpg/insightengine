@@ -1,0 +1,11 @@
+{
+  "name": "PRIME-NCS-APL-K9 Front",
+  "vendor": "cisco",
+  "key": "prime-ncs-apl-k9",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/prime-ncs-apl-k9.front.svg",
+  "width": 1827.0,
+  "height": 167.0,
+  "hotspots": [],
+  "source": "visio"
+}

@@ -1,0 +1,75 @@
+{
+  "name": "FMG-400G (R)",
+  "vendor": "fortinet",
+  "key": "fmg-400g-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fmg-400g-r.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [
+    {
+      "prompt": "LC#1",
+      "x": 0.08844,
+      "y": 0.67483,
+      "w": 0.02,
+      "h": 0.16258
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.12995,
+      "y": 0.58701,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.12995,
+      "y": 0.74291,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Ethernet Port#5",
+      "x": 0.16283,
+      "y": 0.58701,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Ethernet Port#6",
+      "x": 0.16283,
+      "y": 0.74291,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.20784,
+      "y": 0.52242,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.20804,
+      "y": 0.65271,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.20804,
+      "y": 0.75516,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Power Plug#1",
+      "x": 0.79964,
+      "y": 0.68724,
+      "w": 0.12,
+      "h": 0.18009
+    }
+  ],
+  "source": "visio"
+}

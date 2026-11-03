@@ -1,0 +1,11 @@
+{
+  "name": "PA-415 Rear",
+  "vendor": "palo-alto",
+  "key": "pa-415",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/pa-415.rear.svg",
+  "width": 1563.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

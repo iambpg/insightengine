@@ -1,0 +1,11 @@
+{
+  "name": "Z3C-HW-WW Front",
+  "vendor": "meraki",
+  "key": "z3c-hw-ww",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/z3c-hw-ww.front.svg",
+  "width": 951.0,
+  "height": 132.0,
+  "hotspots": [],
+  "source": "visio"
+}

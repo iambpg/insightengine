@@ -1,0 +1,11 @@
+{
+  "name": "FortiFone Cordless Base (F)",
+  "vendor": "fortinet",
+  "key": "fortifone-cordless-base-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fortifone-cordless-base-f.front.svg",
+  "width": 551.0,
+  "height": 172.0,
+  "hotspots": [],
+  "source": "visio"
+}

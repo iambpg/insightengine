@@ -1,0 +1,11 @@
+{
+  "name": "C9500X-28C8D Rear",
+  "vendor": "cisco",
+  "key": "c9500x-28c8d",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9500x-28c8d.rear.svg",
+  "width": 2284.0,
+  "height": 208.0,
+  "hotspots": [],
+  "source": "visio"
+}

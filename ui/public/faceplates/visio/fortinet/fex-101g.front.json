@@ -1,0 +1,75 @@
+{
+  "name": "FEX-101G",
+  "vendor": "fortinet",
+  "key": "fex-101g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fex-101g.front.svg",
+  "width": 399.0,
+  "height": 91.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.15111,
+      "y": 0.23451,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.23728,
+      "y": 0.25005,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.32344,
+      "y": 0.23451,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN Port#1",
+      "x": 0.40433,
+      "y": 0.23451,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN Port#2",
+      "x": 0.4864,
+      "y": 0.23451,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN Port#3",
+      "x": 0.56729,
+      "y": 0.23451,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "LAN PoE PD Port#4",
+      "x": 0.64818,
+      "y": 0.23451,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "12VDC#1",
+      "x": 0.76365,
+      "y": 0.25264,
+      "w": 0.0401,
+      "h": 0.36
+    },
+    {
+      "prompt": "Antenna Connector#1",
+      "x": 0.97936,
+      "y": 0.2656,
+      "w": 0.0401,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

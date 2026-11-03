@@ -1,0 +1,11 @@
+{
+  "name": "Cisco ISR C1111-8P Front",
+  "vendor": "cisco",
+  "key": "cisco-isr-c1111-8p",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/cisco-isr-c1111-8p.front.svg",
+  "width": 1527.0,
+  "height": 215.0,
+  "hotspots": [],
+  "source": "visio"
+}

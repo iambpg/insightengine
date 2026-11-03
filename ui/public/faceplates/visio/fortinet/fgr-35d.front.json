@@ -1,0 +1,40 @@
+{
+  "name": "FGR-35D",
+  "vendor": "fortinet",
+  "key": "fgr-35d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fgr-35d.front.svg",
+  "width": 602.0,
+  "height": 185.0,
+  "hotspots": [
+    {
+      "prompt": "DC Connector#1",
+      "x": 0.25654,
+      "y": 0.43029,
+      "w": 0.02658,
+      "h": 0.20541
+    },
+    {
+      "prompt": "LAN Port#1",
+      "x": 0.41984,
+      "y": 0.44552,
+      "w": 0.02658,
+      "h": 0.20541
+    },
+    {
+      "prompt": "LAN Port#2",
+      "x": 0.55436,
+      "y": 0.44552,
+      "w": 0.02658,
+      "h": 0.20541
+    },
+    {
+      "prompt": "LAN Port#3",
+      "x": 0.7161,
+      "y": 0.44552,
+      "w": 0.02658,
+      "h": 0.20541
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "MS210-24P-HW Rear",
+  "vendor": "meraki",
+  "key": "ms210-24p-hw",
+  "view": "rear",
+  "file": "/faceplates/visio/meraki/ms210-24p-hw.rear.svg",
+  "width": 2283.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

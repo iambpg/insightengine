@@ -1,0 +1,11 @@
+{
+  "name": "M-700 Rear",
+  "vendor": "palo-alto",
+  "key": "m-700",
+  "view": "rear",
+  "file": "/faceplates/visio/palo-alto/m-700.rear.svg",
+  "width": 2283.0,
+  "height": 430.0,
+  "hotspots": [],
+  "source": "visio"
+}

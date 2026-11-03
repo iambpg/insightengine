@@ -1,0 +1,54 @@
+{
+  "name": "WLC-50D",
+  "vendor": "fortinet",
+  "key": "wlc-50d",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/wlc-50d.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.29251,
+      "y": 0.4664,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.33094,
+      "y": 0.52495,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.39629,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.43533,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.47438,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.51384,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

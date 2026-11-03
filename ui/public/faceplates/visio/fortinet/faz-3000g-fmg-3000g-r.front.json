@@ -1,0 +1,75 @@
+{
+  "name": "FAZ-3000G/FMG-3000G (R)",
+  "vendor": "fortinet",
+  "key": "faz-3000g-fmg-3000g-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/faz-3000g-fmg-3000g-r.front.svg",
+  "width": 1140.0,
+  "height": 313.0,
+  "hotspots": [
+    {
+      "prompt": "SFP28 Slot#3",
+      "x": 0.11889,
+      "y": 0.11621,
+      "w": 0.03309,
+      "h": 0.12141
+    },
+    {
+      "prompt": "SFP28 Slot#4",
+      "x": 0.1641,
+      "y": 0.11621,
+      "w": 0.03309,
+      "h": 0.12141
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.27463,
+      "y": 0.83435,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.30874,
+      "y": 0.83435,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "VGA Port#1",
+      "x": 0.36793,
+      "y": 0.84035,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.43945,
+      "y": 0.8411,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.74935,
+      "y": 0.80361,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.74935,
+      "y": 0.86059,
+      "w": 0.02,
+      "h": 0.12141
+    },
+    {
+      "prompt": "Power Plug#1",
+      "x": 0.89691,
+      "y": 0.49625,
+      "w": 0.02,
+      "h": 0.30435
+    }
+  ],
+  "source": "visio"
+}

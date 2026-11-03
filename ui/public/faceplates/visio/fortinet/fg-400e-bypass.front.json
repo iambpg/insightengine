@@ -1,0 +1,271 @@
+{
+  "name": "FG-400E-Bypass",
+  "vendor": "fortinet",
+  "key": "fg-400e-bypass",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-400e-bypass.front.svg",
+  "width": 1140.0,
+  "height": 106.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.11269,
+      "y": 0.48075,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.13118,
+      "y": 0.48075,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.16139,
+      "y": 0.48742,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "HA Port#1",
+      "x": 0.20003,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.20003,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.2551,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.2551,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.28758,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.28758,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.33977,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.33977,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.37224,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.37224,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#9",
+      "x": 0.42444,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#10",
+      "x": 0.42444,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#11",
+      "x": 0.45691,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#12",
+      "x": 0.45691,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#13",
+      "x": 0.50911,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#14",
+      "x": 0.50911,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#15",
+      "x": 0.54158,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#16",
+      "x": 0.54158,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#17",
+      "x": 0.59337,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#18",
+      "x": 0.59337,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#19",
+      "x": 0.62584,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#20",
+      "x": 0.62584,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#21",
+      "x": 0.67804,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#22",
+      "x": 0.67804,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#23",
+      "x": 0.71051,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#24",
+      "x": 0.71051,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#25",
+      "x": 0.76271,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#26",
+      "x": 0.76271,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#27",
+      "x": 0.79518,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#28",
+      "x": 0.79518,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#29",
+      "x": 0.84738,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#30",
+      "x": 0.84738,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#31",
+      "x": 0.87985,
+      "y": 0.16298,
+      "w": 0.02,
+      "h": 0.35849
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#32",
+      "x": 0.87985,
+      "y": 0.47853,
+      "w": 0.02,
+      "h": 0.35849
+    }
+  ],
+  "source": "visio"
+}

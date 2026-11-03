@@ -1,0 +1,110 @@
+{
+  "name": "FG-300C",
+  "vendor": "fortinet",
+  "key": "fg-300c",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-300c.front.svg",
+  "width": 1140.0,
+  "height": 105.0,
+  "hotspots": [
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.39892,
+      "y": 0.06554,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.39892,
+      "y": 0.45393,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.43511,
+      "y": 0.06554,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.43511,
+      "y": 0.45393,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#5",
+      "x": 0.47129,
+      "y": 0.06554,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#6",
+      "x": 0.47129,
+      "y": 0.45393,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#7",
+      "x": 0.50748,
+      "y": 0.06554,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#8",
+      "x": 0.50748,
+      "y": 0.45393,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#9",
+      "x": 0.54489,
+      "y": 0.06554,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#10",
+      "x": 0.54489,
+      "y": 0.45393,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.58334,
+      "y": 0.44054,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.62096,
+      "y": 0.28205,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.62096,
+      "y": 0.47402,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB Management#1",
+      "x": 0.65653,
+      "y": 0.44277,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

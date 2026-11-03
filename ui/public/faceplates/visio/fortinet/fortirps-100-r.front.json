@@ -1,0 +1,61 @@
+{
+  "name": "FortiRPS-100 (R)",
+  "vendor": "fortinet",
+  "key": "fortirps-100-r",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fortirps-100-r.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Ground Terminal#1",
+      "x": 0.05576,
+      "y": 0.33351,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "AC Power Input#2",
+      "x": 0.22962,
+      "y": 0.33351,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Output 2#2",
+      "x": 0.37964,
+      "y": 0.38982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Output 2#1",
+      "x": 0.45321,
+      "y": 0.38982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Output 1#2",
+      "x": 0.5272,
+      "y": 0.38982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "DC Output 1#1",
+      "x": 0.60077,
+      "y": 0.38982,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "AC Power Input#1",
+      "x": 0.79764,
+      "y": 0.33351,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,54 @@
+{
+  "name": "FG-3500/3501F",
+  "vendor": "fortinet",
+  "key": "fg-3500-3501f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fg-3500-3501f.front.svg",
+  "width": 1140.0,
+  "height": 211.0,
+  "hotspots": [
+    {
+      "prompt": "USB#1",
+      "x": 0.13159,
+      "y": 0.73512,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.16098,
+      "y": 0.74737,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#1",
+      "x": 0.20619,
+      "y": 0.59147,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "Management Port#2",
+      "x": 0.20619,
+      "y": 0.74737,
+      "w": 0.02,
+      "h": 0.18009
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.45264,
+      "y": 0.67483,
+      "w": 0.12,
+      "h": 0.16927
+    },
+    {
+      "prompt": "QSFP Port#1",
+      "x": 0.81113,
+      "y": 0.67595,
+      "w": 0.1073,
+      "h": 0.16704
+    }
+  ],
+  "source": "visio"
+}

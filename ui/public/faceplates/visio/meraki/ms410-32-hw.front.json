@@ -1,0 +1,11 @@
+{
+  "name": "MS410-32-HW Front",
+  "vendor": "meraki",
+  "key": "ms410-32-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms410-32-hw.front.svg",
+  "width": 2284.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

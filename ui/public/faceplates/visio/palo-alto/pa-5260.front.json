@@ -1,0 +1,11 @@
+{
+  "name": "PA-5260 Front",
+  "vendor": "palo-alto",
+  "key": "pa-5260",
+  "view": "front",
+  "file": "/faceplates/visio/palo-alto/pa-5260.front.svg",
+  "width": 2284.0,
+  "height": 634.0,
+  "hotspots": [],
+  "source": "visio"
+}

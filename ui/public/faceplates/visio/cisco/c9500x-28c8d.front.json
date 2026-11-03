@@ -1,0 +1,11 @@
+{
+  "name": "C9500X-28C8D Front",
+  "vendor": "cisco",
+  "key": "c9500x-28c8d",
+  "view": "front",
+  "file": "/faceplates/visio/cisco/c9500x-28c8d.front.svg",
+  "width": 2287.0,
+  "height": 218.0,
+  "hotspots": [],
+  "source": "visio"
+}

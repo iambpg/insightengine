@@ -1,0 +1,89 @@
+{
+  "name": "FGR-60F/-3G4G",
+  "vendor": "fortinet",
+  "key": "fgr-60f-3g4g",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fgr-60f-3g4g.front.svg",
+  "width": 510.0,
+  "height": 101.0,
+  "hotspots": [
+    {
+      "prompt": "Diversity Connector#1",
+      "x": 0.0564,
+      "y": 0.00056,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.15557,
+      "y": 0.43806,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Console Port#1",
+      "x": 0.22398,
+      "y": 0.43574,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#1",
+      "x": 0.31397,
+      "y": 0.43574,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#2",
+      "x": 0.38468,
+      "y": 0.43574,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#3",
+      "x": 0.45539,
+      "y": 0.43574,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "Gigabit Ethernet Port#4",
+      "x": 0.5261,
+      "y": 0.43574,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#1",
+      "x": 0.62894,
+      "y": 0.43574,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "WAN Port#2",
+      "x": 0.71893,
+      "y": 0.43574,
+      "w": 0.03137,
+      "h": 0.36
+    },
+    {
+      "prompt": "LC#1",
+      "x": 0.82142,
+      "y": 0.47278,
+      "w": 0.07709,
+      "h": 0.36
+    },
+    {
+      "prompt": "Main Connector#1",
+      "x": 0.91315,
+      "y": 0.00056,
+      "w": 0.03137,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "C9300L-xx Rear",
+  "vendor": "cisco",
+  "key": "c9300l-xx",
+  "view": "rear",
+  "file": "/faceplates/visio/cisco/c9300l-xx.rear.svg",
+  "width": 2284.0,
+  "height": 213.0,
+  "hotspots": [],
+  "source": "visio"
+}

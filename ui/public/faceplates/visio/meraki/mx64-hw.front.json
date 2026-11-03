@@ -1,0 +1,11 @@
+{
+  "name": "MX64-HW Front",
+  "vendor": "meraki",
+  "key": "mx64-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/mx64-hw.front.svg",
+  "width": 1144.0,
+  "height": 131.0,
+  "hotspots": [],
+  "source": "visio"
+}

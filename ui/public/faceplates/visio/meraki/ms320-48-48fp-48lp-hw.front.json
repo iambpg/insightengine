@@ -1,0 +1,11 @@
+{
+  "name": "MS320-48_48FP_48LP-HW Front",
+  "vendor": "meraki",
+  "key": "ms320-48-48fp-48lp-hw",
+  "view": "front",
+  "file": "/faceplates/visio/meraki/ms320-48-48fp-48lp-hw.front.svg",
+  "width": 2284.0,
+  "height": 212.0,
+  "hotspots": [],
+  "source": "visio"
+}

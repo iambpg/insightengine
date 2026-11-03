@@ -1,0 +1,61 @@
+{
+  "name": "FPX-400E (F)",
+  "vendor": "fortinet",
+  "key": "fpx-400e-f",
+  "view": "front",
+  "file": "/faceplates/visio/fortinet/fpx-400e-f.front.svg",
+  "width": 1140.0,
+  "height": 104.0,
+  "hotspots": [
+    {
+      "prompt": "Console Port#1",
+      "x": 0.11166,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#1",
+      "x": 0.14721,
+      "y": 0.38081,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "USB#2",
+      "x": 0.14721,
+      "y": 0.55198,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#1",
+      "x": 0.21483,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#2",
+      "x": 0.24647,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#3",
+      "x": 0.28388,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    },
+    {
+      "prompt": "Ethernet Port#4",
+      "x": 0.31552,
+      "y": 0.45964,
+      "w": 0.02,
+      "h": 0.36
+    }
+  ],
+  "source": "visio"
+}

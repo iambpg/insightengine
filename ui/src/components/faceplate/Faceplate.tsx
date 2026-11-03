@@ -12,6 +12,8 @@ import ApLayout, { AP_H, AP_W } from './layouts/ApLayout';
 import { ControllerLayout, FirewallLayout, RouterLayout, APPL_H, APPL_W } from './layouts/AppliancesLayout';
 import ModularLayout, { CH_W, chassisHeight } from './layouts/ModularLayout';
 import FirewallModelLayout, { FW_MODELS, fwModelHeight, fwModelWidth } from './layouts/FirewallModels';
+import RealisticFaceplate from './RealisticFaceplate';
+import { useFaceplateModel } from './library/catalog';
 
 interface FaceplateProps {
   device: FaceplateDevice;
@@ -62,6 +64,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
 
   const onSelect = (p: PortInfo) => onSelectPort?.(selectedPortId === p.id ? null : p);
   const common = { uid, selectedId: selectedPortId, onHover, onSelect };
+  const art = useFaceplateModel(device);
 
   const { vbW, vbH, body } = useMemo(() => {
     const pad = 24;
@@ -142,6 +145,16 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
     .filter((s) => memberCounts[s])
     .map((s) => `${memberCounts[s]} ${STATE_LABEL[s].toLowerCase()}`)
     .join(' · ');
+
+  if (art && !compact && device.form_factor !== 'switch-stack') {
+    return (
+      <div ref={wrapRef} className={`relative ${className}`}>
+        <RealisticFaceplate device={device} model={art} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} />
+        {hover && <PortTooltip port={hover.port} left={hover.left} top={hover.top} />}
+        {radioHover && <RadioTooltip radio={radioHover.radio} left={radioHover.left} top={radioHover.top} />}
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapRef} className={`relative ${className}`}>
