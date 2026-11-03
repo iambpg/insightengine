@@ -71,7 +71,7 @@ def test_9800_paste_has_every_subscription_and_no_secret():
     assert body["title"] == "Controller config"
     text = body["config"]
     assert "netconf-yang" in text
-    assert "source-vrf <VRF>" in text
+    assert "\n source-vrf " not in text
     assert "encode-kvgpb" in text
     assert "protocol grpc-tcp" in text
     assert "show telemetry ietf subscription all" in text
@@ -90,6 +90,16 @@ def test_9800_paste_has_every_subscription_and_no_secret():
             assert "update-policy periodic %d" % (seconds * 100) in text
     assert "wireless-wlan-cfg" in text
     assert "/wireless-rogue-oper:rogue-oper-data/rogue-data" not in text
+    for block in text.split("telemetry ietf subscription ")[1:]:
+        if any(path in block for path in ("capwap-data", "radio-oper-data", "ap-join-stats")):
+            assert "update-policy on-change" not in block
+            assert "update-policy periodic" in block
+    vrf = telemetry_config(
+        {"name": "wlc-9800", "ip": "10.9.0.8", "role": "wireless-controller", "platform": "ios-xe", "mgmt_vrf": "Mgmt-intf"},
+        receiver="10.1.1.50",
+    )
+    assert "\n source-vrf Mgmt-intf\n" in vrf["config"]
+    assert "\n source-vrf <VRF>" not in vrf["config"]
 
 
 def test_aireos_render_has_no_client_table():

@@ -385,22 +385,23 @@ def ap_metric(metric):
 
 
 def ap_info(metric, ap):
-    model = tag_or_field(metric, ("model",))
-    serial = tag_or_field(metric, ("wtp_serial_num", "wtp-serial-num", "serial"))
-    ip = tag_or_field(metric, ("ip_addr", "ip-addr", "wtp_ip", "wtp-ip", "ip"))
-    mac = tag_or_field(metric, ("wtp_mac", "wtp-mac", "eth_mac", "eth-mac", "ethernet_mac"))
-    location = tag_or_field(metric, ("location",))
+    model = tag_or_field(metric, ("model", "device_detail/static_info/ap_models/model", "ap_models/model"))
+    serial = tag_or_field(metric, ("wtp_serial_num", "wtp-serial-num", "serial", "board_data/wtp_serial_num"))
+    ip = tag_or_field(metric, ("wtp_ip", "wtp-ip", "ip_addr", "ip-addr", "ap_ip_addr", "ip"))
+    mac = tag_or_field(metric, ("wtp_mac", "wtp-mac", "wtp_enet_mac", "eth_mac", "eth-mac", "ethernet_mac"))
+    location = tag_or_field(metric, ("ap_location/location", "location"))
     country = tag_or_field(metric, ("country_code", "country-code"))
-    ios = tag_or_field(metric, ("sw_version", "sw-version", "ios"))
-    mode = tag_or_field(metric, ("wtp_mode", "wtp-mode", "ap_mode"))
-    site_tag = tag_or_field(metric, ("site_tag_name", "site-tag-name"))
-    policy_tag = tag_or_field(metric, ("policy_tag_name", "policy-tag-name"))
-    rf_tag = tag_or_field(metric, ("rf_tag_name", "rf-tag-name"))
+    ios = tag_or_field(metric, ("sw_version", "sw-version", "wtp_version/sw_version", "ios"))
+    mode = tag_or_field(metric, ("wtp_mode", "wtp-mode", "ap_mode_data/wtp_mode", "ap_mode"))
+    site_tag = tag_or_field(metric, ("site_tag_name", "site-tag-name", "site_tag/site_tag_name"))
+    policy_tag = tag_or_field(metric, ("policy_tag_name", "policy-tag-name", "policy_tag_info/policy_tag_name"))
+    rf_tag = tag_or_field(metric, ("rf_tag_name", "rf-tag-name", "rf_tag/rf_tag_name"))
     if not (model or serial or ip or location or country or ios or mode or site_tag):
         return None
-    info = Metric("ie_wlc_ap_info")
+    info = Metric("ie_wlc_ap")
     copy_place(metric, info)
     info.tags["ap"] = ap
+    info.tags["ap_name"] = ap
     if model:
         info.tags["model"] = str(model)
     if serial:
@@ -415,6 +416,7 @@ def ap_info(metric, ap):
         info.tags["country"] = str(country)
     if ios:
         info.tags["ios"] = str(ios)
+        info.tags["sw_version"] = str(ios)
     if mode:
         info.tags["mode"] = str(mode)
     if site_tag:
@@ -775,12 +777,50 @@ def store_clients(metric):
 
 
 def tag_or_field(metric, names):
+    # Exact names first. IOS-XE kvgpb then nests containers, and Telegraf
+    # joins them with "/" after turning hyphens into underscores
+    # (device_detail/static_info/ap_models/model). A suffix match still finds
+    # the leaf. The shortest key wins so a top-level leaf beats a deeper one.
     for name in names:
-        if name in metric.tags and metric.tags[name] != "":
-            return metric.tags[name]
-        if name in metric.fields:
-            return metric.fields[name]
+        found = _lookup(metric, name, False)
+        if found != None:
+            return found
+    for name in names:
+        found = _lookup(metric, name, True)
+        if found != None:
+            return found
     return None
+
+
+def _lookup(metric, name, nested):
+    leaf = name.replace("-", "_")
+    best = None
+    best_len = 0
+    for key in metric.tags:
+        if metric.tags[key] == "":
+            continue
+        if (not nested and key == name) or (nested and _suffix(key, leaf)):
+            if best == None or len(key) < best_len:
+                best = metric.tags[key]
+                best_len = len(key)
+    for key in metric.fields:
+        value = metric.fields[key]
+        if value == "":
+            continue
+        if (not nested and (key == name or key == leaf)) or (nested and _suffix(key, leaf)):
+            if best == None or len(key) < best_len:
+                best = value
+                best_len = len(key)
+    return best
+
+
+def _suffix(key, leaf):
+    if key == leaf:
+        return True
+    tail = "/" + leaf
+    if len(key) < len(tail):
+        return False
+    return key[len(key) - len(tail):] == tail
 
 
 def num(value):

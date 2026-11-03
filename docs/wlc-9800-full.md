@@ -17,9 +17,10 @@ AireOS has no per-client RSSI or SNR over SNMP under this rule. `bsnAPIfPoorSNRC
 | Path | Interval |
 |---|---|
 | AP inventory, CDP/LLDP, ethernet, image, hardware | 600s |
-| Radio oper, RRM, SSID counters | 120s, plus on-change for channel, tx power and SSID client counts |
+| Radio oper, RRM | 120s. SSID counters are 120s plus on-change |
 | Client detail and WLAN client counts | 60s |
-| AP join/leave (`capwap-data`, `ap-join-stats`) and HA | on-change, with a periodic refresh |
+| AP inventory (`capwap-data`) and join stats | 600s and 300s periodic. This IOS-XE rejects on-change for capwap-data, radio-oper-data and ap-join-stats |
+| HA | on-change, plus a 300s refresh |
 
 AireOS Telegraf uses the same idea: inventory, CDP, rogue count and joins at 5–10 minutes; radio, noise, interference and client counts at 2 minutes; WLAN counts at 5 minutes.
 
@@ -42,10 +43,8 @@ Default export for one 5,000-AP controller is about 890040 series, of which 6000
 | Source | Path | Interval | Shows |
 |---|---|---|---|
 | MDT | `/wireless-access-point-oper:access-point-oper-data/ap-name-mac-map` | 600s | AP name, radio MAC, Ethernet MAC |
-| MDT | `/wireless-access-point-oper:access-point-oper-data/capwap-data` | on-change | AP join/leave, name, model, serial, IP, location, country, IOS, mode, tags |
-| MDT | `/wireless-access-point-oper:access-point-oper-data/capwap-data` | 600s | AP inventory refresh |
-| MDT | `/wireless-access-point-oper:access-point-oper-data/radio-oper-data` | on-change | Radio channel, width, tx power, admin/oper, antenna |
-| MDT | `/wireless-access-point-oper:access-point-oper-data/radio-oper-data` | 120s | Radio oper refresh |
+| MDT | `/wireless-access-point-oper:access-point-oper-data/capwap-data` | 600s | AP name, model, serial, IP, location, country, IOS, mode, tags |
+| MDT | `/wireless-access-point-oper:access-point-oper-data/radio-oper-data` | 120s | Radio channel, width, tx power, admin/oper, antenna |
 | MDT | `/wireless-access-point-oper:access-point-oper-data/radio-oper-stats` | 120s | Radio retries, FCS errors, frame counts |
 | MDT | `/wireless-access-point-oper:access-point-oper-data/ethernet-if-stats` | 600s | AP ethernet interface packets and oper state |
 | MDT | `/wireless-access-point-oper:access-point-oper-data/cdp-cache-data` | 600s | CDP neighbour switch, port, platform |
@@ -64,7 +63,6 @@ Default export for one 5,000-AP controller is about 890040 series, of which 6000
 | MDT | `/wireless-client-oper:client-oper-data/policy-data` | 60s | Client VLAN from policy |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/ewlc-ap-stats` | 600s | Controller AP counters |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/ap-join-stats` | 300s | Per-AP join and disconnect reason |
-| MDT | `/wireless-ap-global-oper:ap-global-oper-data/ap-join-stats` | on-change | AP join/leave reason |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/ap-history` | 300s | Per-AP disconnect counter |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/emltd-join-count-stat` | 300s | Joined AP count |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/wlan-client-stats` | 60s | Clients per WLAN (count, not a client list) |
@@ -124,7 +122,7 @@ Channel width is not a column on `bsnAPIfTable`. `bsnAPIfDot11PhyTxPowerTable` l
 
 Docker and unit tests use a simulated gRPC dial-out (one kvgpb sample per path), an snmpsim walk of the AireOS count and inventory OIDs, and `promtool` on the rules. They do not prove a Catalyst 9800 or an AireOS controller.
 
-On the first 9800, confirm `show telemetry ietf subscription all` and that `most-recent-rssi` is still on `traffic-stats` for that release. Confirm `source-vrf` is deleted when the management address is in the global table. Confirm HA state strings from `Cisco-IOS-XE-ha-oper`.
+On the first 9800, confirm `show telemetry ietf subscription all` and that `most-recent-rssi` is still on `traffic-stats` for that release. `source-vrf` is omitted unless that device has a management VRF set. Do not paste `source-vrf Mgmt-intf` on a controller whose address is in the global table. Confirm HA state strings from `Cisco-IOS-XE-ha-oper`. capwap-data, radio-oper-data and ap-join-stats are periodic only.
 
 On the first AireOS controller, confirm `cLApUpTime` and the reassoc counters exist (some images only serve AIRESPACE-WIRELESS-MIB). Confirm `clcCdpApCacheTable` is populated. Confirm temperature and fans, which are not in AIRESPACE-SWITCHING-MIB. Time one noise and interference walk: those tables are indexed by channel, so the SNMP walk is wider than the Prometheus series Telegraf keeps.
 

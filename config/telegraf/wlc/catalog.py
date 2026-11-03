@@ -33,14 +33,12 @@ CLIENT_WALK_PREFIXES = (
 MDT_SUBS = (
     (0, "/wireless-access-point-oper:access-point-oper-data/ap-name-mac-map",
      "ie_wlc_ap_name_map", "periodic", 600, "AP name, radio MAC, Ethernet MAC"),
-    (1, "/wireless-access-point-oper:access-point-oper-data/capwap-data",
-     "ie_wlc_ap_mdt", "on-change", 0, "AP join/leave, name, model, serial, IP, location, country, IOS, mode, tags"),
+    # capwap-data and radio-oper-data reject on-change on IOS-XE ("Format failure"
+    # / "on-change not supported, only periodic"). The periodic subscriptions cover them.
     (2, "/wireless-access-point-oper:access-point-oper-data/capwap-data",
-     "ie_wlc_ap_mdt", "periodic", 600, "AP inventory refresh"),
-    (3, "/wireless-access-point-oper:access-point-oper-data/radio-oper-data",
-     "ie_wlc_radio_mdt", "on-change", 0, "Radio channel, width, tx power, admin/oper, antenna"),
+     "ie_wlc_ap_mdt", "periodic", 600, "AP name, model, serial, IP, location, country, IOS, mode, tags"),
     (4, "/wireless-access-point-oper:access-point-oper-data/radio-oper-data",
-     "ie_wlc_radio_mdt", "periodic", 120, "Radio oper refresh"),
+     "ie_wlc_radio_mdt", "periodic", 120, "Radio channel, width, tx power, admin/oper, antenna"),
     (5, "/wireless-access-point-oper:access-point-oper-data/radio-oper-stats",
      "ie_wlc_radio_stats", "periodic", 120, "Radio retries, FCS errors, frame counts"),
     (6, "/wireless-access-point-oper:access-point-oper-data/ethernet-if-stats",
@@ -77,8 +75,6 @@ MDT_SUBS = (
      "ie_wlc_ap_global", "periodic", 600, "Controller AP counters"),
     (22, "/wireless-ap-global-oper:ap-global-oper-data/ap-join-stats",
      "ie_wlc_ap_join", "periodic", 300, "Per-AP join and disconnect reason"),
-    (23, "/wireless-ap-global-oper:ap-global-oper-data/ap-join-stats",
-     "ie_wlc_ap_join", "on-change", 0, "AP join/leave reason"),
     (24, "/wireless-ap-global-oper:ap-global-oper-data/ap-history",
      "ie_wlc_ap_history", "periodic", 300, "Per-AP disconnect counter"),
     (25, "/wireless-ap-global-oper:ap-global-oper-data/emltd-join-count-stat",
@@ -378,7 +374,7 @@ def estimate_series(aps: int = 5000, radios_per_ap: int = 2, ssids_per_radio: in
     }
 
 
-def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str) -> str:
+def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str, vrf: str = "") -> str:
     base = wlc_subscription_base(name)
     user = username or "<SNMP_V3_USERNAME>"
     lines = [
@@ -391,7 +387,10 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
         "! Per-client series are stored unless IE_WLC_STORE_CLIENTS=0 on telegraf-wlc.",
         "! That switch does not stop the dial-out. Delete the client-oper blocks to stop the bandwidth.",
         "! SNMP below is names and placeholders. Secrets are not in this text.",
-        "! Replace <VRF> or delete the source-vrf line when the address is in the global table.",
+        "! source-vrf %s" % (vrf if vrf else "is omitted. The management address is in the global table."),
+        "! A management VRF is added only when the device has one set. Mgmt-intf is not the default.",
+        "! capwap-data, radio-oper-data and ap-join-stats are periodic only.",
+        "! This IOS-XE rejects on-change for those three paths.",
         "! Replace %s if IE_MDT_RECEIVER was unset." % receiver,
         "!",
         "netconf-yang",
@@ -405,16 +404,20 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
     ]
     for offset, xpath, _alias, policy, seconds, shows in MDT_SUBS:
         lines.append("! %s" % shows)
-        lines.extend([
+        block = [
             "telemetry ietf subscription %d" % (base + offset),
             " encoding encode-kvgpb",
             " filter xpath %s" % xpath,
             " source-address %s" % ip,
-            " source-vrf <VRF>",
+        ]
+        if vrf:
+            block.append(" source-vrf %s" % vrf)
+        block.extend([
             " stream yang-push",
             " update-policy %s" % subscription_policy(policy, seconds),
             " receiver ip address %s %d protocol grpc-tcp" % (receiver, port),
         ])
+        lines.extend(block)
         lines.append("!")
     lines.extend([
         "! Verify after paste:",
@@ -519,11 +522,43 @@ def _sample_content(path: str) -> list[tuple[str, str]]:
     if path.endswith("policy-data"):
         return [("res-vlan-id", "20"), ("res-vlan-name", "users")]
     if path.endswith("capwap-data"):
-        return [("name", "AP-1"), ("ap-operation-state", "registered"), ("reboot-reason", "none"),
-                ("ip-addr", "10.8.0.10"), ("country-code", "ZA"), ("wtp-serial-num", "FGL00001"),
-                ("model", "C9120AXI"), ("location", "floor-1"), ("sw-version", "17.12.1"),
-                ("wtp-mode", "local"), ("site-tag-name", "site-a"), ("policy-tag-name", "pol-a"),
-                ("rf-tag-name", "rf-a")]
+        # Cisco-IOS-XE-wireless-access-point-oper 17.15.1 grouping capwap-wtp-data.
+        # kvgpb nests containers; Telegraf names the leaves with slash prefixes.
+        return [
+            ("name", "AP-1"),
+            ("ip-addr", "10.8.0.10"),
+            ("wtp-ip", "10.8.0.10"),
+            ("country-code", "ZA"),
+            ("device-detail", [
+                ("static-info", [
+                    ("board-data", [
+                        ("wtp-serial-num", "FGL2417ABC1"),
+                        ("wtp-enet-mac", "00:11:22:33:44:66"),
+                    ]),
+                    ("ap-models", [
+                        ("model", "C9120AXI-B"),
+                    ]),
+                ]),
+                ("wtp-version", [
+                    ("sw-version", "17.15.1.4"),
+                ]),
+            ]),
+            ("ap-location", [
+                ("location", "floor-1"),
+                ("floor", "2"),
+            ]),
+            ("tag-info", [
+                ("site-tag", [("site-tag-name", "site-a")]),
+                ("policy-tag-info", [("policy-tag-name", "pol-a")]),
+                ("rf-tag", [("rf-tag-name", "rf-a")]),
+            ]),
+            ("ap-state", [
+                ("ap-operation-state", "ap-up"),
+            ]),
+            ("ap-mode-data", [
+                ("wtp-mode", "local"),
+            ]),
+        ]
     if "radio-oper-data" in path and "rrm" not in path:
         return [("radio-type", "radio-80211a"), ("admin-state", "enabled"), ("oper-state", "up"),
                 ("curr-freq", "36"), ("chan-width", "40"), ("current-tx-power-level", "1"),

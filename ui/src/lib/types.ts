@@ -219,6 +219,9 @@ export interface AccessPointRow {
   location?: string;
   ios?: string;
   mode?: string;
+  siteTag?: string;
+  policyTag?: string;
+  rfTag?: string;
   neighborSwitch?: string;
   neighborPort?: string;
   netboxSite?: string;

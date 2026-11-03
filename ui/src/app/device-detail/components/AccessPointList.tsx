@@ -119,6 +119,9 @@ function ApDetail({ row, events, error, onClose }: { row?: AccessPointRow; event
               <Fact label="Location" value={row.location} />
               <Fact label="IOS" value={row.ios} />
               <Fact label="Mode" value={row.mode} />
+              <Fact label="Site tag" value={row.siteTag} />
+              <Fact label="Policy tag" value={row.policyTag} />
+              <Fact label="RF tag" value={row.rfTag} />
               <Fact label="NetBox site" value={row.netboxSite || row.site} />
               <Fact label="Switch" value={row.neighborSwitch ? `${row.neighborSwitch} ${row.neighborPort || ''}`.trim() : ''} />
             </dl>

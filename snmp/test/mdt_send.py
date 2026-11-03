@@ -41,6 +41,12 @@ def _typed(mod, name, value):
     return field(mod, name, string_value=text)
 
 
+def encode_field(mod, name, value):
+    if isinstance(value, list):
+        return mod.TelemetryField(name=name, fields=[encode_field(mod, child, inner) for child, inner in value])
+    return _typed(mod, name, value)
+
+
 def row(mod, keys, content):
     # IOS-XE GPB-KV is one TelemetryField whose children are "keys" and "content".
     return mod.TelemetryField(fields=[
@@ -82,7 +88,7 @@ def main() -> int:
         rows.append(message(
             tele, node, sample["path"], str(61000 + index),
             [_typed(tele, name, value) for name, value in sample["keys"]],
-            [_typed(tele, name, value) for name, value in sample["content"]],
+            [encode_field(tele, name, value) for name, value in sample["content"]],
             when,
         ))
     # Second client so the per-radio rollup is an average, still dropped when store_clients=0.

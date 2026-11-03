@@ -334,11 +334,22 @@ def main() -> int:
             os.environ.get("IE_NETBOX_CA") or "/etc/ie-certs/ca.crt",
         )
     except Exception as exc:
-        targets = []
+        # Leave the previous file in place. An empty rewrite would drop every
+        # controller until the next successful fetch.
         print("wlc target fetch failed: %s" % exc.__class__.__name__)
+        return 1
     text = render(targets, dict(os.environ))
-    with open(args.output, "w", encoding="utf-8") as handle:
+    previous = ""
+    if os.path.isfile(args.output):
+        with open(args.output, "r", encoding="utf-8") as handle:
+            previous = handle.read()
+    if previous == text:
+        print("unchanged %s (%d bytes)" % (args.output, len(text)))
+        return 0
+    temporary = args.output + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
         handle.write(text)
+    os.replace(temporary, args.output)
     print("wrote %s (%d bytes)" % (args.output, len(text)))
     return 0
 

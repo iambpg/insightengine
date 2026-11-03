@@ -2052,7 +2052,7 @@ class FleetService:
             channels = self._prom(client, "ie_wlc_radio_channel")
             utils = self._prom(client, "ie_wlc_radio_channel_util")
             radio_clients = self._prom(client, "ie_wlc_radio_clients")
-            info = self._prom(client, "ie_wlc_ap_info")
+            info = self._prom(client, "ie_wlc_ap_info or ie_wlc_ap_info_info")
             noise = self._prom(client, "ie_wlc_radio_noise")
             interference = self._prom(client, "ie_wlc_radio_interference")
             power = self._prom(client, "ie_wlc_radio_tx_power_dbm or ie_wlc_radio_tx_power")
@@ -2083,8 +2083,11 @@ class FleetService:
                     "serial": str(metric.get("serial") or ""),
                     "ip": str(metric.get("ip") or ""),
                     "location": str(metric.get("location") or ""),
-                    "ios": str(metric.get("ios") or ""),
+                    "ios": str(metric.get("ios") or metric.get("sw_version") or ""),
                     "mode": str(metric.get("mode") or ""),
+                    "siteTag": str(metric.get("site_tag") or ""),
+                    "policyTag": str(metric.get("policy_tag") or ""),
+                    "rfTag": str(metric.get("rf_tag") or ""),
                     "neighborSwitch": "",
                     "neighborPort": "",
                     "netboxSite": "",
@@ -2154,11 +2157,17 @@ class FleetService:
         for sample in info or []:
             metric = sample.get("metric") or {}
             row = ensure(metric)
-            for src, dst in (("model", "model"), ("serial", "serial"), ("ip", "ip"), ("location", "location"), ("ios", "ios"), ("mode", "mode")):
+            ios = str(metric.get("ios") or metric.get("sw_version") or "")
+            for src, dst in (("model", "model"), ("serial", "serial"), ("ip", "ip"), ("location", "location"), ("mode", "mode")):
                 if metric.get(src):
                     row[dst] = str(metric.get(src))
+            if ios:
+                row["ios"] = ios
             if metric.get("mac"):
                 row["mac"] = str(metric.get("mac"))
+            for src, dst in (("site_tag", "siteTag"), ("policy_tag", "policyTag"), ("rf_tag", "rfTag")):
+                if metric.get(src):
+                    row[dst] = str(metric.get(src))
         for sample in neighbors or []:
             metric = sample.get("metric") or {}
             row = ensure(metric)
