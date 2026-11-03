@@ -24,6 +24,9 @@ export default function LoginScreenView() {
   const [show, setShow] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [mustChange, setMustChange] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [nextPassword, setNextPassword] = useState('');
 
   const {
     register,
@@ -53,8 +56,29 @@ export default function LoginScreenView() {
       setFormError(res.error ?? 'Invalid credentials.');
       return;
     }
+    if (res.mustChangePassword) {
+      setCurrentPassword(v.password);
+      setMustChange(true);
+      toast.info('Choose a new password before continuing.');
+      return;
+    }
     toast.success(`Signed in as ${res.role}`);
     router.push('/');
+  };
+
+  const changePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      await api.changePassword(currentPassword, nextPassword);
+      toast.success('Password updated');
+      router.push('/');
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'The password was not changed.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const fill = (a: DemoAccount) => {
@@ -94,11 +118,33 @@ export default function LoginScreenView() {
 
           <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
-            or use your email
+            or use your email or username
             <span className="h-px flex-1 bg-border" />
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+          {mustChange ? (
+            <form onSubmit={changePassword} className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                This password was issued for you. Choose a new one with at least 12 characters, a letter, and a digit.
+              </p>
+              <label className="block text-sm font-medium" htmlFor="next-password">
+                New password
+                <input
+                  id="next-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={nextPassword}
+                  onChange={(event) => setNextPassword(event.target.value)}
+                  className="mt-1.5 h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+                />
+              </label>
+              {formError ? <p role="alert" className="text-sm text-destructive">{formError}</p> : null}
+              <button type="submit" disabled={submitting} className="flex h-10 w-full items-center justify-center rounded-md bg-navy text-sm font-semibold text-primary-foreground">
+                {submitting ? 'Saving…' : 'Save password and continue'}
+              </button>
+            </form>
+          ) : null}
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className={`space-y-4 ${mustChange ? 'hidden' : ''}`}>
             {formError && (
               <div
                 role="alert"
@@ -116,18 +162,18 @@ export default function LoginScreenView() {
 
             <div>
               <label htmlFor="email" className="text-sm font-medium">
-                Work email
+                Email or username
               </label>
               <input
                 id="email"
-                type="email"
+                type="text"
                 autoComplete="username"
                 aria-invalid={!!errors.email}
                 {...register('email', {
-                  required: 'Enter your work email',
+                  required: 'Enter your email or username',
                   pattern: {
-                    value: /^\S+@\S+\.\S+$/,
-                    message: 'Enter a valid email address, like name@company.example',
+                    value: /^(\S+@\S+\.\S+|[A-Za-z0-9][A-Za-z0-9._-]{0,63})$/,
+                    message: 'Enter an email address or a username',
                   },
                 })}
                 className={`mt-1.5 h-10 w-full rounded-md border bg-card px-3 text-sm outline-none transition-colors focus:border-ring ${errors.email ? 'border-destructive' : 'border-input'}`}

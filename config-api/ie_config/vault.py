@@ -422,7 +422,8 @@ def mount_vault(app, user_of, audit) -> None:
     app.state.vault_failures = {}
 
     def require_admin(user) -> None:
-        if getattr(user, "role", "") != "Administrator":
+        from .auth import is_admin
+        if not is_admin(getattr(user, "role", "")):
             raise ApiError(403, "forbidden", "Vault is limited to Administrators")
 
     def session_token(request: Request) -> str:

@@ -209,8 +209,8 @@ def test_bootstrap_csrf_and_roles(world):
     op = _login(client, "op@example.com", "Operatorpass1")
     denied = client.get("/api/v1/settings/apps")
     assert denied.status_code == 403 and denied.json()["error"]["code"] == "forbidden"
-    denied = client.get("/api/v1/discovery/unapproved")
-    assert denied.status_code == 403
+    # Operators can edit devices. Settings stays closed.
+    assert client.get("/api/v1/discovery/unapproved").status_code == 200
     client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": op})
     eng = _login(client, "eng@example.com", "Engineerpass1")
     assert client.get("/api/v1/settings/apps/caddy/files/Caddyfile").status_code == 200
@@ -460,18 +460,18 @@ def test_device_discover_api_auth_and_precheck(world, monkeypatch):
     created = client.post(
         "/api/v1/auth/users",
         headers={"X-CSRF-Token": csrf},
-        json={"email": "op@example.com", "password": "Operatorpass1", "role": "Operator"},
+        json={"email": "reader@example.com", "password": "Readerpass1234", "role": "Read-only"},
     )
     assert created.status_code == 200, created.text
     client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": csrf})
-    op = _login(client, "op@example.com", "Operatorpass1")
+    reader = _login(client, "reader@example.com", "Readerpass1234")
     denied = client.post(
         "/api/v1/discovery/device",
-        headers={"X-CSRF-Token": op},
+        headers={"X-CSRF-Token": reader},
         json={"ip": "10.9.9.9"},
     )
     assert denied.status_code == 403
-    client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": op})
+    client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": reader})
     csrf = _login(client)
     discovery = client.app.state.discovery
     monkeypatch.setenv("SNMP_V2_COMMUNITY", "s3cret-community")

@@ -193,6 +193,10 @@ export const api = {
         email: result.email ?? email,
         role: result.role,
         csrfToken: result.csrfToken,
+        id: result.id,
+        username: result.username,
+        displayName: result.displayName,
+        mustChangePassword: result.mustChangePassword,
       });
     }
     return result;
@@ -346,5 +350,47 @@ export const api = {
   // BACKEND: GET /api/v1/devices/{id}/telemetry-config
   async getTelemetryConfig(deviceId: string) {
     return (await backend()).getTelemetryConfig(deviceId);
+  },
+
+  // BACKEND: GET /api/v1/auth/users
+  async listDirectoryUsers() {
+    return (await backend()).listDirectoryUsers();
+  },
+
+  // BACKEND: GET /api/v1/auth/users/audit
+  async listUserAudit() {
+    return (await backend()).listUserAudit();
+  },
+
+  async createDirectoryUser(body: {
+    username: string;
+    displayName: string;
+    email: string;
+    role: string;
+    password?: string;
+    generate?: boolean;
+    forceChange?: boolean;
+  }) {
+    return (await backend()).createDirectoryUser(body);
+  },
+
+  async updateDirectoryUser(id: number, body: { displayName?: string; email?: string; role?: string }) {
+    return (await backend()).updateDirectoryUser(id, body);
+  },
+
+  async setDirectoryUserStatus(id: number, status: 'active' | 'disabled') {
+    return (await backend()).setDirectoryUserStatus(id, status);
+  },
+
+  async resetDirectoryPassword(id: number, body: { password?: string; generate?: boolean }) {
+    return (await backend()).resetDirectoryPassword(id, body);
+  },
+
+  async deleteDirectoryUser(id: number) {
+    return (await backend()).deleteDirectoryUser(id);
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    return (await backend()).changePassword(currentPassword, newPassword);
   },
 };

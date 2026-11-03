@@ -7,6 +7,8 @@ import Modal from '@/components/ui/Modal';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
 import NotInNetBoxView from '@/app/not-in-net-box/components/NotInNetBoxView';
+import { allowOperate } from '@/lib/settings/access';
+import { useKnownRole } from '@/lib/useSession';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -32,6 +34,7 @@ function readTab(initial: string): TabId {
 }
 
 export default function NetBridgeView({ initialTab = 'dashboard' }: { initialTab?: string }) {
+  const canWrite = allowOperate(useKnownRole());
   const [tab, setTab] = useState<TabId>(readTab(initialTab));
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
   const [open, setOpen] = useState(0);
@@ -95,9 +98,9 @@ export default function NetBridgeView({ initialTab = 'dashboard' }: { initialTab
       <div role="tabpanel">
         {tab === 'dashboard' && <Dashboard summary={summary} onOpen={choose} onRefresh={loadSummary} />}
         {tab === 'missing' && <NotInNetBoxView embedded />}
-        {tab === 'access-points' && <AccessPoints />}
-        {tab === 'eox' && <EoxTab />}
-        {LIST_TABS.has(tab) && tab !== 'access-points' && tab !== 'eox' ? <ResourceTab kind={tab} /> : null}
+        {tab === 'access-points' && <AccessPoints canWrite={canWrite} />}
+        {tab === 'eox' && <EoxTab canWrite={canWrite} />}
+        {LIST_TABS.has(tab) && tab !== 'access-points' && tab !== 'eox' ? <ResourceTab kind={tab} canWrite={canWrite} /> : null}
       </div>
     </div>
   );
@@ -165,7 +168,7 @@ function Dashboard({
   );
 }
 
-function ResourceTab({ kind }: { kind: string }) {
+function ResourceTab({ kind, canWrite }: { kind: string; canWrite: boolean }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [q, setQ] = useState('');
@@ -238,7 +241,7 @@ function ResourceTab({ kind }: { kind: string }) {
           placeholder="Search"
           className="h-9 min-w-[180px] flex-1 rounded-md border border-input px-3 text-sm"
         />
-        {writable ? (
+        {writable && canWrite ? (
           <button type="button" onClick={runPreview} disabled={busy} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
             Preview
           </button>
@@ -257,7 +260,7 @@ function ResourceTab({ kind }: { kind: string }) {
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
               {columns.map((column) => <th key={column} className="px-3 py-2">{column}</th>)}
-              {kind === 'conflicts' ? <th className="px-3 py-2">Queue</th> : null}
+              {kind === 'conflicts' && canWrite ? <th className="px-3 py-2">Queue</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -266,7 +269,7 @@ function ResourceTab({ kind }: { kind: string }) {
                 {columns.map((column) => (
                   <td key={column} className="px-3 py-2 align-top">{formatCell(row[column])}</td>
                 ))}
-                {kind === 'conflicts' ? (
+                {kind === 'conflicts' && canWrite ? (
                   <td className="px-3 py-2">
                     <button type="button" className="mr-2 text-xs font-semibold" onClick={() => resolve(Number(row.id), 'resolve')}>Resolve</button>
                     <button type="button" className="text-xs" onClick={() => resolve(Number(row.id), 'ignore')}>Ignore</button>
@@ -290,7 +293,7 @@ function ResourceTab({ kind }: { kind: string }) {
   );
 }
 
-function AccessPoints() {
+function AccessPoints({ canWrite }: { canWrite: boolean }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [q, setQ] = useState('');
@@ -350,8 +353,8 @@ function AccessPoints() {
     <section className="mx-4 rounded-md border border-border bg-card" aria-label="Access points">
       <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
         <input aria-label="Search access points" value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Name, serial, IP, switch" className="h-9 min-w-[180px] flex-1 rounded-md border border-input px-3 text-sm" />
-        <button type="button" onClick={scan} disabled={busy} className="rounded-md border border-border px-3 py-1.5 text-sm">Scan controllers</button>
-        <button type="button" onClick={ask} disabled={busy || selected.length === 0} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Upload selected</button>
+        {canWrite ? <button type="button" onClick={scan} disabled={busy} className="rounded-md border border-border px-3 py-1.5 text-sm">Scan controllers</button> : null}
+        {canWrite ? <button type="button" onClick={ask} disabled={busy || selected.length === 0} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Upload selected</button> : null}
       </div>
       <div className="flex flex-wrap gap-2 px-3 py-2">
         <FilterButton label="All models" on={model === ''} onClick={() => { setModel(''); setPage(1); }} />
@@ -404,7 +407,7 @@ function AccessPoints() {
   );
 }
 
-function EoxTab() {
+function EoxTab({ canWrite }: { canWrite: boolean }) {
   const [bucket, setBucket] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -444,11 +447,11 @@ function EoxTab() {
         <FilterButton label={`OK (${counts.ok ?? 0})`} on={bucket === 'ok'} onClick={() => { setBucket('ok'); setPage(1); }} />
         <FilterButton label={`Unknown (${counts.unknown ?? 0})`} on={bucket === 'unknown'} onClick={() => { setBucket('unknown'); setPage(1); }} />
         <FilterButton label="All" on={bucket === ''} onClick={() => { setBucket(''); setPage(1); }} />
-        <button type="button" onClick={refresh} disabled={busy} className="rounded-md border border-border px-3 py-1.5 text-sm">Refresh from Cisco</button>
-        <button type="button" onClick={async () => {
+        {canWrite ? <button type="button" onClick={refresh} disabled={busy} className="rounded-md border border-border px-3 py-1.5 text-sm">Refresh from Cisco</button> : null}
+        {canWrite ? <button type="button" onClick={async () => {
           try { setPreview((await api.netbridgePost('/eox/preview', {})) as Record<string, unknown>); }
           catch (cause) { toast.error(isApiError(cause) ? cause.message : 'Preview failed.'); }
-        }} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Preview NetBox fields</button>
+        }} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Preview NetBox fields</button> : null}
       </div>
       <input aria-label="Search end of life" value={q} onChange={(event) => { setQ(event.target.value); setPage(1); }} placeholder="Name, PID, serial" className="h-9 w-full max-w-sm rounded-md border border-input px-3 text-sm" />
       <div className="scroll-thin overflow-x-auto rounded-md border border-border">

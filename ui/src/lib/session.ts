@@ -4,6 +4,10 @@ export interface Session {
   email: string;
   role: RoleName;
   csrfToken: string;
+  id?: number;
+  username?: string;
+  displayName?: string;
+  mustChangePassword?: boolean;
 }
 
 const KEY = 'ie.session';

@@ -15,6 +15,8 @@ import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isApiError } from '@/lib/apiError';
 import type { DeviceDiscoveryJob, DiscoveryCatalog, DiscoveryScan, UnapprovedDevice } from '@/lib/contract';
+import { allowOperate } from '@/lib/settings/access';
+import { useKnownRole } from '@/lib/useSession';
 
 type DiscoveredPage = { rows: UnapprovedDevice[]; total: number };
 
@@ -45,6 +47,7 @@ function stamp(value: string): string {
 }
 
 export default function NotInNetBoxView({ embedded = false }: { embedded?: boolean }) {
+  const canWrite = allowOperate(useKnownRole());
   const [items, setItems] = useState<UnapprovedDevice[] | null>(null);
   const [serverPaged, setServerPaged] = useState(false);
   const [total, setTotal] = useState(0);
@@ -427,7 +430,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
           </button>
         </div>
 
-        {selected.length > 0 && (
+        {selected.length > 0 && canWrite && (
           <div className="slide-up flex flex-wrap items-center gap-3 border-b border-border bg-navy px-4 py-2 text-sm text-primary-foreground">
             <span className="font-medium tabular">{selected.length} selected</span>
             <button
@@ -592,8 +595,9 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                         <select
                           aria-label={`Suggested role for ${name}`}
                           value={roleValue(catalog, device.suggested.role)}
+                          disabled={!canWrite}
                           onChange={(event) => saveRole([device.id], event.target.value)}
-                          className="h-8 max-w-[14rem] rounded-md border border-input bg-card px-2 text-sm"
+                          className="h-8 max-w-[14rem] rounded-md border border-input bg-card px-2 text-sm disabled:opacity-60"
                         >
                           <option value="">Select a role</option>
                           {roleNames(catalog, device.suggested.role).map((option) => (
@@ -608,21 +612,27 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => ask([device.id], 'approve')}
-                            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
-                          >
-                            <Icon name="CheckIcon" size={13} /> Approve
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Reject ${name}`}
-                            onClick={() => ask([device.id], 'reject')}
-                            className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:border-destructive/40 hover:text-destructive"
-                          >
-                            <Icon name="XMarkIcon" size={14} />
-                          </button>
+                          {canWrite ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => ask([device.id], 'approve')}
+                                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground"
+                              >
+                                <Icon name="CheckIcon" size={13} /> Approve
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Reject ${name}`}
+                                onClick={() => ask([device.id], 'reject')}
+                                className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+                              >
+                                <Icon name="XMarkIcon" size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Read-only</span>
+                          )}
                         </div>
                       </td>
                     </tr>

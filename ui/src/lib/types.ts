@@ -374,7 +374,7 @@ export interface WebhookDelivery {
   durationMs: number;
 }
 
-export type RoleName = 'Administrator' | 'Engineer' | 'Operator' | 'Read-only';
+export type RoleName = 'Administrator' | 'Engineer' | 'Operator' | 'Read-only' | 'Admin' | 'Viewer';
 
 export interface UserRow {
   id: string;

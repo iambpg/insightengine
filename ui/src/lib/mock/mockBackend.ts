@@ -45,6 +45,7 @@ import {
   validateSettingsFile,
 } from '@/lib/mock/store';
 import type { ApproveBody, AuditQuery, LoginResult, SaveFileBody } from '@/lib/contract';
+import { ApiError } from '@/lib/apiError';
 import { readSession } from '@/lib/session';
 import type { Session } from '@/lib/session';
 
@@ -558,4 +559,166 @@ export async function getTelemetryConfig() {
     reason: '',
     config: '! Example telemetry subscription. Nothing is pushed.\ntelemetry ietf subscription 60000\n',
   };
+}
+
+type MockDirectoryUser = {
+  id: number;
+  username: string;
+  displayName: string;
+  email: string;
+  role: 'Administrator' | 'Engineer' | 'Operator' | 'Read-only';
+  status: 'active' | 'disabled';
+  lastLogin: string | null;
+  created: string | null;
+  builtin: boolean;
+  mustChangePassword: boolean;
+};
+
+const mockUsers: MockDirectoryUser[] = [
+  { id: 1, username: 'admin', displayName: 'Marit van der Berg', email: 'm.vanderberg@noc.example', role: 'Administrator', status: 'active', lastLogin: '2026-11-03T14:20:00Z', created: '2026-01-15T09:00:00Z', builtin: true, mustChangePassword: false },
+  { id: 2, username: 'sander', displayName: 'Sander Kuipers', email: 's.kuipers@noc.example', role: 'Engineer', status: 'active', lastLogin: '2026-11-03T13:40:00Z', created: '2026-02-02T09:00:00Z', builtin: false, mustChangePassword: false },
+  { id: 3, username: 'dewi', displayName: 'Dewi Pranata', email: 'd.pranata@noc.example', role: 'Operator', status: 'active', lastLogin: '2026-11-03T12:10:00Z', created: '2026-03-11T09:00:00Z', builtin: false, mustChangePassword: false },
+  { id: 4, username: 'fenna', displayName: 'Fenna Smit', email: 'f.smit@customer.example', role: 'Read-only', status: 'active', lastLogin: '2026-11-02T16:00:00Z', created: '2026-04-01T09:00:00Z', builtin: false, mustChangePassword: false },
+];
+
+const mockUserAudit: { id: number; at: string | null; actor: string; role: string; action: string; detail: string; result: string }[] = [
+  { id: 1, at: '2026-01-15T09:00:00Z', actor: 'm.vanderberg@noc.example', role: 'Administrator', action: 'admin-created', detail: 'first administrator created', result: 'ok' },
+];
+
+function storedRole(role: string): MockDirectoryUser['role'] {
+  if (role === 'Admin' || role === 'Administrator') return 'Administrator';
+  if (role === 'Viewer' || role === 'Read-only') return 'Read-only';
+  if (role === 'Engineer' || role === 'Operator') return role;
+  throw new ApiError(400, 'bad_role', 'role must be one of: Admin, Operator, Viewer, Engineer');
+}
+
+function activeAdmins(exceptId?: number) {
+  return mockUsers.filter((user) => user.id !== exceptId && user.status === 'active' && user.role === 'Administrator').length;
+}
+
+function audit(action: string, detail: string) {
+  mockUserAudit.unshift({
+    id: mockUserAudit.length + 1,
+    at: new Date().toISOString(),
+    actor: readSession()?.email || 'm.vanderberg@noc.example',
+    role: readSession()?.role || 'Administrator',
+    action,
+    detail,
+    result: 'ok',
+  });
+}
+
+export async function listDirectoryUsers() {
+  await delay(20);
+  return mockUsers.map((user) => ({ ...user }));
+}
+
+export async function listUserAudit() {
+  await delay(20);
+  return { entries: mockUserAudit.map((row) => ({ ...row })) };
+}
+
+export async function createDirectoryUser(body: {
+  username: string;
+  displayName: string;
+  email: string;
+  role: string;
+  password?: string;
+  generate?: boolean;
+  forceChange?: boolean;
+}) {
+  await delay(30);
+  const username = body.username.trim().toLowerCase();
+  if (username === 'admin' || mockUsers.some((user) => user.username === username || user.email === body.email.toLowerCase())) {
+    throw new ApiError(409, 'exists', 'a user with that username or email already exists');
+  }
+  const password = body.generate ? 'Temp' + Math.random().toString(36).slice(2, 10) + '1a' : body.password || '';
+  if (!body.generate && (password.length < 12 || !/[A-Za-z]/.test(password) || !/\d/.test(password))) {
+    throw new ApiError(400, 'bad_password', 'password must be 12-200 characters and include a letter and a digit');
+  }
+  const user: MockDirectoryUser = {
+    id: Math.max(...mockUsers.map((row) => row.id)) + 1,
+    username,
+    displayName: body.displayName.trim(),
+    email: body.email.trim().toLowerCase(),
+    role: storedRole(body.role),
+    status: 'active',
+    lastLogin: null,
+    created: new Date().toISOString(),
+    builtin: false,
+    mustChangePassword: body.generate === true || body.forceChange === true,
+  };
+  mockUsers.push(user);
+  audit('user-create', user.email + ' ' + user.role);
+  return { ...user, ok: true as const, ...(body.generate ? { oneTimePassword: password } : {}) };
+}
+
+export async function updateDirectoryUser(id: number, body: { displayName?: string; email?: string; role?: string }) {
+  await delay(20);
+  const user = mockUsers.find((row) => row.id === id);
+  if (!user) throw new ApiError(404, 'no_user', 'no user with that id');
+  if (body.role && storedRole(body.role) !== user.role) {
+    const next = storedRole(body.role);
+    if ((user.builtin || user.username === 'admin') && next !== 'Administrator') {
+      throw new ApiError(409, 'protected_admin', 'the built-in admin account cannot be deleted, disabled, or demoted');
+    }
+    if (user.role === 'Administrator' && next !== 'Administrator' && activeAdmins(user.id) < 1) {
+      throw new ApiError(409, 'last_admin', 'the last administrator cannot be removed, disabled, or demoted');
+    }
+    user.role = next;
+  }
+  if (body.displayName) user.displayName = body.displayName.trim();
+  if (body.email) user.email = body.email.trim().toLowerCase();
+  audit('user-update', user.username);
+  return { ...user };
+}
+
+export async function setDirectoryUserStatus(id: number, status: 'active' | 'disabled') {
+  await delay(20);
+  const user = mockUsers.find((row) => row.id === id);
+  if (!user) throw new ApiError(404, 'no_user', 'no user with that id');
+  if (status === 'disabled' && (user.builtin || user.username === 'admin')) {
+    throw new ApiError(409, 'protected_admin', 'the built-in admin account cannot be deleted, disabled, or demoted');
+  }
+  if (status === 'disabled' && user.role === 'Administrator' && activeAdmins(user.id) < 1) {
+    throw new ApiError(409, 'last_admin', 'the last administrator cannot be removed, disabled, or demoted');
+  }
+  user.status = status;
+  audit(status === 'disabled' ? 'user-disable' : 'user-enable', user.username);
+  return { ...user };
+}
+
+export async function resetDirectoryPassword(id: number, body: { password?: string; generate?: boolean }) {
+  await delay(20);
+  const user = mockUsers.find((row) => row.id === id);
+  if (!user) throw new ApiError(404, 'no_user', 'no user with that id');
+  const password = body.generate ? 'Reset' + Math.random().toString(36).slice(2, 10) + '9z' : body.password || '';
+  if (!body.generate && (password.length < 12 || !/[A-Za-z]/.test(password) || !/\d/.test(password))) {
+    throw new ApiError(400, 'bad_password', 'password must be 12-200 characters and include a letter and a digit');
+  }
+  user.mustChangePassword = true;
+  audit('user-password-reset', user.username + ' sessions cleared');
+  return { ok: true as const, username: user.username, mustChangePassword: true, ...(body.generate ? { oneTimePassword: password } : {}) };
+}
+
+export async function deleteDirectoryUser(id: number) {
+  await delay(20);
+  const index = mockUsers.findIndex((row) => row.id === id);
+  if (index < 0) throw new ApiError(404, 'no_user', 'no user with that id');
+  const user = mockUsers[index];
+  if (readSession()?.email === user.email) throw new ApiError(403, 'self_delete', 'you cannot delete your own account');
+  if (user.builtin || user.username === 'admin') {
+    throw new ApiError(409, 'protected_admin', 'the built-in admin account cannot be deleted, disabled, or demoted');
+  }
+  if (user.role === 'Administrator' && activeAdmins(user.id) < 1) {
+    throw new ApiError(409, 'last_admin', 'the last administrator cannot be removed, disabled, or demoted');
+  }
+  mockUsers.splice(index, 1);
+  audit('user-delete', user.username + ' ' + user.email);
+  return { ok: true as const };
+}
+
+export async function changePassword() {
+  await delay(20);
+  return { ok: true as const };
 }

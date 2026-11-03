@@ -749,10 +749,14 @@ export const USERS: UserRow[] = [
 export const PERMISSIONS: { label: string; Administrator: boolean; Engineer: boolean; Operator: boolean; 'Read-only': boolean }[] = [
   { label: 'View devices, sites and faceplates', Administrator: true, Engineer: true, Operator: true, 'Read-only': true },
   { label: 'View port graphs and history', Administrator: true, Engineer: true, Operator: true, 'Read-only': true },
-  { label: 'Acknowledge alerts', Administrator: true, Engineer: true, Operator: true, 'Read-only': false },
-  { label: 'Approve devices from "Not in NetBox"', Administrator: true, Engineer: true, Operator: false, 'Read-only': false },
+  { label: 'Acknowledge alerts and silences', Administrator: true, Engineer: true, Operator: true, 'Read-only': false },
+  { label: 'Approve NetBridge syncs', Administrator: true, Engineer: true, Operator: true, 'Read-only': false },
+  { label: 'Edit devices', Administrator: true, Engineer: true, Operator: true, 'Read-only': false },
+  { label: 'Approve devices from "Not in NetBox"', Administrator: true, Engineer: true, Operator: true, 'Read-only': false },
   { label: 'Edit saved views and thresholds', Administrator: true, Engineer: true, Operator: false, 'Read-only': false },
+  { label: 'Settings applications', Administrator: true, Engineer: true, Operator: false, 'Read-only': false },
   { label: 'Manage Alertmanager webhook', Administrator: true, Engineer: false, Operator: false, 'Read-only': false },
+  { label: 'Vault', Administrator: true, Engineer: false, Operator: false, 'Read-only': false },
   { label: 'Manage users and roles', Administrator: true, Engineer: false, Operator: false, 'Read-only': false },
   { label: 'View Database tab (read-only)', Administrator: true, Engineer: true, Operator: false, 'Read-only': false },
 ];

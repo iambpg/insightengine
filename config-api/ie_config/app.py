@@ -16,7 +16,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from .actions import Reloader, container_states
-from .auth import SETTINGS_ROLES, Auth, check_bearer, client_ip, read_setup_token, require_csrf, token_hash, validate_email, validate_password
+from .auth import (
+    Auth, can_operate, can_settings, check_bearer, client_ip, generate_password, is_admin,
+    read_setup_token, require_csrf, role_in, token_hash, validate_email, validate_password,
+)
 from .db import AuditRow, make_session_factory
 from .discovery import Discovery, NetBoxWriter, guess_device, load_device_aliases, load_yaml, unapproved_for_ui
 from .errors import ApiError, error_body
@@ -208,15 +211,23 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         user, csrf = auth.session_user(request.cookies.get(settings.cookie_name))
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             require_csrf(request.headers.get("x-csrf-token", ""), csrf)
+        if getattr(user, "must_change_password", 0) and request.url.path not in (
+            "/api/v1/auth/me", "/api/v1/auth/logout", "/api/v1/auth/change-password",
+        ):
+            raise ApiError(403, "password_change_required", "change the one-time password before continuing")
         return user, csrf
 
     def require_reader(user):
-        if user.role not in SETTINGS_ROLES:
+        if not can_settings(user.role):
             raise ApiError(403, "forbidden", "Settings is available to Administrators and Engineers")
+
+    def require_operator(user):
+        if not can_operate(user.role):
+            raise ApiError(403, "forbidden", "your role cannot change devices, alerts, or NetBridge")
 
     def require_editor(user, spec: AppSpec):
         require_reader(user)
-        if spec.sensitive and user.role != "Administrator":
+        if spec.sensitive and not is_admin(user.role):
             raise ApiError(403, "forbidden", "this application is restricted to Administrators")
 
     def app_or_404(app_id: str) -> AppSpec:
@@ -277,7 +288,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         email = validate_email(body.get("email", ""))
         password = validate_password(body.get("password", ""))
         # The password is hashed and never logged.
-        auth.create_user(email, password, "Administrator")
+        auth.create_user(email, password, "Administrator", username="admin", display_name="Administrator", builtin=True)
         _audit(sf, None, "bootstrap-admin", client_ip(request), "ok", detail=email)
         log.info("bootstrapped initial administrator %s", email)
         return {"ok": True}
@@ -293,7 +304,16 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
             raise
         from types import SimpleNamespace
         _audit(sf, SimpleNamespace(email=result["email"], role=result["role"]), "login", ip, "ok")
-        resp = JSONResponse({"ok": True, "role": result["role"], "csrfToken": result["csrf"]})
+        resp = JSONResponse({
+            "ok": True,
+            "role": result["role"],
+            "csrfToken": result["csrf"],
+            "email": result["email"],
+            "username": result.get("username") or "",
+            "displayName": result.get("displayName") or "",
+            "id": result.get("id"),
+            "mustChangePassword": bool(result.get("mustChangePassword")),
+        })
         resp.set_cookie(
             settings.cookie_name, result["token"], httponly=True, secure=settings.cookie_secure,
             samesite="lax", path="/", max_age=settings.session_hours * 3600,
@@ -316,27 +336,108 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.get("/api/v1/auth/me")
     def me(request: Request):
         user, csrf = user_of(request)
-        return {"email": user.email, "role": user.role, "csrfToken": csrf}
+        return {
+            "email": user.email,
+            "role": user.role,
+            "csrfToken": csrf,
+            "id": user.id,
+            "username": user.username or "",
+            "displayName": user.display_name or "",
+            "mustChangePassword": bool(user.must_change_password),
+        }
+
+    def require_user_admin(user):
+        if not is_admin(user.role):
+            raise ApiError(403, "forbidden", "only an Administrator can manage users")
 
     @app.get("/api/v1/auth/users")
     def list_users(request: Request):
         user, _csrf = user_of(request)
-        if user.role != "Administrator":
-            raise ApiError(403, "forbidden", "only an Administrator can list users")
-        from .db import User
-        with sf() as db:
-            rows = db.scalars(select(User).order_by(User.id)).all()
-            return [{"email": r.email, "role": r.role} for r in rows]
+        require_user_admin(user)
+        return auth.list_directory()
+
+    @app.get("/api/v1/auth/users/audit")
+    def user_audit(request: Request):
+        user, _csrf = user_of(request)
+        require_user_admin(user)
+        return {"entries": auth.user_audit()}
 
     @app.post("/api/v1/auth/users")
     async def add_user(request: Request):
         user, _csrf = user_of(request)
-        if user.role != "Administrator":
-            raise ApiError(403, "forbidden", "only an Administrator can create users")
+        require_user_admin(user)
         body = await request.json()
-        created = auth.create_user(body.get("email", ""), body.get("password", ""), body.get("role", ""))
-        _audit(sf, user, "create-user", client_ip(request), "ok", detail=created.email + " " + created.role)
-        return {"ok": True, "email": created.email, "role": created.role}
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        generated = ""
+        if body.get("generate") is True:
+            generated = generate_password()
+            password = generated
+        else:
+            password = body.get("password", "")
+        created = auth.create_user(
+            body.get("email", ""),
+            password,
+            body.get("role", ""),
+            username=body.get("username") or None,
+            display_name=body.get("displayName") or body.get("name") or "",
+            must_change=body.get("generate") is True or body.get("forceChange") is True,
+        )
+        _audit(sf, user, "user-create", client_ip(request), "ok", detail=created.email + " " + created.role)
+        payload = {
+            "ok": True,
+            "id": created.id,
+            "email": created.email,
+            "role": created.role,
+            "username": created.username or "",
+            "displayName": created.display_name or "",
+            "mustChangePassword": bool(created.must_change_password),
+        }
+        if generated:
+            payload["oneTimePassword"] = generated
+        return payload
+
+    @app.patch("/api/v1/auth/users/{user_id}")
+    async def patch_user(user_id: int, request: Request):
+        actor, _csrf = user_of(request)
+        require_user_admin(actor)
+        body = await request.json()
+        return auth.update_user(actor, user_id, body, client_ip(request))
+
+    @app.post("/api/v1/auth/users/{user_id}/disable")
+    def disable_user(user_id: int, request: Request):
+        actor, _csrf = user_of(request)
+        require_user_admin(actor)
+        return auth.set_status(actor, user_id, "disabled", client_ip(request))
+
+    @app.post("/api/v1/auth/users/{user_id}/enable")
+    def enable_user(user_id: int, request: Request):
+        actor, _csrf = user_of(request)
+        require_user_admin(actor)
+        return auth.set_status(actor, user_id, "active", client_ip(request))
+
+    @app.post("/api/v1/auth/users/{user_id}/reset-password")
+    async def reset_user_password(user_id: int, request: Request):
+        actor, _csrf = user_of(request)
+        require_user_admin(actor)
+        body = await request.json()
+        return auth.reset_user_password(actor, user_id, body, client_ip(request))
+
+    @app.delete("/api/v1/auth/users/{user_id}")
+    def delete_user(user_id: int, request: Request):
+        actor, _csrf = user_of(request)
+        require_user_admin(actor)
+        auth.delete_user(actor, user_id, client_ip(request))
+        return {"ok": True}
+
+    @app.post("/api/v1/auth/change-password")
+    async def change_password(request: Request):
+        actor, _csrf = user_of(request)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        auth.change_password(actor.id, body.get("currentPassword", ""), body.get("newPassword", ""), client_ip(request))
+        return {"ok": True}
 
     @app.get("/api/v1/settings/apps")
     def list_apps(request: Request):
@@ -560,7 +661,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     def _run_action(spec: AppSpec, action, user, request, content: str | None = None) -> dict:
         if action is None:
             return {"ok": False, "message": "this application has no reload action"}
-        if user.role not in action.roles:
+        if not role_in(user.role, action.roles):
             raise ApiError(403, "forbidden", "your role cannot run this action")
         if action.kind == "reload":
             if spec.id == "caddy":
@@ -652,7 +753,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         action = spec.action(action_id)
         if action is None:
             raise ApiError(404, "not_found", "unknown action")
-        if user.role not in action.roles:
+        if not role_in(user.role, action.roles):
             raise ApiError(403, "forbidden", "your role cannot run this action")
         if action.kind == "generate":
             return _generate(spec)
@@ -732,8 +833,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         return {"ok": True}
 
     def require_admin(user):
-        require_reader(user)
-        if user.role != "Administrator":
+        if not is_admin(user.role):
             raise ApiError(403, "forbidden", "SNMP credentials are restricted to Administrators")
 
     async def snmp_json_body(request: Request):
@@ -833,13 +933,13 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.get("/api/v1/discovery/catalog")
     def discovery_catalog(request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         return discovery.catalog()
 
     @app.get("/api/v1/discovery/unapproved")
     def unapproved(request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         suffixes = discovery.hostname_suffixes()
         rows = [unapproved_for_ui(row, suffixes) for row in discovery.list_unapproved()]
         params = request.query_params
@@ -857,7 +957,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.post("/api/v1/discovery/roles")
     async def set_roles(request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         try:
             body = await request.json()
         except Exception:
@@ -877,7 +977,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.post("/api/v1/discovery/{cid}/approve")
     async def approve(cid: int, request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         body = {}
         if request.headers.get("content-length") not in (None, "0"):
             body = await request.json()
@@ -929,7 +1029,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.post("/api/v1/discovery/{cid}/reject")
     def reject(cid: int, request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         updated = discovery.set_status(cid, "rejected")
         if updated is None:
             raise ApiError(404, "not_found", "unknown discovery candidate")
@@ -939,13 +1039,13 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.get("/api/v1/discovery/scans")
     def scans(request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         return discovery.list_scans()
 
     @app.post("/api/v1/discovery/scan")
     async def scan(request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         try:
             body = await request.json()
         except Exception:
@@ -962,7 +1062,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.post("/api/v1/discovery/device")
     async def discover_device(request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         try:
             body = await request.json()
         except Exception:
@@ -993,7 +1093,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
     @app.get("/api/v1/discovery/device/{job_id}")
     def discover_device_status(job_id: str, request: Request):
         user, _csrf = user_of(request)
-        require_reader(user)
+        require_operator(user)
         try:
             if job_id.isdigit():
                 found = discovery.device_job_status(int(job_id))

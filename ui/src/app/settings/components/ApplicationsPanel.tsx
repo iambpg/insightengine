@@ -154,7 +154,7 @@ export default function ApplicationsPanel({ role }: { role: RoleName | null }) {
         {!loading && selected === 'all' && apps ? (
           <Landing apps={apps} overviewById={overviewById} audit={audit} onOpen={open} />
         ) : null}
-        {selectedApp ? (
+        {selectedApp && role ? (
           <AppEditor
             app={selectedApp}
             overview={overviewById.get(selectedApp.id)}

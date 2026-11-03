@@ -477,4 +477,19 @@ else
   fi
 fi
 
+say "10. Migrate ie-config users. The existing administrator and password hash are kept."
+if [ "$DRY" -eq 1 ]; then
+  say "dry-run: would run docker compose exec -T ie-config python -m ie_config.users_migrate"
+  if [ -n "$LOG" ]; then
+    printf 'plan: docker compose exec -T ie-config python -m ie_config.users_migrate\n' >> "$LOG"
+  fi
+else
+  if [ -n "$LOG" ]; then
+    printf 'run: docker compose exec -T ie-config python -m ie_config.users_migrate\n' >> "$LOG"
+  fi
+  if ! docker compose exec -T ie-config python -m ie_config.users_migrate; then
+    say "WARNING: user migration did not run. ie-config migrates users when it starts and does not rewrite password hashes."
+  fi
+fi
+
 say "=== upgrade steps finished ==="
