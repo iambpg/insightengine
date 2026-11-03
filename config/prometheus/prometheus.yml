@@ -69,7 +69,7 @@ scrape_configs:
         authorization:
           # NetBox 4.6 v2 tokens (nbt_<key>.<secret>) require the Bearer scheme.
           type: Bearer
-          credentials_file: /run/secrets/netbox_token
+          credentials_file: /run/ie-secrets/netbox_token
         tls_config:
           ca_file: /etc/ie-certs/ca.crt
           server_name: caddy

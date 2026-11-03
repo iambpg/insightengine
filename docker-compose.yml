@@ -218,8 +218,12 @@ networks:
     internal: true
 
 # ----------------------------------- secrets ---------------------------------
-# File-based secrets (installed by install.sh under ./secrets, 0600/0400 and
-# chown'ed to the container UID when run as root). Values are never in git.
+# File-based secrets (installed by install.sh under ./secrets, 0600/0400).
+# Compose bind-mounts the host file, so a root-only mode is what the
+# container sees. telegraf-wlc, telegraf-api, prometheus, and trapd start
+# as root, copy each secret to a mode-0400 file owned by the service uid,
+# and drop privileges. The host file is not made world-readable.
+# Values are never in git.
 secrets:
   setup_token:
     file: ./secrets/setup/token
@@ -656,7 +660,12 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
+    user: "0:0"
     environment:
+      # Root only long enough to copy the root-only NetBox token. drop-priv.sh
+      # then runs Prometheus as nobody (65534).
+      IE_RUN_UID: "65534"
+      IE_RUN_GID: "65534"
       # Expanded inside external_labels by --enable-feature=expand-external-labels
       CLIENT_SLUG: ${CLIENT_SLUG}
       CLIENT_NAME: ${CLIENT_NAME}
@@ -667,10 +676,13 @@ services:
       - ./config/prometheus:/etc/prometheus:ro
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - prom-data:/prometheus
+      - ./config/telegraf/wlc/drop-priv.sh:/drop-priv.sh:ro
     secrets:
       - source: netbox_token_prometheus
         target: netbox_token
+    entrypoint: ["/drop-priv.sh"]
     command:
+      - /bin/prometheus
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${PROM_RETENTION_TIME:-30d}
@@ -832,14 +844,18 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
-    user: "10001:10001"          # TODO(Phindani): confirm; secrets are chown'ed to this UID by install.sh
+    user: "0:0"
     environment:
       CLIENT_SLUG: ${CLIENT_SLUG}
+      IE_RUN_UID: "10001"
+      IE_RUN_GID: "10001"
+    entrypoint: ["/usr/local/bin/drop-priv.sh"]
     volumes:
       # CA is outside the read-only /etc/telegraf tree. A file mount under that
       # directory fails with "make mountpoint ... read-only file system".
       - ./config/telegraf/api:/etc/telegraf:ro
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
+      - ./config/telegraf/wlc/drop-priv.sh:/usr/local/bin/drop-priv.sh:ro
     secrets:
       - fortigate_token
       - panos_api_key
@@ -873,7 +889,9 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [monitoring-net]
-    user: "10001:10001"
+    # Start as root so a 0600 root-owned NetBox token can be copied to a
+    # 0400 file for uid 10001. entrypoint.sh drops privileges before Telegraf.
+    user: "0:0"
     environment:
       CLIENT_SLUG: ${CLIENT_SLUG}
       SNMP_V2_COMMUNITY: ${SNMP_V2_COMMUNITY:-}

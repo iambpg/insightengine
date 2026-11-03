@@ -94,6 +94,7 @@ def _prepare_prometheus(content: str, work: str, rules_text: str | None) -> str:
     rewritten = (
         content.replace("/etc/prometheus/", work + "/")
         .replace("/etc/ie-certs/", os.path.join(work, "ie-certs") + "/")
+        .replace("/run/ie-secrets/netbox_token", os.path.join(work, "netbox.token"))
         .replace("/run/secrets/netbox_token", os.path.join(work, "netbox.token"))
     )
     path = os.path.join(work, "prometheus.yml")

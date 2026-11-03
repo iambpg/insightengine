@@ -8,9 +8,12 @@ RUN apt-get update \
 # mount of this directory is /etc/telegraf, which is not the script directory.
 COPY catalog.py /usr/local/bin/catalog.py
 COPY render_wlc.py /usr/local/bin/render_wlc.py
+COPY drop-priv.sh /usr/local/bin/drop-priv.sh
 COPY entrypoint.sh /entrypoint.sh
 ENV PYTHONPATH=/usr/local/bin:/etc/telegraf
-RUN chmod 0755 /entrypoint.sh /usr/local/bin/render_wlc.py \
+RUN chmod 0755 /entrypoint.sh /usr/local/bin/render_wlc.py /usr/local/bin/drop-priv.sh \
     && chmod 0644 /usr/local/bin/catalog.py
-USER 10001:10001
+# Stay root. entrypoint.sh copies root-only secrets to mode 0400 for uid
+# 10001 and drops privileges before Telegraf starts.
+USER root
 ENTRYPOINT ["/entrypoint.sh"]
