@@ -21,6 +21,7 @@ from .db import AuditRow, make_session_factory
 from .discovery import Discovery, NetBoxWriter, guess_device, load_device_aliases, load_yaml, unapproved_for_ui
 from .errors import ApiError, error_body
 from .apps_launcher import mount_apps_launcher
+from .netbridge.api import mount_netbridge
 from .vault import mount_vault
 from .device_cli import mount_device_cli
 from .experience import mount_experience
@@ -158,6 +159,11 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                     except Exception as exc:
                         log.warning("snmp sync: %s", exc.__class__.__name__)
                     last_snmp = time.time()
+                try:
+                    from .netbridge.service import NetBridge
+                    NetBridge(settings, sf, discovery).maybe_daily()
+                except Exception as exc:
+                    log.warning("netbridge daily: %s", exc.__class__.__name__)
                 try:
                     poll = int(cfg.get("prefix_poll_seconds") or 60)
                 except (TypeError, ValueError):
@@ -835,7 +841,38 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         user, _csrf = user_of(request)
         require_reader(user)
         suffixes = discovery.hostname_suffixes()
-        return [unapproved_for_ui(row, suffixes) for row in discovery.list_unapproved()]
+        rows = [unapproved_for_ui(row, suffixes) for row in discovery.list_unapproved()]
+        params = request.query_params
+        if "page" not in params and "page_size" not in params and "q" not in params:
+            return rows
+        for row in rows:
+            suggested = row.get("suggested") or {}
+            row["role"] = suggested.get("role") or ""
+            row["site"] = suggested.get("site") or ""
+        from .netbridge.plan import paginate
+        return paginate(rows, params.get("page"), params.get("page_size"), params.get("q") or "", [
+            "hostname", "sysName", "ip", "vendor", "model", "role", "site",
+        ])
+
+    @app.post("/api/v1/discovery/roles")
+    async def set_roles(request: Request):
+        user, _csrf = user_of(request)
+        require_reader(user)
+        try:
+            body = await request.json()
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        ids = body.get("ids")
+        if not isinstance(ids, list) or not ids or len(ids) > 500:
+            raise ApiError(400, "bad_body", "ids must be a list of candidates")
+        try:
+            result = discovery.set_roles(ids, body.get("role") or "")
+        except ValueError as exc:
+            raise ApiError(400, "bad_body", str(exc))
+        _audit(sf, user, "discovery-role", client_ip(request), "ok", "netdisco", "", "", str(len(result.get("updated") or [])))
+        return result
 
     @app.post("/api/v1/discovery/{cid}/approve")
     async def approve(cid: int, request: Request):
@@ -971,6 +1008,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         return found
 
     mount_fleet(app, user_of)
+    mount_netbridge(app, user_of, _audit)
     mount_experience(app, user_of)
 
     def record_cli(user, request, result, detail):

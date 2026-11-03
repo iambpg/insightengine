@@ -16,6 +16,7 @@ vi.mock('@/lib/apiClient', () => ({
     discoverDevice: vi.fn(),
     getDeviceDiscovery: vi.fn(),
     startScan: vi.fn(),
+    setDeviceRoles: vi.fn(),
   },
 }));
 
@@ -52,6 +53,8 @@ describe('NotInNetBoxView device discover', () => {
     vi.mocked(api.discoverDevice).mockReset();
     vi.mocked(api.getDeviceDiscovery).mockReset();
     vi.mocked(api.startScan).mockReset();
+    vi.mocked(api.setDeviceRoles).mockReset();
+    vi.mocked(api.setDeviceRoles).mockResolvedValue({ ok: true, role: 'Core switch', updated: ['disc-1'] });
     vi.mocked(api.discoveryCatalog).mockResolvedValue({ roles: [], sites: [], platforms: [] });
     vi.mocked(api.listScans).mockResolvedValue([]);
     vi.mocked(api.listDiscovered).mockResolvedValue([]);
@@ -114,10 +117,33 @@ describe('NotInNetBoxView device discover', () => {
     const user = userEvent.setup();
     render(<NotInNetBoxView />);
     await screen.findByLabelText('IP address');
-    await user.selectOptions(screen.getByRole('combobox'), 'prefix');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Discover target' }), 'prefix');
     await user.type(screen.getByLabelText('Prefix'), '10.2.0.0/24');
     await user.click(screen.getByRole('button', { name: 'Discover' }));
     await waitFor(() => expect(api.startScan).toHaveBeenCalledWith('prefix', '10.2.0.0/24'));
     expect(api.discoverDevice).not.toHaveBeenCalled();
+  });
+
+  it('saves a per-row role and a bulk role from the NetBox list', async () => {
+    vi.mocked(api.discoveryCatalog).mockResolvedValue({
+      roles: ['Access switch', 'Core switch'],
+      roleChoices: [
+        { name: 'Access switch', slug: 'access-switch' },
+        { name: 'Core switch', slug: 'core-switch' },
+      ],
+      sites: ['Lab'],
+      platforms: [],
+    });
+    vi.mocked(api.listDiscovered).mockResolvedValue([foundDevice()]);
+    const user = userEvent.setup();
+    render(<NotInNetBoxView />);
+    const role = await screen.findByRole('combobox', { name: 'Suggested role for sw-new' });
+    expect(role).toHaveValue('Access switch');
+    await user.selectOptions(role, 'Core switch');
+    expect(api.setDeviceRoles).toHaveBeenCalledWith(['disc-1'], 'Core switch');
+    await user.click(screen.getByRole('checkbox', { name: 'Select sw-new' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Role for selected devices' }), 'Access switch');
+    await user.click(screen.getByRole('button', { name: 'Set role for selected' }));
+    expect(api.setDeviceRoles).toHaveBeenCalledWith(['disc-1'], 'Access switch');
   });
 });

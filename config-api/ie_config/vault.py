@@ -29,6 +29,15 @@ _MAX_BYTES = 1024 * 1024
 _FAIL_LIMIT = 8
 _FAIL_WINDOW = 60.0
 
+# Saved from Settings → Vault. Never returned in the clear, including reveal.
+WITHHELD_KEYS = (
+    "CISCO_API_CLIENT_ID",
+    "CISCO_API_CLIENT_SECRET",
+    "FORTIMANAGER_URL",
+    "FORTIMANAGER_TOKEN",
+)
+_WITHHELD = set(WITHHELD_KEYS)
+
 REVEAL_SECONDS = 300
 
 
@@ -229,6 +238,8 @@ def list_view(pairs: list[tuple[str, str]], host: str) -> dict:
     values = dict(pairs)
     buckets: dict[str, list[dict]] = {group.id: [] for group in GROUPS}
     for key, value in pairs:
+        if key in _WITHHELD:
+            continue
         secret = is_secret_key(key)
         item = {"key": key, "secret": secret, "set": value != ""}
         if not secret:
@@ -246,7 +257,109 @@ def list_view(pairs: list[tuple[str, str]], host: str) -> dict:
     return {"readOnly": True, "revealSeconds": REVEAL_SECONDS, "groups": groups}
 
 
+def integrations_path(settings) -> str:
+    root = getattr(settings, "config_root", "") or ""
+    return os.path.join(root, "data", "vault", "integrations.env")
+
+
+def _stored_pairs(path: str) -> list[tuple[str, str]]:
+    try:
+        if not os.path.isfile(path):
+            return []
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            text = handle.read(_MAX_BYTES)
+    except OSError:
+        return []
+    return parse_env(text)
+
+
+def secret_value(settings, key: str) -> str:
+    """Integration secret. Integrations file, then .env, then the process environment.
+
+    The value is for the caller to use. Do not log it.
+    """
+    if key not in _WITHHELD:
+        return ""
+    for _name, value in _stored_pairs(integrations_path(settings)):
+        if _name == key and value.strip():
+            return value.strip()
+    try:
+        pairs = read_env(settings)
+    except ApiError:
+        pairs = []
+    for name, value in pairs:
+        if name == key and value.strip():
+            return value.strip()
+    env = (os.environ.get(key) or "").strip()
+    if env and env != "unset-placeholder":
+        return env
+    return ""
+
+
+def integration_status(settings) -> dict:
+    return {
+        "cisco": {
+            "idSet": bool(secret_value(settings, "CISCO_API_CLIENT_ID")),
+            "secretSet": bool(secret_value(settings, "CISCO_API_CLIENT_SECRET")),
+        },
+        "fortimanager": {
+            "urlSet": bool(secret_value(settings, "FORTIMANAGER_URL")),
+            "tokenSet": bool(secret_value(settings, "FORTIMANAGER_TOKEN")),
+        },
+    }
+
+
+def _quote_env(value: str) -> str:
+    if any(ch in value for ch in ("'", "\n", "\r", "\x00")):
+        raise ApiError(400, "bad_value", "that value cannot be stored safely")
+    return "'" + value + "'"
+
+
+def save_integrations(settings, updates: dict[str, str]) -> dict:
+    """Write only the allow-listed keys. A blank value keeps the stored one."""
+    if not isinstance(updates, dict):
+        raise ApiError(400, "bad_body", "body must be a JSON object")
+    current = dict(_stored_pairs(integrations_path(settings)))
+    for key in WITHHELD_KEYS:
+        if key not in updates:
+            continue
+        value = updates[key]
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise ApiError(400, "bad_value", "values must be strings")
+        if value == "":
+            continue
+        if len(value) > 512:
+            raise ApiError(400, "bad_value", "value is too long")
+        if key == "FORTIMANAGER_URL":
+            lowered = value.strip().lower()
+            if not (lowered.startswith("https://") or lowered.startswith("http://")):
+                raise ApiError(400, "bad_value", "FortiManager URL must start with http:// or https://")
+        current[key] = value.strip()
+    path = integrations_path(settings)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    lines = ["# NetBridge integration credentials. Values are not logged.", ""]
+    for key in WITHHELD_KEYS:
+        if current.get(key):
+            lines.append("%s=%s" % (key, _quote_env(current[key])))
+    body = "\n".join(lines) + "\n"
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, body.encode("utf-8"))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+    os.chmod(path, 0o600)
+    return integration_status(settings)
+
+
 def lookup_value(pairs: list[tuple[str, str]], key: str) -> str:
+    if key in _WITHHELD:
+        raise ApiError(403, "secret_withheld", "this value is never shown")
     if not _KEY_RE.match(key):
         raise ApiError(400, "bad_key", "key is not valid")
     for name, value in pairs:
@@ -325,6 +438,7 @@ def mount_vault(app, user_of, audit) -> None:
         seconds = reveal_seconds(settings)
         payload = list_view(pairs, getattr(settings, "public_host", "") or "")
         payload["revealSeconds"] = seconds
+        payload["integrations"] = integration_status(settings)
         return payload
 
     @app.post("/api/v1/settings/vault/unlock")
@@ -382,6 +496,69 @@ def mount_vault(app, user_of, audit) -> None:
             "vault", key, "", "",
         )
         return {"key": key, "value": value, "action": action}
+
+    @app.post("/api/v1/settings/vault/integrations")
+    async def vault_save_integrations(request: Request):
+        user, _csrf = user_of(request)
+        require_admin(user)
+        try:
+            body = _json_object(await request.json())
+        except ApiError:
+            raise
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        mapping = {
+            "CISCO_API_CLIENT_ID": body.get("ciscoClientId", body.get("CISCO_API_CLIENT_ID")),
+            "CISCO_API_CLIENT_SECRET": body.get("ciscoClientSecret", body.get("CISCO_API_CLIENT_SECRET")),
+            "FORTIMANAGER_URL": body.get("fortimanagerUrl", body.get("FORTIMANAGER_URL")),
+            "FORTIMANAGER_TOKEN": body.get("fortimanagerToken", body.get("FORTIMANAGER_TOKEN")),
+        }
+        # Drop keys the client omitted so a partial form does not clear them.
+        updates = {key: value for key, value in mapping.items() if value is not None}
+        saved = save_integrations(app.state.settings, updates)
+        audit(app.state.sf, user, "vault-integrations", _client_ip(request), "ok", "vault", "", "", "")
+        return {"ok": True, "integrations": saved}
+
+    @app.post("/api/v1/settings/vault/integrations/test")
+    async def vault_test_integrations(request: Request):
+        user, _csrf = user_of(request)
+        require_admin(user)
+        try:
+            body = _json_object(await request.json())
+        except ApiError:
+            raise
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        target = body.get("target")
+        if target == "cisco":
+            client = getattr(app.state, "eox_client", None)
+            if client is None:
+                from .netbridge.eox import EoxClient
+                client = EoxClient(
+                    secret_value(app.state.settings, "CISCO_API_CLIENT_ID"),
+                    secret_value(app.state.settings, "CISCO_API_CLIENT_SECRET"),
+                    pause=0,
+                )
+            result = client.probe()
+        elif target == "fortimanager":
+            from .netbridge.sources import fmg_list
+            listed = fmg_list(
+                secret_value(app.state.settings, "FORTIMANAGER_URL"),
+                secret_value(app.state.settings, "FORTIMANAGER_TOKEN"),
+                http=getattr(app.state, "fmg_http", None),
+            )
+            count = len(listed.get("devices") or [])
+            if listed.get("ok"):
+                result = {"ok": True, "message": "Connected. %d managed devices." % count}
+            else:
+                result = {"ok": False, "message": listed.get("message") or "FortiManager did not answer"}
+        else:
+            raise ApiError(400, "bad_body", "target must be cisco or fortimanager")
+        audit(
+            app.state.sf, user, "vault-integration-test", _client_ip(request),
+            "ok" if result.get("ok") else "failed", "vault", "", "", str(target),
+        )
+        return result
 
 
 def _client_ip(request) -> str:

@@ -462,4 +462,19 @@ if [ "$DRY" -eq 0 ] && [ -z "${UPGRADE_SELF_TEST_FLOW:-}" ]; then
 fi
 plan docker compose up -d --force-recreate --no-deps netbox-component-backfill
 
+say "9. Create NetBridge tables in the ie-config database if they are missing."
+if [ "$DRY" -eq 1 ]; then
+  say "dry-run: would run docker compose exec -T ie-config python -m ie_config.netbridge.migrate"
+  if [ -n "$LOG" ]; then
+    printf 'plan: docker compose exec -T ie-config python -m ie_config.netbridge.migrate\n' >> "$LOG"
+  fi
+else
+  if [ -n "$LOG" ]; then
+    printf 'run: docker compose exec -T ie-config python -m ie_config.netbridge.migrate\n' >> "$LOG"
+  fi
+  if ! docker compose exec -T ie-config python -m ie_config.netbridge.migrate; then
+    say "WARNING: NetBridge migration did not run. ie-config creates the tables when it starts."
+  fi
+fi
+
 say "=== upgrade steps finished ==="

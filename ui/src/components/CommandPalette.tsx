@@ -19,10 +19,10 @@ const DEMO: Entry[] = [
   { id: 'cmd-dev', label: 'All devices', hint: 'Device list · 19,840 devices', href: '/', icon: 'ServerStackIcon' },
   { id: 'cmd-detail', label: 'stk-rot04-01', hint: 'Switch stack · Rotterdam-Havenstraat-214 · 10.22.14.17', href: '/device-detail', icon: 'CpuChipIcon' },
   { id: 'cmd-site', label: 'Rotterdam-Havenstraat-214', hint: 'Site · 9 devices', href: '/site-view', icon: 'BuildingOffice2Icon' },
-  { id: 'cmd-nib', label: 'Not in NetBox', hint: '10 discovered devices awaiting approval', href: '/not-in-net-box', icon: 'QuestionMarkCircleIcon' },
+  { id: 'cmd-nib', label: 'NetBridge', hint: '10 discovered devices awaiting approval', href: '/netbridge?tab=missing', icon: 'ArrowsRightLeftIcon' },
   { id: 'cmd-fw', label: 'fw-ams01-a', hint: 'Firewall · Amsterdam-Zuidas-105 · Te0/2 faulted', href: '/device-detail', icon: 'ShieldExclamationIcon' },
   { id: 'cmd-set', label: 'Settings', hint: 'Roles, database, Alertmanager webhook', href: '/settings', icon: 'Cog6ToothIcon' },
-  { id: 'cmd-ip', label: '10.22.14.61', hint: 'IP · sw-rot04-09 (discovered)', href: '/not-in-net-box', icon: 'GlobeAltIcon' },
+  { id: 'cmd-ip', label: '10.22.14.61', hint: 'IP · sw-rot04-09 (discovered)', href: '/netbridge?tab=missing', icon: 'GlobeAltIcon' },
 ];
 
 const NAV: Entry[] = [
@@ -30,7 +30,7 @@ const NAV: Entry[] = [
   { id: 'cmd-site', label: 'Sites', hint: 'Site list', href: '/site-view', icon: 'BuildingOffice2Icon' },
   { id: 'cmd-alerts', label: 'Alerts', hint: 'Open alerts', href: '/alerts', icon: 'BellAlertIcon' },
   { id: 'cmd-experience', label: 'Service Experience', hint: 'Wireless, SD-WAN, VBS, banks', href: '/service-experience', icon: 'SignalIcon' },
-  { id: 'cmd-nib', label: 'Not in NetBox', hint: 'Discovered devices awaiting approval', href: '/not-in-net-box', icon: 'QuestionMarkCircleIcon' },
+  { id: 'cmd-nib', label: 'NetBridge', hint: 'Discovered devices awaiting approval', href: '/netbridge?tab=missing', icon: 'ArrowsRightLeftIcon' },
   { id: 'cmd-set', label: 'Settings', hint: 'Applications, roles, webhook', href: '/settings', icon: 'Cog6ToothIcon' },
 ];
 

@@ -1,11 +1,6 @@
-import React from 'react';
-import AppLayout from '@/components/AppLayout';
-import NotInNetBoxView from '@/app/not-in-net-box/components/NotInNetBoxView';
+import { redirect } from 'next/navigation';
 
+/** The approval queue lives on NetBridge. This route stays so old links still land. */
 export default function NotInNetBoxPage() {
-  return (
-    <AppLayout>
-      <NotInNetBoxView />
-    </AppLayout>
-  );
+  redirect('/netbridge?tab=missing');
 }

@@ -1166,7 +1166,7 @@ class Discovery:
         now = time.monotonic()
         if self._catalog is not None and (now - self._catalog_at) < _CATALOG_TTL:
             return dict(self._catalog)
-        empty = {"ok": False, "roles": [], "sites": [], "platforms": []}
+        empty = {"ok": False, "roles": [], "sites": [], "platforms": [], "roleChoices": []}
         if not self.netbox_headers():
             return empty
         try:
@@ -1175,9 +1175,16 @@ class Discovery:
             platforms = self._netbox_get_all("/api/dcim/platforms/?limit=500")
         except Exception:
             return empty
+        choices = []
+        for row in roles or []:
+            name = (row.get("name") or "").strip()
+            if not name:
+                continue
+            choices.append({"name": name, "slug": (row.get("slug") or "").strip()})
         body = {
             "ok": True,
             "roles": _names(roles),
+            "roleChoices": choices,
             "sites": _names(sites),
             "platforms": _names(platforms),
         }
@@ -1201,6 +1208,29 @@ class Discovery:
                 row.detail = detail
             db.commit()
             return _public(row)
+
+    def set_roles(self, ids, role: str) -> dict:
+        """Remember the NetBox role on pending candidates. Approval reads it back."""
+        chosen = (role or "").strip()
+        if not chosen or len(chosen) > 64:
+            raise ValueError("role is required")
+        updated = []
+        missing = []
+        with self.sf() as db:
+            for raw in ids or []:
+                try:
+                    cid = int(raw)
+                except (TypeError, ValueError):
+                    missing.append(str(raw))
+                    continue
+                row = db.get(DiscoveryCandidate, cid)
+                if row is None or row.status != "pending":
+                    missing.append(str(cid))
+                    continue
+                row.role_slug = chosen
+                updated.append(str(cid))
+            db.commit()
+        return {"ok": True, "role": chosen, "updated": updated, "missing": missing}
 
 
 _SNMP_ERRORS = {
