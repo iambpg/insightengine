@@ -6,6 +6,7 @@ import Icon from '@/components/ui/AppIcon';
 import EmptyState from '@/components/ui/EmptyState';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { devicePath } from '@/lib/apiMode';
+import { deviceHealthPath } from '@/lib/deviceHealthPath';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import type { DeviceRow } from '@/lib/types';
 import type { ColumnKey } from './ColumnMenu';
@@ -117,7 +118,7 @@ export default function DeviceTable({ rows, error, onRetry, visible, selected, o
                     className="h-4 w-4 accent-[var(--primary)]"
                   />
                 </td>
-                {show('health') && <td className="px-3 py-2.5"><HealthBadge health={r.health} /></td>}
+                {show('health') && <td className="px-3 py-2.5"><HealthBadge health={r.health} href={deviceHealthPath(r.id, r.formFactor, r.health)} /></td>}
                 {show('hostname') && (
                   <td className="relative px-3 py-2.5" onMouseEnter={() => setHoverId(r.id)} onMouseLeave={() => setHoverId(null)}>
                     <span className="inline-flex flex-wrap items-center gap-2">

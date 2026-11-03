@@ -495,9 +495,11 @@ def test_populated_shapes_filters_and_paging(stack):
     found = client.get("/api/v1/devices?q=10.2&health=all&role=all&sort=hostname:asc").json()
     assert [row["hostname"] for row in found["rows"]] == ["wan-3"]
     warned = client.get("/api/v1/devices?health=warning&role=all").json()
-    assert [row["hostname"] for row in warned["rows"]] == ["core-1"]
-    assert warned["rows"][0]["portsWarn"] == 1
-    assert warned["rows"][0]["portsUp"] == 3
+    assert warned["rows"] == []
+    critical_rows = client.get("/api/v1/devices?health=critical&role=all").json()
+    assert [row["hostname"] for row in critical_rows["rows"]] == ["core-1"]
+    assert critical_rows["rows"][0]["portsWarn"] == 1
+    assert critical_rows["rows"][0]["portsUp"] == 3
     switched = client.get("/api/v1/devices?role=Access%20switch&health=all").json()
     assert [row["hostname"] for row in switched["rows"]] == ["edge-2"]
     assert switched["rows"][0]["formFactor"] == "access-switch-24"
@@ -515,8 +517,8 @@ def test_populated_shapes_filters_and_paging(stack):
     summary = client.get("/api/v1/summary").json()
     assert summary["total"] == 3
     assert summary["healthy"] == 1
-    assert summary["warning"] == 1
-    assert summary["critical"] == 0
+    assert summary["warning"] == 0
+    assert summary["critical"] == 1
     assert summary["unreachable"] == 1
     assert summary["alerts"] == 1
     assert summary["isExampleData"] is False
@@ -558,6 +560,12 @@ def test_populated_shapes_filters_and_paging(stack):
     assert ports[0]["type"] == "RJ45"
     assert any(item["kind"] == "power" and item["status"] == "fail" for item in device["hardware"])
     assert any(issue["severity"] == "critical" for issue in device["issues"])
+    assert device["health"] == "critical"
+    causes = device["healthItems"]
+    assert any(item["source"] == "alertmanager" and item["severity"] == "critical" for item in causes)
+    assert any(item["title"] == "Power supply degraded" and item["severity"] == "critical" for item in causes)
+    assert any(item["title"] == "Interface down" for item in causes)
+    assert device["health"] == "critical"
     assert device["backup"]["available"] is False
     assert {row["name"] for row in device["sources"]} >= {"netbox", "prometheus", "alertmanager", "oxidized", "netdisco"}
     assert isinstance(device["interfaces"], list)
@@ -667,6 +675,12 @@ def test_read_only_cannot_acknowledge(stack):
     )
     assert denied.status_code == 403
     assert client.get("/api/v1/devices").status_code == 200
+    blocked = client.post(
+        "/api/v1/access-points/approve",
+        json={"role": "access-point", "site": "Rotterdam", "accessPoints": [{"name": "ap-1"}]},
+        headers={"X-CSRF-Token": reader},
+    )
+    assert blocked.status_code == 403
 
 
 def test_webhook_and_upstream_failures(stack, monkeypatch):
@@ -839,3 +853,69 @@ def test_missing_token_is_a_clear_error(stack):
     assert TOKEN not in failed.text
     health = stack["client"].get("/api/v1/health").json()
     assert health["upstreams"]["netbox"]["status"] == "unconfigured"
+
+
+def test_access_point_page_and_netbox_approve(stack, monkeypatch):
+    csrf = _auth(stack)
+    stack["fleet"].cache.put("ap-snapshot", {"degraded": False, "rows": [{
+        "name": "ap-1",
+        "serial": "FGLNEW",
+        "wlc": "wlc-1",
+        "model": "C9120AXI",
+        "ip": "10.8.0.10",
+        "ios": "17.12.1",
+        "status": "down",
+        "clients": 3,
+        "mac": "aa:bb",
+        "location": "floor-1",
+        "siteTag": "Rotterdam",
+        "site": "",
+        "netboxSite": "",
+        "radios": [{"slot": "0", "utilization": 0.81, "channel": 36, "clients": 3}],
+        "ssids": [],
+        "neighborSwitch": "core-1",
+        "neighborPort": "Gi1/0/1",
+        "uptimeSeconds": 120,
+    }]})
+    detail = stack["client"].get("/api/v1/devices/ap%3Aap-1")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["hostname"] == "ap-1"
+    assert body["inNetbox"] is False
+    assert body["role"] == "Access point"
+    assert body["health"] == "critical"
+    assert any(item["title"] == "Access point down" for item in body["healthItems"])
+    assert any(item["source"] == "telegraf" and item["severity"] == "warning" for item in body["healthItems"])
+    assert body["healthPanel"]["accessPoint"]["wlc"] == "wlc-1"
+    assert body["healthPanel"]["accessPoint"]["serial"] == "FGLNEW"
+    assert body["healthPanel"]["accessPoint"]["clients"] == 3
+    assert body["neighbors"][0]["remoteName"] == "core-1"
+    assert body["neighbors"][0]["protocol"] == "cdp"
+
+    calls = []
+
+    def fake(self, ap, **kwargs):
+        calls.append((ap["name"], kwargs.get("role"), kwargs.get("site"), ap.get("serial")))
+        return {"device_id": 42, "name": ap["name"]}
+
+    monkeypatch.setattr("ie_config.fleet.NetBoxWriter.approve_access_point", fake)
+    created = stack["client"].post(
+        "/api/v1/access-points/approve",
+        json={
+            "role": "access-point",
+            "site": "Rotterdam",
+            "accessPoints": [
+                {"name": "ap-1", "wlc": "wlc-1", "serial": "FGLNEW", "model": "C9120AXI", "ip": "10.8.0.10", "ios": "17.12.1"},
+                {"name": "ap-old", "wlc": "wlc-1", "serial": "ABCDEF123456"},
+            ],
+        },
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert created.status_code == 200, created.text
+    results = {row["name"]: row["status"] for row in created.json()["results"]}
+    assert results == {"ap-1": "created", "ap-old": "skipped"}
+    assert calls == [("ap-1", "access-point", "Rotterdam", "FGLNEW")]
+    audit = stack["client"].get("/api/v1/settings/audit?app=netbox")
+    assert audit.status_code == 200, audit.text
+    actions = [row["action"] for row in audit.json()["entries"] if row["action"] == "ap-approve"]
+    assert len(actions) == 2

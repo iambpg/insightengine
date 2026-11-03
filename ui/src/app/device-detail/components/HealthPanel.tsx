@@ -9,6 +9,16 @@ const TONE: Record<HealthGroup['status'], string> = {
   unsupported: 'text-muted-foreground',
 };
 
+function Fact({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-mono-data">{value}</dd>
+    </div>
+  );
+}
+
 function pct(value: number | null): string {
   if (value === null || Number.isNaN(value)) return '—';
   return `${Math.round(value * 100)}%`;
@@ -48,11 +58,22 @@ export default function HealthPanel({ panel }: { panel: DeviceHealthPanel }) {
           <p className="font-medium">Access point</p>
           <p className="mt-1 text-muted-foreground">{panel.accessPoint.note}</p>
           <p className="mt-2">
-            Status {panel.accessPoint.status} · clients {panel.accessPoint.clients ?? '—'} · uptime{' '}
+            {panel.accessPoint.wlc ? `Joined WLC ${panel.accessPoint.wlc} · ` : ''}
+            status {panel.accessPoint.status} · clients {panel.accessPoint.clients ?? '—'} · uptime{' '}
             {panel.accessPoint.uptimeSeconds === null || panel.accessPoint.uptimeSeconds === undefined
               ? '—'
               : `${Math.round(panel.accessPoint.uptimeSeconds / 60)} min`}
           </p>
+          <dl className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+            <Fact label="Model" value={panel.accessPoint.model} />
+            <Fact label="Serial" value={panel.accessPoint.serial} />
+            <Fact label="IP" value={panel.accessPoint.ip} />
+            <Fact label="MAC" value={panel.accessPoint.mac} />
+            <Fact label="Location" value={panel.accessPoint.location} />
+            <Fact label="Software" value={panel.accessPoint.ios} />
+            <Fact label="Site tag" value={panel.accessPoint.siteTag} />
+            <Fact label="CDP neighbour" value={panel.accessPoint.neighborSwitch ? `${panel.accessPoint.neighborSwitch} ${panel.accessPoint.neighborPort || ''}`.trim() : ''} />
+          </dl>
           {panel.accessPoint.radios.length > 0 ? (
             <ul className="mt-2 space-y-1 font-mono-data text-xs">
               {panel.accessPoint.radios.map((radio) => (

@@ -11,6 +11,7 @@ export interface TopoNode {
   y: number;
   current?: boolean;
   href?: string;
+  healthHref?: string;
 }
 
 export interface TopoLink {
@@ -42,6 +43,13 @@ export function kindFromForm(form: string | undefined | null): DeviceKind {
 /** Last resort when a neighbour has no NetBox or Netdisco record. Hostnames are not classified. */
 export function kindForUnlinkedNeighbour(): DeviceKind {
   return 'generic';
+}
+
+export function healthNodeHref(href: string | undefined, health: DeviceHealth): string | undefined {
+  if (!href) return undefined;
+  const severity = health === 'critical' || health === 'warning' ? health : health === 'unreachable' ? 'critical' : '';
+  const extra = severity ? `tab=health&severity=${severity}` : 'tab=health';
+  return `${href}&${extra}`;
 }
 
 export function deviceNodeHref(live: boolean, id: string | undefined, formFactor: string): string | undefined {
@@ -107,6 +115,7 @@ export function buildDeviceTopology(d: DeviceDetailData, devices: DeviceRow[] = 
       y: H / 2,
       current: true,
       href: deviceNodeHref(live, d.id, d.faceplate.form_factor),
+      healthHref: healthNodeHref(deviceNodeHref(live, d.id, d.faceplate.form_factor), d.health),
     },
   ];
   const links: TopoLink[] = [];
@@ -124,6 +133,10 @@ export function buildDeviceTopology(d: DeviceDetailData, devices: DeviceRow[] = 
       x: W / 2 + Math.cos(angle) * 320,
       y: H / 2 + Math.sin(angle) * 140,
       href: neighbourNodeHref(live, deviceId, match?.formFactor, linked ? undefined : name),
+      healthHref: healthNodeHref(
+        neighbourNodeHref(live, deviceId, match?.formFactor, linked ? undefined : name),
+        info.state === 'fault' ? 'critical' : info.state === 'warning' ? 'warning' : 'healthy',
+      ),
     });
     links.push({ id: `l-${name}`, from: 'self', to: `n-${name}`, label: `${info.local} ↔ ${info.port}`, state: info.state });
   });
@@ -158,6 +171,7 @@ export function buildSiteTopology(devices: DeviceRow[], live = false, currentHos
     y,
     current: currentHost ? d.hostname === currentHost : false,
     href: deviceNodeHref(live, d.id, d.formFactor),
+    healthHref: healthNodeHref(deviceNodeHref(live, d.id, d.formFactor), d.health),
   });
 
   nodes.push({ id: 'wan', label: 'ISP uplink', sub: 'WAN', kind: 'cloud', health: 'healthy', x: W / 2, y: 40 });

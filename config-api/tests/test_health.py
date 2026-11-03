@@ -11,8 +11,12 @@ from ie_config.health import (  # noqa: E402
     NOT_SUPPORTED,
     aireos_psu_states,
     build_health_panel,
+    classify_health,
     classify_profile,
+    explain_health,
+    match_access_point,
     page_rows,
+    suggest_ap_site,
 )
 
 
@@ -69,6 +73,104 @@ def test_access_point_pages_do_not_return_the_whole_fleet():
     assert page["rows"] == []
     first = page_rows(rows, page=1, page_size=50, q="ap-0007")
     assert [row["name"] for row in first["rows"]] == ["ap-0007"]
+
+
+def test_explain_health_matches_the_badge_and_lists_every_cause():
+    assert classify_health(None, None, None, 0, 0, 0) == "unreachable"
+    assert classify_health(0, 1, 10, 2, 0, 4) == "unreachable"
+    assert classify_health(1, 1, 4000, 2, 0, 4) == "unreachable"
+    empty = explain_health({"probe": 1, "snmpUp": 1, "lastAgeS": 10, "portsFault": 0, "portsWarn": 0, "portsTotal": 4})
+    assert empty == {"health": "healthy", "items": []}
+    rich = explain_health({
+        "probe": 1,
+        "snmpUp": 1,
+        "lastAgeS": 12,
+        "since": "12s ago",
+        "ports": [
+            {"name": "Gi1/0/2", "state": "fault", "errors": 120, "utilisation": 10},
+            {"name": "Te1/1/1", "state": "up", "errors": 0, "utilisation": 91, "alias": "uplink"},
+        ],
+        "cpu": 96,
+        "memoryPercent": 91,
+        "tempC": 76,
+        "fans": ["normal", "warning"],
+        "psus": ["normal", "critical"],
+        "apDown": 2,
+        "alerts": [
+            {"id": "fp", "severity": "info", "title": "Firmware notice", "detail": "behind", "status": "open", "ageSeconds": 60, "target": "system"},
+            {"id": "ack", "severity": "critical", "title": "Silenced", "detail": "", "status": "acknowledged", "ageSeconds": 60},
+        ],
+    })
+    assert rich["health"] == "critical"
+    titles = [item["title"] for item in rich["items"]]
+    assert "Interface down" in titles
+    assert "Interface input errors" in titles
+    assert "Critical-path utilization high" in titles
+    assert "CPU high" in titles
+    assert "Memory high" in titles
+    assert "Temperature high" in titles
+    assert "Fan degraded" in titles
+    assert "Power supply degraded" in titles
+    assert "Access points down" in titles
+    assert "Firmware notice" in titles
+    assert "Silenced" not in titles
+    info = next(item for item in rich["items"] if item["title"] == "Firmware notice")
+    assert info["severity"] == "info"
+    assert info["source"] == "alertmanager"
+    down = next(item for item in rich["items"] if item["title"] == "Interface down")
+    assert down["value"] == "down" and down["threshold"] == "up" and down["since"] == "12s ago"
+    only_info = explain_health({"alerts": [{"id": "i", "severity": "info", "title": "Note", "status": "open", "detail": "", "since": "1d"}]})
+    assert only_info["health"] == "healthy"
+    assert only_info["items"][0]["title"] == "Note"
+    ap = explain_health({"apStatus": "down", "apName": "ap-1", "radios": [{"slot": "1", "utilization": 0.8}]})
+    assert ap["health"] == "critical"
+    assert {item["source"] for item in ap["items"]} == {"telegraf"}
+
+
+def test_approve_access_point_writes_cisco_inventory():
+    from ie_config.discovery import NetBoxWriter
+
+    class Fake(NetBoxWriter):
+        def __init__(self):
+            self.calls = []
+
+        def _req(self, method, path, body=None):
+            self.calls.append((method, path, body))
+            if method == "GET":
+                return {"results": []}
+            if path == "/api/dcim/devices/":
+                return {"id": 9, "name": body["name"]}
+            return {"id": 3}
+
+    writer = Fake()
+    made = writer.approve_access_point(
+        {"name": "ap-1", "model": "C9120AXI", "serial": "FGL1", "ip": "10.8.0.10", "ios": "17.12.1", "wlc": "wlc-1"},
+        role="access-point",
+        site="Rotterdam",
+    )
+    assert made["device_id"] == 9
+    posted = next(body for method, path, body in writer.calls if method == "POST" and path == "/api/dcim/devices/")
+    assert posted["serial"] == "FGL1"
+    assert posted["custom_fields"]["ie_parent_wlc"] == "wlc-1"
+    assert posted["custom_fields"]["ie_sw_version"] == "17.12.1"
+    assert posted["tags"][0]["slug"].startswith("wlc-")
+    manufacturer = next(body for method, path, body in writer.calls if method == "POST" and path.startswith("/api/dcim/manufacturers/"))
+    assert manufacturer["name"] == "Cisco" and manufacturer["slug"] == "cisco"
+    role = next(body for method, path, body in writer.calls if method == "POST" and "/device-roles/" in path)
+    assert role["slug"] == "access-point"
+
+
+def test_access_point_netbox_match_prefers_serial_then_name():
+    devices = [
+        {"id": "1", "name": "ap-1", "serial": "OTHER", "site_name": "Rotterdam"},
+        {"id": "2", "name": "sw-1", "serial": "FGL1", "site_name": "Amsterdam"},
+    ]
+    assert match_access_point(devices, {"name": "ap-1", "serial": "FGL1"})["id"] == "2"
+    assert match_access_point(devices, {"name": "ap-1", "serial": ""})["id"] == "1"
+    assert match_access_point(devices, {"name": "missing", "serial": ""}) is None
+    assert suggest_ap_site({"siteTag": "rotterdam", "location": "floor"}, [{"name": "Rotterdam", "slug": "rotterdam"}]) == "Rotterdam"
+    assert suggest_ap_site({"location": "Amsterdam office"}, [{"name": "Amsterdam", "slug": "ams"}]) == "Amsterdam"
+    assert suggest_ap_site({"site": "Lab"}, []) == "Lab"
 
 
 def test_module_map_picks_wlc_platform_and_skips_aps():

@@ -10,6 +10,7 @@ import Faceplate from '@/components/faceplate/Faceplate';
 import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { devicePath } from '@/lib/apiMode';
+import { deviceHealthPath } from '@/lib/deviceHealthPath';
 import { buildFaceplateFor } from '@/lib/mockData';
 import type { DeviceRow, SiteRow } from '@/lib/types';
 
@@ -91,7 +92,7 @@ export default function SiteDetail({ site, loading = false }: { site: SiteRow | 
                   <Link href={devicePath(d.id, d.formFactor)} className="block truncate font-mono-data text-sm font-semibold hover:text-primary hover:underline">{d.hostname}</Link>
                   <p className="text-xs text-muted-foreground">{d.role} · <span className="font-mono-data">{d.mgmtIp}</span></p>
                 </div>
-                <HealthBadge health={d.health} />
+                <HealthBadge health={d.health} href={deviceHealthPath(d.id, d.formFactor, d.health)} />
               </div>
               <div className="rounded-md bg-gradient-to-b from-secondary to-background p-2">
                 <Faceplate device={buildFaceplateFor(d.formFactor)} compact />

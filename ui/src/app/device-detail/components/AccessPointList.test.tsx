@@ -5,8 +5,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/apiClient';
 import AccessPointList from './AccessPointList';
 
+vi.mock('next/link', () => ({
+  default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
+}));
+
+vi.mock('@/lib/apiMode', () => ({
+  isMockMode: () => false,
+  devicePath: (id: string, form?: string) => `/device-detail?id=${encodeURIComponent(id)}${form ? `&form=${encodeURIComponent(form)}` : ''}`,
+}));
+
 vi.mock('@/lib/apiClient', () => ({
-  api: { listAccessPoints: vi.fn(), getAccessPointDetail: vi.fn() },
+  api: {
+    listAccessPoints: vi.fn(),
+    getAccessPointDetail: vi.fn(),
+    discoveryCatalog: vi.fn(),
+    approveAccessPoints: vi.fn(),
+  },
 }));
 
 const row = {
@@ -31,19 +45,17 @@ describe('AccessPointList', () => {
     vi.mocked(api.getAccessPointDetail).mockReset();
   });
 
-  it('shows the NetBox site and opens inventory, radios and events', async () => {
+  it('links the access point to its device page and can add it to NetBox', async () => {
     vi.mocked(api.listAccessPoints).mockResolvedValue({ rows: [row], total: 1, page: 1, pageSize: 50 });
-    vi.mocked(api.getAccessPointDetail).mockResolvedValue({
-      accessPoint: row,
-      events: [{ t: 1700000000, what: 'channel', ap: row.name, radio: '0', from: '40', to: '36' }],
-      degraded: [],
-    });
+    vi.mocked(api.discoveryCatalog).mockResolvedValue({ roles: ['Access point'], sites: ['Rotterdam'], platforms: [], roleChoices: [{ name: 'Access point', slug: 'access-point' }] });
     const user = userEvent.setup();
     render(<AccessPointList wlc="wlc-9800" />);
-    expect(await screen.findByText('ap-ams01-114')).toBeInTheDocument();
+    const link = await screen.findByRole('link', { name: 'ap-ams01-114' });
+    expect(link).toHaveAttribute('href', '/device-detail?id=ap%3Aap-ams01-114&form=ceiling-ap');
     expect(screen.getByText('sw-ams01 Gi1/0/14')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'ap-ams01-114' }));
-    expect(await screen.findByText(/40 → 36/)).toBeInTheDocument();
-    expect(screen.getByText(/corp band/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Healthy/ })).toHaveAttribute('href', expect.stringContaining('tab=health'));
+    await user.click(screen.getByRole('button', { name: 'Add to NetBox' }));
+    expect(await screen.findByRole('dialog', { name: 'Add to NetBox' })).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Role' })).toHaveValue('Access point');
   });
 });

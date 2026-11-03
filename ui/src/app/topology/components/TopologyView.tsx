@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import { isMockMode } from '@/lib/apiMode';
+import { deviceHealthPath } from '@/lib/deviceHealthPath';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
@@ -104,7 +105,9 @@ function Diagram({ nodes, links, W, H, title }: { nodes: TopoNode[]; links: Topo
                 />
               )}
               <DeviceArt kind={n.kind} x={n.x - NODE_W / 2} y={n.y - NODE_H / 2} w={NODE_W} h={NODE_H} />
-              <circle cx={n.x + ringW / 2 - 4} cy={n.y - NODE_H / 2 - 1} r="5" fill={HEALTH_STROKE[n.health]} stroke="var(--card)" strokeWidth="1.5" />
+              {n.healthHref ? null : (
+                <circle cx={n.x + ringW / 2 - 4} cy={n.y - NODE_H / 2 - 1} r="5" fill={HEALTH_STROKE[n.health]} stroke="var(--card)" strokeWidth="1.5" />
+              )}
               <text x={n.x} y={n.y + NODE_H / 2 + (n.kind === 'chassis' ? 22 : 17)} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--foreground)" className="font-mono-data">
                 {n.label.length > 20 ? `${n.label.slice(0, 19)}…` : n.label}
               </text>
@@ -118,12 +121,25 @@ function Diagram({ nodes, links, W, H, title }: { nodes: TopoNode[]; links: Topo
               )}
             </g>
           );
-          return n.href ? (
+          const dot = (
+            <circle cx={n.x + ringW / 2 - 4} cy={n.y - NODE_H / 2 - 1} r="8" fill={HEALTH_STROKE[n.health]} stroke="var(--card)" strokeWidth="1.5" />
+          );
+          const body = n.href ? (
             <Link key={n.id} href={n.href} aria-label={`Open ${n.label} faceplate`}>
               {inner}
             </Link>
           ) : (
             <g key={n.id}>{inner}</g>
+          );
+          return (
+            <g key={`node-${n.id}`}>
+              {body}
+              {n.healthHref ? (
+                <Link href={n.healthHref} aria-label={`Open health for ${n.label}`}>
+                  {dot}
+                </Link>
+              ) : null}
+            </g>
           );
         })}
       </svg>
@@ -204,7 +220,7 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
-              <HealthBadge health={device.health} />
+              <HealthBadge health={device.health} href={deviceHealthPath(device.id || deviceKey, device.faceplate.form_factor, device.health)} />
               <span className="font-mono-data text-xs text-muted-foreground">{device.mgmtIp} · {device.modelFamily}</span>
               <span className="font-mono-data text-xs text-muted-foreground">Serial {device.serialMasked}</span>
             </div>

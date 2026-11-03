@@ -4,6 +4,8 @@ import type { RangeKey } from '@/lib/mockData';
 import { ApiError } from '@/lib/apiError';
 import type {
   ActionResult,
+  AccessPointApproveBody,
+  AccessPointApproveResult,
   ApproveBody,
   AuditPage,
   AuditQuery,
@@ -176,6 +178,10 @@ export async function approveDevice(
   body: ApproveBody
 ): Promise<{ id: string; ok: boolean }> {
   return request(`${API}/discovery/${encodeURIComponent(id)}/approve`, { method: 'POST', body });
+}
+
+export async function approveAccessPoints(body: AccessPointApproveBody): Promise<AccessPointApproveResult> {
+  return request(`${API}/access-points/approve`, { method: 'POST', body });
 }
 
 export async function rejectDevice(id: string): Promise<{ id: string; ok: boolean }> {

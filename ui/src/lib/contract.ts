@@ -223,6 +223,27 @@ export interface ApproveBody {
   platform?: string;
 }
 
+export interface AccessPointApproveBody {
+  role: string;
+  site: string;
+  platform?: string;
+  accessPoints: {
+    name: string;
+    wlc?: string;
+    model?: string;
+    serial?: string;
+    ip?: string;
+    ios?: string;
+    location?: string;
+    siteTag?: string;
+  }[];
+}
+
+export interface AccessPointApproveResult {
+  ok: boolean;
+  results: { name: string; wlc?: string; status: 'created' | 'skipped' | 'failed' | string; reason: string; deviceId: string }[];
+}
+
 /** GET /api/v1/discovery/catalog — live NetBox names for the approve form. */
 export interface DiscoveryRoleChoice {
   name: string;
