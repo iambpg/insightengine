@@ -36,7 +36,7 @@ SNMP on a 9800 does not give useful per-client RSSI/SNR or per-radio noise and i
 
 `telegraf-wlc` listens for gRPC dial-out on port **57500** (`inputs.cisco_telemetry_mdt`, `service_address = ":${IE_MDT_PORT}"`). `IE_MDT_PORT` and `PORT_MDT` default to 57500 and can be changed together. Set `IE_MDT_RECEIVER` to an address the controller can route to. The generated line is `receiver ip address <server> 57500`.
 
-Open **TCP 57500** on the collector for that dial-out. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. Host port 57500 used to publish telegraf-host `/metrics` (`PORT_TELEGRAF` → container 9273). That publish is now **57501**, so it does not bind the MDT port. Prometheus still scrapes `telegraf-host:9273` on the docker network. gNMI dial-in does not use 57500: Telegraf dials the controller on port 9339.
+Open **TCP 57500** on the collector for that dial-out. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. **57500** is the only Telegraf host port. Telegraf's Prometheus `/metrics` output is not published (it used to be host 57500, then 57501). Prometheus scrapes `telegraf-host:9273` and `telegraf-wlc:9273` on the docker network. gNMI dial-in does not use 57500: Telegraf dials the controller on port 9339.
 
 On the device page, **Telemetry subscription** copies the IOS-XE CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you.
 

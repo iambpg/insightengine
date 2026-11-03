@@ -37,9 +37,10 @@
 # host, client, or certificates that already exist. A published port is rewritten
 # only when it is still a previous default (PORT_HTTP 80, 8080, or 8086 becomes
 # 18086; PORT_NETBOX 8444 or 8080 becomes 8092; PORT_ALERTMANAGER 9093 becomes
-# 8086). Any other port, including PORT_HTTPS=57400, is left. --dry-run with
-# --upgrade-env prints the plan and writes nothing. A partial or corrupt .env
-# is refused.
+# 8086). Any other port, including PORT_HTTPS=57400, is left. PORT_TELEGRAF is
+# removed when it is present and is not added. Telegraf /metrics is not a host
+# port. --dry-run with --upgrade-env prints the plan and writes nothing. A
+# partial or corrupt .env is refused.
 #
 # WHICH CLIENT this server is for, and NEW INSTALL vs MOVE FROM THE OLD STACK, are NOT
 # asked here: open the first-run page  https://<PUBLIC_HOST>[:PORT_HTTPS]/setup/
@@ -130,6 +131,35 @@ getenv_val() {  # read a value back from .env (unquoted). Last assignment wins.
   local line file
   file="${ENV_FILE:-.env}"
   line="$(grep -E "^$1=" "$file" | tail -n1 || true)"; line="${line#*=}"; line="${line#\'}"; line="${line%\'}"; printf '%s' "$line"
+}
+# drop_env_key KEY DRY : remove KEY= from .env. A missing key is ignored.
+# dry=1 prints the plan and does not write. Used for PORT_TELEGRAF, which used
+# to publish telegraf-host /metrics and is no longer a host port.
+drop_env_key() {
+  local key=$1 dry=$2 cur="" file tmp
+  file="${ENV_FILE:-.env}"
+  [ -f "$file" ] || return 0
+  if ! grep -qE "^${key}=" "$file"; then
+    return 0
+  fi
+  cur="$(getenv_val "$key")"
+  if [ "$dry" = 1 ]; then
+    say "would drop ${key} (was ${cur}). Telegraf /metrics is not published on the host. Prometheus scrapes it on the docker network."
+    return 0
+  fi
+  tmp="$(mktemp "${file}.XXXXXX")"
+  KEY="$key" awk '
+    BEGIN { k = ENVIRON["KEY"] }
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      if (index(line, k "=") == 1) next
+      print line
+    }
+  ' "$file" > "$tmp"
+  mv "$tmp" "$file"
+  own_private_env "$file"
+  say "dropped ${key} (was ${cur}). Telegraf /metrics is not published on the host. Prometheus scrapes it on the docker network."
 }
 
 # secret files must have NO trailing newline
@@ -339,10 +369,10 @@ plan_published_ports() {
   plan_one_port PORT_OXIDIZED 8888 18888 tcp
   plan_one_port PORT_SNMP_EXPORTER 9116 19116 tcp
   plan_one_port PORT_BLACKBOX 9115 19115 tcp
-  # 57500 is the MDT dial-out listener. Telegraf metrics take the next port.
+  # 57500 is the only Telegraf host port: the MDT dial-out listener.
+  # /metrics is scraped on the docker network and is not published.
   # 57400 is left for UI HTTPS when 443 is taken; this planner does not use it.
   plan_one_port PORT_MDT 57500 57510 tcp
-  plan_one_port PORT_TELEGRAF 57501 57502 tcp
   plan_one_port PORT_SYSLOG 514 5514 both
   plan_one_port PORT_TRAPS 162 1162 udp
 }
@@ -361,7 +391,7 @@ EOF
   else setenv HTTPS_PORT_SUFFIX ":${https}"; fi
 }
 print_port_table() {
-  local http https http3 grafana prom am ap nd ox nb snmp bb tel mdt syslog traps origin
+  local http https http3 grafana prom am ap nd ox nb snmp bb mdt syslog traps origin
   http="$(getenv_val PORT_HTTP)"; http="${http:-18086}"
   https="$(getenv_val PORT_HTTPS)"; https="${https:-443}"
   http3="$(getenv_val PORT_HTTP3)"; http3="${http3:-443}"
@@ -374,7 +404,6 @@ print_port_table() {
   nb="$(getenv_val PORT_NETBOX)"; nb="${nb:-8092}"
   snmp="$(getenv_val PORT_SNMP_EXPORTER)"; snmp="${snmp:-9116}"
   bb="$(getenv_val PORT_BLACKBOX)"; bb="${bb:-9115}"
-  tel="$(getenv_val PORT_TELEGRAF)"; tel="${tel:-57501}"
   mdt="$(getenv_val PORT_MDT)"; mdt="${mdt:-57500}"
   syslog="$(getenv_val PORT_SYSLOG)"; syslog="${syslog:-514}"
   traps="$(getenv_val PORT_TRAPS)"; traps="${traps:-162}"
@@ -390,8 +419,8 @@ print_port_table() {
   say "  NetBox            https://${PUBLIC_HOST}:${nb}/"
   say "  SNMP exporter     http://${PUBLIC_HOST}:${snmp}/"
   say "  blackbox exporter http://${PUBLIC_HOST}:${bb}/"
-  say "  Telegraf metrics  http://${PUBLIC_HOST}:${tel}/metrics"
-  say "  Telegraf MDT      tcp ${mdt} (9800 and cEdge dial-out; not UI HTTPS)"
+  say "  Telegraf MDT      tcp ${mdt} (9800 and cEdge dial-out; the only Telegraf host port)"
+  say "  Telegraf metrics  not published (Prometheus scrapes telegraf-host:9273 on the docker network)"
   say "  syslog            ${syslog}/tcp+udp"
   say "  SNMP traps        ${traps}/udp"
 }
@@ -449,8 +478,9 @@ align_published_ports() {
   align_key PORT_BLACKBOX 9115
   align_key PORT_MDT 57500
   align_key IE_MDT_PORT 57500
-  # 57500 used to be the telegraf-host metrics publish. It is the MDT listener now.
-  align_key PORT_TELEGRAF 57501 57500
+  # 57500, then 57501, used to publish telegraf-host /metrics. Drop any leftover
+  # PORT_TELEGRAF. A missing key is left missing. The upgrade does not fail.
+  drop_env_key PORT_TELEGRAF "$dry"
   local https
   https="$(getenv_val PORT_HTTPS)"
   if [ -z "$https" ]; then

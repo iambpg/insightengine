@@ -80,6 +80,22 @@ def write_sim(path: Path) -> None:
     sort_snmprec(path)
 
 
+def wait_sim(name: str = "ie-exp-sim", seconds: int = 30) -> None:
+    # snmpsim writes its listen line to stderr. docker logs keeps that stream
+    # separate, so merge it or the wait never sees the line.
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        logs = subprocess.check_output(
+            ["sudo", "docker", "logs", name],
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+        if "Listening at UDP" in logs:
+            return
+        time.sleep(0.3)
+    raise SystemExit("timed out waiting for %s to listen" % name)
+
+
 def wait_http(url: str, seconds: int = 40) -> None:
     deadline = time.time() + seconds
     while time.time() < deadline:
@@ -166,6 +182,7 @@ def main() -> int:
         "--data-dir=/data", "--agent-udpv4-endpoint=127.0.0.1:1165",
         "--process-user=nobody", "--process-group=nogroup",
     ])
+    wait_sim()
     run([
         "sudo", "docker", "run", "-d", "--name", "ie-exp-snmp", "--network", "host",
         "-e", "SNMP_V2_COMMUNITY=public",
