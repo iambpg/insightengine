@@ -656,14 +656,18 @@ def snmp_place(metric):
 
 
 def split_index(index):
+    # MAC is the first six dotted index bytes. The next byte is the radio slot.
+    # Telegraf 1.38.3 uses go.starlark.net with while loops disabled, so the
+    # walk is a for-loop over range() bounded by that six-byte prefix.
     parts = []
     if index:
         parts = index.split(".")
+    limit = len(parts)
+    if limit > 6:
+        limit = 6
     mac_parts = []
-    i = 0
-    while i < len(parts) and i < 6:
+    for i in range(limit):
         mac_parts.append(parts[i])
-        i = i + 1
     mac = join_dot(mac_parts)
     radio = "0"
     if len(parts) > 6:

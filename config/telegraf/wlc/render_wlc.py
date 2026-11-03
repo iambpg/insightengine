@@ -30,8 +30,19 @@ import urllib.request
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
-if str(_HERE) not in sys.path:
-    sys.path.insert(0, str(_HERE))
+# Image build copies catalog.py next to this file (/usr/local/bin). Compose and
+# upgrade.sh also mount the checkout at /etc/telegraf. The directory that
+# contains this script wins when both copies exist.
+_CATALOG_DIR = Path(os.environ.get("IE_WLC_CATALOG_DIR") or "/etc/telegraf")
+_catalog_dirs = []
+for _candidate in (_HERE, _CATALOG_DIR):
+    if _candidate.is_dir():
+        _text = str(_candidate)
+        if _text not in _catalog_dirs:
+            _catalog_dirs.append(_text)
+for _text in reversed(_catalog_dirs):
+    if _text not in sys.path:
+        sys.path.insert(0, _text)
 import catalog  # noqa: E402
 
 # Columns only. Full-table walks are intentionally not used.

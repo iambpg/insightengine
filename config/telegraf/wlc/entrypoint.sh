@@ -5,6 +5,9 @@
 # not open the dial-out port.
 set -eu
 umask 077
+# catalog.py is copied next to render_wlc.py and is also on the /etc/telegraf
+# checkout mount (compose and upgrade.sh).
+export PYTHONPATH="/usr/local/bin:/etc/telegraf${PYTHONPATH:+:$PYTHONPATH}"
 # Dial-out port. 57500 is where Telegraf is reached. 57400 is UI HTTPS.
 IE_MDT_PORT="${IE_MDT_PORT:-57500}"
 export IE_MDT_PORT
