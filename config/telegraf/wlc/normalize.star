@@ -349,6 +349,11 @@ def radio_metric(metric, blob):
     if rogues != None:
         out.fields["rogue_neighbors"] = rogues
         wrote = True
+    radio_oper = tag_or_field(metric, ("oper_state", "oper-state", "radio_oper", "ap_operation_state"))
+    radio_up = oper_up(radio_oper)
+    if radio_up != None:
+        out.fields["oper_up"] = radio_up
+        wrote = True
     if not wrote:
         return None
     out.time = metric.time
@@ -369,10 +374,13 @@ def ap_metric(metric):
     if reason:
         out.tags["reboot_reason"] = str(reason)
     up = oper_up(oper)
+    # No state leaf is not the same as down. The API treats a fresh info
+    # sample as online. Forcing 0 here marked every joined AP offline.
     if up != None:
         out.fields["oper_up"] = up
-    else:
-        out.fields["oper_up"] = 0
+    mac = tag_or_field(metric, ("wtp_mac", "wtp-mac", "mac", "ethernet_mac", "wtp_enet_mac"))
+    if mac:
+        out.tags["mac"] = str(mac)
     disconnects = num(tag_or_field(metric, ("disconnects",)))
     if disconnects != None:
         out.fields["disconnects"] = disconnects
@@ -401,7 +409,11 @@ def ap_info(metric, ap):
     info = Metric("ie_wlc_ap")
     copy_place(metric, info)
     info.tags["ap"] = ap
-    info.tags["ap_name"] = ap
+    if not _mac_text(ap):
+        info.tags["ap_name"] = ap
+    mac = tag_or_field(metric, ("wtp_mac", "wtp-mac", "mac", "ethernet_mac", "wtp_enet_mac"))
+    if mac:
+        info.tags["mac"] = str(mac)
     if model:
         info.tags["model"] = str(model)
     if serial:
@@ -832,18 +844,33 @@ def num(value):
     return None
 
 
+def _mac_text(value):
+    text = str(value).strip().lower()
+    if len(text) == 17 and (text[2] == ":" or text[2] == "-"):
+        return True
+    if len(text) == 14 and text[4] == "." and text[9] == ".":
+        return True
+    return False
+
+
 def oper_up(value):
+    # 9800 kvgpb sends the YANG enum, often ewlc-ap-state-registered or ap-up.
+    # AireOS SNMP sends associated(1). run is the radio oper word on 17.15.
     if value == None:
         return None
     if type(value) == "int" or type(value) == "float":
         if value == 1 or value == 2 or value == 4:
             return 1
         return 0
-    text = str(value).lower()
-    if text == "ap-up" or text == "registered" or text == "up" or text == "enabled":
-        return 1
+    text = str(value).lower().replace("_", "-")
     if text == "":
         return None
+    if "not-registered" in text or "deregister" in text or "disassoc" in text or "ap-down" in text:
+        return 0
+    if text == "down" or text == "offline":
+        return 0
+    if "registered" in text or text == "ap-up" or text == "up" or text == "enabled" or text == "run" or text == "associated" or text.endswith("-up"):
+        return 1
     return 0
 
 

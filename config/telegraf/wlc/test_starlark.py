@@ -275,7 +275,8 @@ class StarlarkDialectTests(unittest.TestCase):
                     "ie_wlc_radio,index=9.8.7,wlc=lab,site=hq channel=1i",
                     "ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-1,ms_mac_address=aabbccddeeff most_recent_rssi=-62i,most_recent_snr=28i",
                     "ie_wlc_rogue_raw,index=aabb,wlc=lab value=1i",
-                    'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",device_detail/static_info/ap_models/model="C9120AXI-B",device_detail/static_info/board_data/wtp_serial_num="FGL2417ABC1",device_detail/wtp_version/sw_version="17.15.1.4",wtp_ip="10.8.0.10",ap_location/location="floor-1",ap_mode_data/wtp_mode="local",tag_info/site_tag/site_tag_name="site-a",tag_info/policy_tag_info/policy_tag_name="pol-a",tag_info/rf_tag/rf_tag_name="rf-a",ap_state/ap_operation_state="ap-up"',
+                    'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",wtp_mac="00:11:22:33:44:55",device_detail/static_info/ap_models/model="C9120AXI-B",device_detail/static_info/board_data/wtp_serial_num="FGL2417ABC1",device_detail/wtp_version/sw_version="17.15.1.4",wtp_ip="10.8.0.10",ap_location/location="floor-1",ap_mode_data/wtp_mode="local",tag_info/site_tag/site_tag_name="site-a",tag_info/policy_tag_info/policy_tag_name="pol-a",tag_info/rf_tag/rf_tag_name="rf-a",ap_state/ap_operation_state="ewlc-ap-state-registered"',
+                    'ie_wlc_radio_mdt,wlc=lab,site=hq,path=radio-oper-data wtp_mac="00:11:22:33:44:55",radio_slot_id="1",oper_state="run",current_channel=36i',
                     "",
                 ]),
                 encoding="utf-8",
@@ -324,6 +325,8 @@ class StarlarkDialectTests(unittest.TestCase):
         self.assertIn("policy_tag=pol-a", text)
         self.assertIn("rf_tag=rf-a", text)
         self.assertIn("ap_name=AP-1", text)
+        self.assertIn("mac=00:11:22:33:44:55", text)
+        self.assertIn("oper_up=1", text)
 
     def test_host_api_and_syslog_configs_parse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
