@@ -65,6 +65,14 @@ describe('realistic faceplates', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     const face = screen.getByTestId('realistic-faceplate');
     expect(face).toHaveAttribute('data-faceplate-source', source);
+    expect(face).toHaveAttribute('viewBox', '0 0 1000 200');
+    expect(face).toHaveStyle({ position: 'absolute', left: '0px', top: '0px', width: '1000px', height: '200px' });
+    const picture = screen.getByTestId('faceplate-image');
+    expect(picture).toHaveAttribute('width', '1000');
+    expect(picture).toHaveAttribute('height', '200');
+    expect(picture).toHaveStyle({ objectFit: 'none', width: '1000px', height: '200px', pointerEvents: 'none' });
+    const stage = screen.getByTestId('faceplate-stage');
+    expect(stage).toHaveStyle({ padding: '0px', width: '1000px', height: '200px' });
     await user.click(face);
     expect(onSelect).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /Gi1\/0\/1, Up/ }));

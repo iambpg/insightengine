@@ -146,7 +146,9 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
     .map((s) => `${memberCounts[s]} ${STATE_LABEL[s].toLowerCase()}`)
     .join(' · ');
 
-  if (art && !compact && device.form_factor !== 'switch-stack') {
+  // A photo or stencil is shown only when its port map sat on the cages in the
+  // picture. Anything else, including a failed alignment, uses the drawn faceplate.
+  if (art && art.front && art.source !== 'drawn' && !compact && device.form_factor !== 'switch-stack') {
     return (
       <div ref={wrapRef} className={`relative ${className}`}>
         <RealisticFaceplate device={device} model={art} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} />

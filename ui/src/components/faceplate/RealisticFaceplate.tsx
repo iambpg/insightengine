@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import type { FaceplateDevice, PortInfo } from '@/lib/types';
 import { STATE_COLOR, STATE_GLYPH, STATE_LABEL } from './palette';
 import { namesMatch } from './library/ifname';
@@ -116,43 +116,140 @@ function Hotspot({
   );
 }
 
-function artwork(model: FaceplateModel, width: number, height: number) {
-  if (!model.front) {
+function hotspots({
+  model,
+  ports,
+  width,
+  height,
+  selectedPortId,
+  onHover,
+  onSelect,
+}: {
+  model: FaceplateModel;
+  ports: PortInfo[];
+  width: number;
+  height: number;
+  selectedPortId: string | null;
+  onHover: Props['onHover'];
+  onSelect: Props['onSelect'];
+}) {
+  return model.ports.map((box) => {
+    const port = portForBox(box, ports);
     return (
-      <>
-        <rect x={8} y={16} width={width - 16} height={height - 32} rx={10} fill="#2c333c" stroke="#6d7886" style={{ pointerEvents: 'none' }} />
-        <text x={28} y={height * 0.45} fill="#d5dde6" fontSize={22} fontFamily="var(--font-sans)" style={{ pointerEvents: 'none' }}>{model.model}</text>
-      </>
+      <Hotspot
+        key={box.name}
+        box={box}
+        port={port}
+        width={width}
+        height={height}
+        selected={selectedPortId === port.id}
+        onHover={onHover}
+        onSelect={onSelect}
+      />
     );
-  }
-  return (
-    <image
-      href={model.front}
-      x={0}
-      y={0}
-      width={width}
-      height={height}
-      preserveAspectRatio="none"
-      style={{ pointerEvents: 'none' }}
-    />
-  );
+  });
 }
 
 export default function RealisticFaceplate({ device, model, selectedPortId = null, onHover, onSelect }: Props) {
   const ports = livePorts(device);
-  const width = model.width || 1000;
-  const height = model.height || 180;
-  // Photos stay at or below their pixel width so the bitmap is not scaled up.
-  // Visio and drawn art are vectors, so they fit the row and stay sharp.
-  const maxWidth = model.raster ? width : undefined;
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: model.width || 1000, h: model.height || 180 });
+  const [scale, setScale] = useState(1);
+  const width = box.w;
+  const height = box.h;
+
+  function rememberNatural(event: React.SyntheticEvent<HTMLImageElement>) {
+    const img = event.currentTarget;
+    // naturalWidth is the bitmap's pixel width. It is not multiplied by
+    // devicePixelRatio: both the image and the overlay live in CSS pixels,
+    // and the browser paints the bitmap onto the device grid.
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      setBox({ w: img.naturalWidth, h: img.naturalHeight });
+    }
+  }
+
+  useLayoutEffect(() => {
+    const node = frameRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
+    const measure = () => {
+      const available = node.clientWidth;
+      if (!available || !width) return;
+      const fit = available / width;
+      // Photos are not scaled above their natural pixel width. Vectors may grow.
+      setScale(model.raster ? Math.min(1, fit) : fit);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [width, model.raster]);
+
+  const caption = model.source === 'visio'
+    ? ' · Visio stencil'
+    : model.source === 'photo'
+      ? ' · device-type photo'
+      : model.source === 'vendor'
+        ? ' · vendor image'
+        : ' · drawn from the port list';
 
   return (
     <div>
       <p className="mb-2 text-xs text-muted-foreground">
         {model.model}
-        {model.source === 'visio' ? ' · Visio stencil' : model.source === 'photo' ? ' · device-type photo' : model.source === 'vendor' ? ' · vendor image' : ' · drawn from the port list'}
+        {caption}
       </p>
-      <div className="mx-auto w-full" style={maxWidth ? { maxWidth } : undefined}>
+      {model.front ? (
+        <div
+          ref={frameRef}
+          className="mx-auto w-full"
+          style={{ maxWidth: model.raster ? width : undefined, height: height * scale, padding: 0, border: 'none' }}
+        >
+          <div
+            data-testid="faceplate-stage"
+            style={{
+              width,
+              height,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              position: 'relative',
+              lineHeight: 0,
+              padding: 0,
+              border: 'none',
+            }}
+          >
+            <img
+              src={model.front}
+              alt=""
+              data-testid="faceplate-image"
+              width={width}
+              height={height}
+              draggable={false}
+              onLoad={rememberNatural}
+              style={{
+                display: 'block',
+                width,
+                height,
+                objectFit: 'none',
+                objectPosition: 'left top',
+                pointerEvents: 'none',
+                padding: 0,
+                border: 'none',
+              }}
+            />
+            <svg
+              viewBox={`0 0 ${width} ${height}`}
+              preserveAspectRatio="none"
+              role="img"
+              aria-label={`${model.model} faceplate`}
+              data-testid="realistic-faceplate"
+              data-faceplate-source={model.source}
+              style={{ position: 'absolute', left: 0, top: 0, width, height, display: 'block', padding: 0 }}
+            >
+              {hotspots({ model, ports, width, height, selectedPortId, onHover, onSelect })}
+            </svg>
+          </div>
+        </div>
+      ) : (
         <svg
           viewBox={`0 0 ${width} ${height}`}
           preserveAspectRatio="xMidYMid meet"
@@ -162,24 +259,11 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
           data-faceplate-source={model.source}
           style={{ width: '100%', height: 'auto', display: 'block', aspectRatio: `${width} / ${height}` }}
         >
-          {artwork(model, width, height)}
-          {model.ports.map((box) => {
-            const port = portForBox(box, ports);
-            return (
-              <Hotspot
-                key={box.name}
-                box={box}
-                port={port}
-                width={width}
-                height={height}
-                selected={selectedPortId === port.id}
-                onHover={onHover}
-                onSelect={onSelect}
-              />
-            );
-          })}
+          <rect x={8} y={16} width={width - 16} height={height - 32} rx={10} fill="#2c333c" stroke="#6d7886" style={{ pointerEvents: 'none' }} />
+          <text x={28} y={height * 0.45} fill="#d5dde6" fontSize={22} fontFamily="var(--font-sans)" style={{ pointerEvents: 'none' }}>{model.model}</text>
+          {hotspots({ model, ports, width, height, selectedPortId, onHover, onSelect })}
         </svg>
-      </div>
+      )}
     </div>
   );
 }
