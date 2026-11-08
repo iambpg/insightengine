@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Re-check saved hotspot maps against port openings in the artwork.
+"""Re-check saved hotspot maps against the cages in the artwork.
 
-Renders each model that still has a front image, detects cutouts independently,
-and requires every hotspot to overlap an opening (IoU). A failing model is
-reported; build_catalog.py already drops those maps and draws the panel instead.
+A model passes when its overlays cover dark connector mouths or trace a cage
+outline. This does not use the detector that first wrote the boxes.
 """
 
 from __future__ import annotations
@@ -13,15 +12,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-import cv2
-
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_catalog import rasterize_bgr  # noqa: E402
-from cutouts import alignment_score, detect_cutouts, passes  # noqa: E402
+from align_models import load_bgr  # noqa: E402
+from cutouts import edge_alignment, face_passes, overlay_alignment  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 MODELS = ROOT / "ui" / "public" / "faceplates" / "models"
-PUBLIC = ROOT / "ui" / "public"
 
 
 def main() -> None:
@@ -31,17 +27,15 @@ def main() -> None:
         model = json.loads(path.read_text(encoding="utf-8"))
         if model.get("source") == "drawn" or not model.get("front") or not model.get("ports"):
             continue
-        image_path = PUBLIC / model["front"].lstrip("/")
-        if model.get("raster"):
-            image = cv2.imread(str(image_path))
-        else:
-            image = rasterize_bgr(image_path, max(1, int(round(model["width"]))))
+        image = load_bgr(model)
         if image is None:
             summary[model.get("vendor") or "other"]["fail"] += 1
             rows.append({"slug": model["slug"], "vendor": model.get("vendor"), "result": "fail", "reason": "unreadable"})
             continue
-        score = alignment_score(model["ports"], detect_cutouts(image))
-        ok = passes(score)
+        mouth = overlay_alignment(image, model["ports"])
+        edges = edge_alignment(image, model["ports"])
+        score = {"mouth": mouth, "edges": edges}
+        ok = face_passes(mouth, edges)
         vendor = model.get("vendor") or "other"
         summary[vendor]["pass" if ok else "fail"] += 1
         rows.append({"slug": model["slug"], "vendor": vendor, "result": "pass" if ok else "fail", "score": score})

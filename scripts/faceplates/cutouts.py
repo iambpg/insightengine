@@ -249,6 +249,150 @@ def passes(score: dict) -> bool:
     return score["count"] > 0 and score["median"] >= 0.3 and score["fraction"] >= 0.6
 
 
+def _crop(gray: np.ndarray, box: dict) -> np.ndarray | None:
+    height, width = gray.shape
+    x0 = max(0, int(round(box["x"] * width)))
+    y0 = max(0, int(round(box["y"] * height)))
+    x1 = min(width, int(round((box["x"] + box["w"]) * width)))
+    y1 = min(height, int(round((box["y"] + box["h"]) * height)))
+    if x1 - x0 < 8 or y1 - y0 < 8:
+        return None
+    return gray[y0:y1, x0:x1]
+
+
+def cage_metrics(gray: np.ndarray, box: dict) -> dict | None:
+    """How much a box looks like a connector cage rather than an LED or a vent.
+
+    A cage has a dark mouth and a lighter bezel. An LED or a flat grille speck
+    does not. The numbers are luminance, 0 to 255.
+    """
+    crop = _crop(gray, box)
+    if crop is None:
+        return None
+    crop_h, crop_w = crop.shape
+    edge = max(1, crop_h // 8)
+    core = crop[crop_h // 5 : crop_h - max(1, crop_h // 5), crop_w // 5 : crop_w - max(1, crop_w // 5)]
+    if core.size < 4:
+        return None
+    rim = np.concatenate([crop[:edge, :].ravel(), crop[-edge:, :].ravel()])
+    return {
+        "contrast": float(rim.mean() - core.mean()),
+        "std": float(crop.std()),
+        "core": float(core.mean()),
+    }
+
+
+def is_cage(metrics: dict | None) -> bool:
+    if not metrics:
+        return False
+    # A connector mouth is dark. A flat LED or a pale rectangle on the chassis is not.
+    return metrics["core"] <= 90 and metrics["contrast"] >= 25 and metrics["std"] >= 20
+
+
+def detect_cages(image_bgr: np.ndarray) -> list[dict]:
+    """Port cages only. LEDs, screws and grille specks are dropped."""
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    found: list[dict] = []
+    for thresh in (40, 70, 100, 130):
+        found.extend(_contours(gray, True, thresh))
+    for thresh in (160, 190, 220):
+        found.extend(_contours(gray, False, thresh))
+    cages = []
+    for box in _nms(found, 0.4):
+        if is_cage(cage_metrics(gray, box)):
+            cages.append(box)
+    return cages
+
+
+def cage_alignment(ports: list[dict], cages: list[dict]) -> dict:
+    """IoU of each stored overlay against an independently detected cage."""
+    return alignment_score(ports, cages)
+
+
+def _sits_on_cage(metrics: dict | None) -> bool:
+    if not metrics:
+        return False
+    return metrics["core"] <= 110 and metrics["contrast"] >= 10 and metrics["std"] >= 15
+
+
+def overlay_alignment(image_bgr: np.ndarray, ports: list[dict]) -> dict:
+    """Score the pixels under each overlay, not the detector that drew it.
+
+    median is the bezel-minus-mouth contrast. fraction is how many overlays
+    cover a dark connector mouth. A box on an LED, a vent line or empty
+    chassis scores near zero.
+    """
+    if not ports:
+        return {"median": 0.0, "fraction": 0.0, "count": 0}
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    contrasts = []
+    hits = 0
+    for port in ports:
+        metrics = cage_metrics(gray, port)
+        contrasts.append(0.0 if metrics is None else metrics["contrast"])
+        if _sits_on_cage(metrics):
+            hits += 1
+    ordered = sorted(contrasts)
+    return {
+        "median": round(ordered[len(ordered) // 2], 3),
+        "fraction": round(hits / len(ports), 3),
+        "count": len(ports),
+    }
+
+
+def passes_overlay(score: dict) -> bool:
+    return score["count"] > 0 and score["median"] >= 10 and score["fraction"] >= 0.6
+
+
+def _border_ratio(gray: np.ndarray, box: dict) -> float:
+    """How tightly a box follows a rectangular edge in the picture."""
+    height, width = gray.shape
+    x0 = max(1, int(box["x"] * width))
+    y0 = max(1, int(box["y"] * height))
+    x1 = min(width - 1, int((box["x"] + box["w"]) * width))
+    y1 = min(height - 1, int((box["y"] + box["h"]) * height))
+    if x1 - x0 < 8 or y1 - y0 < 8:
+        return 0.0
+    gradient_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    gradient_y = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    magnitude = cv2.magnitude(gradient_x, gradient_y)
+    border = np.concatenate([
+        magnitude[y0 : y0 + 2, x0:x1].ravel(),
+        magnitude[y1 - 2 : y1, x0:x1].ravel(),
+        magnitude[y0:y1, x0 : x0 + 2].ravel(),
+        magnitude[y0:y1, x1 - 2 : x1].ravel(),
+    ])
+    crop_h = y1 - y0
+    crop_w = x1 - x0
+    core = magnitude[y0 + crop_h // 4 : y1 - crop_h // 4, x0 + crop_w // 4 : x1 - crop_w // 4]
+    if core.size < 4 or border.size < 4:
+        return 0.0
+    return float(border.mean() / (core.mean() + 1.0))
+
+
+def edge_alignment(image_bgr: np.ndarray, ports: list[dict]) -> dict:
+    """Median border-to-interior edge ratio. A cage outline scores far above a flat speck."""
+    if not ports:
+        return {"median": 0.0, "fraction": 0.0, "count": 0}
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    ratios = [_border_ratio(gray, port) for port in ports]
+    ordered = sorted(ratios)
+    return {
+        "median": round(ordered[len(ordered) // 2], 3),
+        "fraction": round(sum(ratio >= 40 for ratio in ratios) / len(ratios), 3),
+        "count": len(ports),
+    }
+
+
+def passes_edges(score: dict) -> bool:
+    return score["count"] > 0 and score["median"] >= 40 and score["fraction"] >= 0.75
+
+
+def face_passes(mouth: dict, edges: dict) -> bool:
+    """Dark RJ45 mouths and light cages with a hard outline both count as aligned."""
+    return passes_overlay(mouth) or passes_edges(edges)
+
+
 def alternate_cutouts(image_bgr: np.ndarray) -> list[dict]:
     """A second threshold set so the check is not the same mask as the boxes."""
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
