@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/AppIcon';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -298,14 +299,11 @@ export default function DeviceDetailView() {
       {device && !isMockMode() ? <ComparisonPanel comparison={device.comparison} /> : null}
 
       {/* faceplate */}
-      <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-labelledby="fp-title">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-          <div>
-            <h2 id="fp-title" className="text-base font-semibold">Faceplate</h2>
-            <p className="text-xs text-muted-foreground">Pick a device to see its own faceplate. Hover a port for details, click to open its graph.</p>
-          </div>
-        </div>
-
+      <CollapsiblePanel
+        title="Faceplate"
+        titleId="fp-title"
+        subtitle="Pick a device to see its own faceplate. Hover a port for details, click to open its graph."
+      >
         {isMockMode() ? (
         <div role="tablist" aria-label="Devices at this site" className="scroll-thin flex gap-2 overflow-x-auto border-b border-border bg-muted/40 px-4 py-2">
           {FORMS.map((f) => {
@@ -359,7 +357,7 @@ export default function DeviceDetailView() {
             </div>
           )}
         </div>
-      </section>
+      </CollapsiblePanel>
 
       {isMockMode() ? (
         <ExampleDataBanner text="Device, port and graph values below come from mock JSON in the API client." />
@@ -386,17 +384,18 @@ function ComparisonPanel({ comparison }: { comparison?: SourceComparison }) {
   if (!comparison) return null;
   const source = comparison.faceplateSource || 'none';
   return (
-    <section className="rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card" aria-label="NetBox and Netdisco comparison">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold">NetBox and Netdisco</h2>
-          <p className="text-xs text-muted-foreground">Faceplate built from {source}.</p>
-        </div>
-        {comparison.differ ? (
+    <CollapsiblePanel
+      title="NetBox and Netdisco"
+      subtitle={`Faceplate built from ${source}.`}
+      className="rounded-none border-x-0 border-y border-border bg-card shadow-card"
+      bodyClassName="p-4"
+      meta={
+        comparison.differ ? (
           <span className="rounded-md border border-warning/40 bg-warning/15 px-2 py-1 text-xs font-semibold text-foreground">NetBox and Netdisco differ</span>
-        ) : null}
-      </div>
-      <table className="mt-3 w-full border-collapse text-sm">
+        ) : null
+      }
+    >
+      <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="py-1.5 pr-3 font-semibold">Field</th>
@@ -414,14 +413,18 @@ function ComparisonPanel({ comparison }: { comparison?: SourceComparison }) {
           ))}
         </tbody>
       </table>
-    </section>
+    </CollapsiblePanel>
   );
 }
 
 function Inventory({ device }: { device: DeviceDetailData }) {
   const sources = device.sources ?? [];
   return (
-    <section className="space-y-3 rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card" aria-label="Inventory">
+    <CollapsiblePanel
+      title="Inventory"
+      className="rounded-none border-x-0 border-y border-border bg-card shadow-card"
+      bodyClassName="space-y-3 p-4"
+    >
       {sources.length > 0 ? (
         <ul className="flex flex-wrap gap-2 text-xs">
           {sources.map((source) => (
@@ -476,7 +479,7 @@ function Inventory({ device }: { device: DeviceDetailData }) {
           <p className="mt-1 text-sm text-muted-foreground">{device.backup?.reason || 'Oxidized has no backup for this device.'}</p>
         )}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
 

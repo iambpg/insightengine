@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import RangeSelector from '@/components/charts/RangeSelector';
 import TopPortsChart from '@/components/charts/TopPortsChart';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/apiClient';
 import { isMockMode } from '@/lib/apiMode';
@@ -23,16 +24,19 @@ export default function TopPortsPanel({ deviceId }: { deviceId: string }) {
   }, [range, customMin, deviceId]);
 
   return (
-    <section className="rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card" aria-labelledby="topports-title">
-      <header className="mb-1 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 id="topports-title" className="text-sm font-semibold">Top ports by peak utilisation</h3>
-          <p className="text-xs text-muted-foreground">Peak % of link speed in the selected window</p>
-        </div>
+    <CollapsiblePanel
+      title="Top ports by peak utilisation"
+      titleId="topports-title"
+      subtitle="Peak % of link speed in the selected window"
+      headingLevel="h3"
+      className="rounded-none border-x-0 border-y border-border bg-card shadow-card"
+      bodyClassName="p-4 pt-0"
+    >
+      <div className="mb-3 flex justify-end">
         <RangeSelector value={range} onChange={setRange} customMin={customMin} onCustomMin={setCustomMin} label="Top ports" />
-      </header>
+      </div>
       {data ? <TopPortsChart data={data} /> : <Skeleton className="h-60 w-full" />}
       <p className="mt-1 text-[11px] text-muted-foreground">Red above 85%, amber above 65%.</p>
-    </section>
+    </CollapsiblePanel>
   );
 }

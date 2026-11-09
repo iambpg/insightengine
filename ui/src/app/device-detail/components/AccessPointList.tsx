@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { HealthBadge } from '@/components/ui/Badge';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import AddApDialog, { type ApDraft } from '@/components/AddApDialog';
 import { api } from '@/lib/apiClient';
 import { accessPointId, deviceHealthPath } from '@/lib/deviceHealthPath';
@@ -55,14 +56,14 @@ export default function AccessPointList({ wlc }: { wlc: string }) {
   const allOn = selectable.length > 0 && selectable.every((row) => picked.includes(rowId(row)));
   const chosen = rows.filter((row) => picked.includes(rowId(row)) && !row.inNetbox);
   return (
-    <section className="rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card" aria-labelledby="ap-list-title">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="ap-list-title" className="text-base font-semibold">Access points</h2>
-          <p className="text-xs text-muted-foreground">
-            {total} on this controller. Inventory, radios, RRM and neighbour come from the WLC. The site is the NetBox device site when the AP name or CDP switch matches.
-          </p>
-        </div>
+    <CollapsiblePanel
+      title="Access points"
+      titleId="ap-list-title"
+      subtitle={`${total} on this controller. Inventory, radios, RRM and neighbour come from the WLC. The site is the NetBox device site when the AP name or CDP switch matches.`}
+      className="rounded-none border-x-0 border-y border-border bg-card shadow-card"
+      bodyClassName="p-4"
+    >
+      <div className="flex flex-wrap items-end justify-end gap-3">
         <form
           className="flex gap-2"
           onSubmit={(event) => {
@@ -162,6 +163,6 @@ export default function AccessPointList({ wlc }: { wlc: string }) {
         <button type="button" disabled={page >= pages} onClick={() => setPage((n) => n + 1)} className="rounded-md border border-border px-3 py-1 disabled:opacity-40">Next</button>
       </div>
       <AddApDialog open={adding.length > 0} aps={adding} onClose={() => setAdding([])} onDone={() => setPicked([])} />
-    </section>
+    </CollapsiblePanel>
   );
 }

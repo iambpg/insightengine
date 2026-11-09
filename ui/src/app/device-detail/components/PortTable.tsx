@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Icon from '@/components/ui/AppIcon';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
 import { PortStateBadge } from '@/components/ui/Badge';
@@ -24,9 +25,13 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
   const FILTERS: Filter[] = ['all', 'up', 'warning', 'fault', 'down', 'disabled', 'unknown'];
 
   return (
-    <section className="rounded-lg border border-border bg-card shadow-card" aria-labelledby="ports-title">
-      <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5">
-        <h2 id="ports-title" className="text-base font-semibold">Ports</h2>
+    <CollapsiblePanel
+      title="Ports"
+      titleId="ports-title"
+      className="rounded-lg border border-border bg-card shadow-card"
+      meta={<span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular text-muted-foreground">{ports.length}</span>}
+    >
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5">
         <label className="relative ml-auto min-w-[200px]">
           <span className="sr-only">Search ports</span>
           <Icon name="MagnifyingGlassIcon" size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -58,7 +63,7 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
             </button>
           ))}
         </div>
-      </header>
+      </div>
       {rows.length === 0 ? (
         <EmptyState icon="CircleStackIcon" title="No ports match" description="No port on this device matches the current state filter or search." actionLabel="Show all ports" onAction={() => { setFilter('all'); setSearch(''); }} />
       ) : (
@@ -105,6 +110,6 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
         </div>
       )}
       <Pagination page={page} pageSize={pageSize} total={rows.length} noun="ports" onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} sizes={[10, 25, 50]} />
-    </section>
+    </CollapsiblePanel>
   );
 }

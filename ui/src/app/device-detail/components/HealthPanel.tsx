@@ -1,4 +1,5 @@
 import React from 'react';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import type { DeviceHealthPanel, HealthGroup } from '@/lib/types';
 
 const TONE: Record<HealthGroup['status'], string> = {
@@ -31,11 +32,11 @@ function rate(value: number | null): string {
 
 export default function HealthPanel({ panel }: { panel: DeviceHealthPanel }) {
   return (
-    <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-labelledby="health-panel-title">
-      <header className="border-b border-border px-4 py-2.5">
-        <h2 id="health-panel-title" className="text-base font-semibold">Health</h2>
-        <p className="text-xs text-muted-foreground">{panel.profileLabel}. Memory, fans, power, temperature and the busiest interfaces.</p>
-      </header>
+    <CollapsiblePanel
+      title="Health"
+      titleId="health-panel-title"
+      subtitle={`${panel.profileLabel}. Memory, fans, power, temperature and the busiest interfaces.`}
+    >
       <ul className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
         {panel.groups.map((group) => (
           <li key={group.id} className="bg-card px-4 py-3">
@@ -114,6 +115,6 @@ export default function HealthPanel({ panel }: { panel: DeviceHealthPanel }) {
           </table>
         )}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }

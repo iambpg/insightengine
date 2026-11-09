@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from '@/components/ui/AppIcon';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import EmptyState from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type { IssueItem } from '@/lib/types';
@@ -12,13 +13,16 @@ const SEV = {
 
 export default function IssuesPanel({ issues }: { issues: IssueItem[] | null }) {
   return (
-    <section className="h-full rounded-lg border border-border bg-background shadow-card" aria-labelledby="issues-title">
-      <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <h2 id="issues-title" className="text-base font-semibold">What is wrong</h2>
-        {issues && (
+    <CollapsiblePanel
+      title="What is wrong"
+      titleId="issues-title"
+      className="h-full rounded-lg border border-border bg-background shadow-card"
+      meta={
+        issues ? (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular text-muted-foreground">{issues.length} open</span>
-        )}
-      </header>
+        ) : null
+      }
+    >
       <div className="p-3">
         {issues === null ? (
           <div className="space-y-2">
@@ -51,6 +55,6 @@ export default function IssuesPanel({ issues }: { issues: IssueItem[] | null }) 
           </ul>
         )}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
