@@ -178,6 +178,16 @@ scrape_configs:
       - target_label: __address__
         replacement: scrape-lb:9115
 
+  # One scrape of the approved parent metric. ie-config writes this file from
+  # NetBox. The parent label used by Alertmanager is on ie_topology_info.
+  - job_name: topology-file-sd
+    scrape_interval: 60s
+    scrape_timeout: 10s
+    metrics_path: /metrics/topology
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/topology.yml
+
   - job_name: snmp-access-switches
     scrape_interval: 60s
     scrape_timeout: 45s

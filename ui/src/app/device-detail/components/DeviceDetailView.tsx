@@ -12,7 +12,7 @@ import { countPorts, faceplateSummaryLine, SNMP_MISSING_HINT } from '@/component
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
-import { isMockMode } from '@/lib/apiMode';
+import { devicePath, isMockMode } from '@/lib/apiMode';
 import { deviceHealthPath } from '@/lib/deviceHealthPath';
 import AddApDialog from '@/components/AddApDialog';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
@@ -128,6 +128,12 @@ export default function DeviceDetailView() {
     }];
   }, [device]);
 
+  const visibleIssues = useMemo(() => {
+    const issues = device?.issues ?? [];
+    if (!device?.parentDown) return issues;
+    return issues.filter((issue) => !/icmp|unreachable|not answering/i.test(`${issue.title} ${issue.detail}`));
+  }, [device]);
+
   const healthItems = useMemo<HealthCause[]>(() => {
     if (!device) return [];
     if (Array.isArray(device.healthItems)) return device.healthItems;
@@ -181,10 +187,10 @@ export default function DeviceDetailView() {
                 {device.faceplate.modelName && (
                   <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono-data text-xs font-semibold text-foreground">{device.faceplate.modelName}</span>
                 )}
-                {device.issues.filter((i) => i.severity === 'critical').length > 0 && (
+                {visibleIssues.filter((i) => i.severity === 'critical').length > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-destructive-foreground">
                     <Icon name="BellAlertIcon" size={12} variant="solid" />
-                    {device.issues.filter((i) => i.severity === 'critical').length} critical
+                    {visibleIssues.filter((i) => i.severity === 'critical').length} critical
                   </span>
                 )}
               </div>
@@ -198,6 +204,7 @@ export default function DeviceDetailView() {
                 <Meta label="Last poll" value={device.lastPoll} mono />
                 <Meta label="Firmware" value={device.firmware} mono />
               </dl>
+              <ParentBlock device={device} />
             </div>
             <div className="flex flex-col items-stretch gap-2">
               <button
@@ -281,7 +288,7 @@ export default function DeviceDetailView() {
       <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Device status overview">
         <div className="grid grid-cols-1 gap-3 p-3 xl:grid-cols-3">
           <div>
-            <IssuesPanel issues={device?.issues ?? null} />
+            <IssuesPanel issues={device ? visibleIssues : null} />
           </div>
           <div>
             <HardwareHealth items={device?.hardware ?? null} />
@@ -539,6 +546,52 @@ function ConfigButton({ label, load }: { label: string; load: () => Promise<{ co
         </div>
       ) : null}
     </>
+  );
+}
+
+function ParentBlock({ device }: { device: DeviceDetailData }) {
+  const parent = device.parent;
+  const children = device.children ?? [];
+  if (!parent && !device.unparented && !device.parentDown && !device.wlc && children.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-1.5 text-sm">
+      {device.parentDown ? (
+        <p role="status" className="font-medium text-destructive">Unreachable due to parent</p>
+      ) : null}
+      {parent ? (
+        <p>
+          Parent{' '}
+          <Link href={devicePath(parent.id, parent.formFactor || 'generic')} className="font-mono-data font-medium text-primary hover:underline">
+            {parent.hostname}
+          </Link>
+          <span className="font-mono-data text-muted-foreground">
+            {' '}{parent.uplinkInterface} → {parent.hostname} {parent.parentInterface}
+          </span>
+        </p>
+      ) : device.unparented ? (
+        <p className="text-amber-800">No path to a subnet root. This device has no parent.</p>
+      ) : null}
+      {device.wlc ? (
+        <p>Joined WLC <span className="font-mono-data">{device.wlc}</span></p>
+      ) : null}
+      {children.length > 0 ? (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Children</p>
+          <ul className="mt-1 space-y-0.5">
+            {children.map((child) => (
+              <li key={child.id}>
+                <Link href={devicePath(child.id, child.formFactor || 'generic')} className="font-mono-data text-primary hover:underline">
+                  {child.hostname}
+                </Link>
+                <span className="font-mono-data text-muted-foreground">
+                  {' '}{child.uplinkInterface} → {device.hostname} {child.parentInterface}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

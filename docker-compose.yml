@@ -674,6 +674,7 @@ services:
       # The CA is not mounted under /etc/prometheus: that directory is read-only,
       # and Docker cannot create /etc/prometheus/certs inside it.
       - ./config/prometheus:/etc/prometheus:ro
+      - ./data/prometheus-sd:/etc/prometheus/file_sd:ro
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - prom-data:/prometheus
       - ./config/telegraf/wlc/drop-priv.sh:/drop-priv.sh:ro

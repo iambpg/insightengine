@@ -14,6 +14,8 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
+    - matchers: [alertname="TopologyParentDown"]
+      receiver: blackhole
     - matchers: [severity="critical"]
       receiver: relay
       group_wait: 10s
@@ -25,9 +27,14 @@ receivers:
       - url: http://alert-relay:8080/alert
         send_resolved: true
         max_alerts: 100
+  - name: blackhole
 
 inhibit_rules:
   # a down device makes its own SNMP failures redundant
   - source_matchers: [alertname="DeviceUnreachable"]
     target_matchers: [alertname="SnmpScrapeFailing"]
     equal: [hostname]
+  # a down parent suppresses the children's own down alerts
+  - source_matchers: [alertname="TopologyParentDown", topology_parent="yes"]
+    target_matchers: [alertname="DeviceUnreachable"]
+    equal: [parent]

@@ -1107,6 +1107,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
             raise ApiError(404, "not_found", "unknown discovery job")
         return found
 
+    app.state.audit = _audit
     mount_fleet(app, user_of)
 
     @app.post("/api/v1/access-points/approve")

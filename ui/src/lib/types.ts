@@ -337,6 +337,43 @@ export interface SourceComparison {
   differ: boolean;
 }
 
+export interface DeviceParentLink {
+  id: string;
+  hostname: string;
+  parentInterface: string;
+  uplinkInterface: string;
+  formFactor?: string;
+  parentDown?: boolean;
+}
+
+export interface HierarchyNode {
+  id: string;
+  hostname: string;
+  role: string;
+  mgmtIp: string;
+  formFactor: string;
+  root: boolean;
+  parentId: string;
+  parentHostname: string;
+  parentInterface: string;
+  uplinkInterface: string;
+  hops: number | null;
+  flagged: boolean;
+  reason: string;
+  wlc: string;
+  parentDown: boolean;
+  differs: boolean;
+  children: DeviceParentLink[];
+}
+
+export interface HierarchyReport {
+  autoApply: boolean;
+  roots: string[];
+  flagged: string[];
+  nodes: HierarchyNode[];
+  degraded?: string[];
+}
+
 export interface DeviceDetailData {
   id: string;
   hostname: string;
@@ -346,6 +383,11 @@ export interface DeviceDetailData {
   mgmtIp: string;
   modelFamily: string;
   health: DeviceHealth;
+  parent?: DeviceParentLink | null;
+  children?: DeviceParentLink[];
+  wlc?: string;
+  unparented?: boolean;
+  parentDown?: boolean;
   healthItems?: HealthCause[];
   inNetbox?: boolean;
   status?: string;
