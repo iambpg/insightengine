@@ -186,7 +186,7 @@ scrape_configs:
     metrics_path: /metrics/topology
     file_sd_configs:
       - files:
-          - /etc/prometheus/file_sd/topology.yml
+          - /etc/ie-file-sd/topology.yml
 
   - job_name: snmp-access-switches
     scrape_interval: 60s

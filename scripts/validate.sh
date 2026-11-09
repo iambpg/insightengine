@@ -93,8 +93,9 @@ export CLIENT_NAME="${CLIENT_NAME:-x}" CLIENT_SLUG="${CLIENT_SLUG:-x}"
 
 # --- prometheus
 if have promtool; then
-  P="$TMP/prom"; mkdir -p "$P/ie-certs"
-  sed "s#/etc/prometheus/#$P/#g; s#/etc/ie-certs/#$P/ie-certs/#g; s#/run/ie-secrets/netbox_token#$P/tok#g; s#/run/secrets/netbox_token#$P/tok#g" config/prometheus/prometheus.yml > "$P/prometheus.yml"
+  P="$TMP/prom"; mkdir -p "$P/ie-certs" "$P/ie-file-sd"
+  printf '[]\n' > "$P/ie-file-sd/topology.yml"
+  sed "s#/etc/prometheus/#$P/#g; s#/etc/ie-certs/#$P/ie-certs/#g; s#/etc/ie-file-sd/#$P/ie-file-sd/#g; s#/run/ie-secrets/netbox_token#$P/tok#g; s#/run/secrets/netbox_token#$P/tok#g" config/prometheus/prometheus.yml > "$P/prometheus.yml"
   cp config/prometheus/alert-rules.yml "$P/"; cp -f certs/ca.crt "$P/ie-certs/ca.crt" 2>/dev/null || : > "$P/ie-certs/ca.crt"; echo x > "$P/tok"
   if promtool check config "$P/prometheus.yml" >"$TMP/p.out" 2>&1; then ok "promtool check config"; else bad "promtool check config"; sed 's/^/      /' "$TMP/p.out"; fi
 else skip "promtool"; fi

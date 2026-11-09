@@ -671,10 +671,10 @@ services:
       CLIENT_NAME: ${CLIENT_NAME}
     volumes:
       # Directory mount so ie-config's atomic rename is the file Prometheus reloads.
-      # The CA is not mounted under /etc/prometheus: that directory is read-only,
-      # and Docker cannot create /etc/prometheus/certs inside it.
+      # The CA and the topology file_sd stay outside /etc/prometheus: that
+      # directory is read-only, and a nested mount there is rejected.
       - ./config/prometheus:/etc/prometheus:ro
-      - ./data/prometheus-sd:/etc/prometheus/file_sd:ro
+      - ./data/prometheus-sd:/etc/ie-file-sd:ro
       - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
       - prom-data:/prometheus
       - ./config/telegraf/wlc/drop-priv.sh:/drop-priv.sh:ro
