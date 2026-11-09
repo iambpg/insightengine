@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import RangeSelector from '@/components/charts/RangeSelector';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Icon from '@/components/ui/AppIcon';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import type { RangeKey } from '@/lib/mockData';
 import { reportLoadError } from '@/lib/loadError';
 import type { SeriesDef } from '@/components/charts/ZoomableChart';
@@ -51,14 +52,17 @@ export default function GraphPanel({ id, title, subtitle, unit, kind, series, yM
   const hasGap = data?.some((d) => series.every((s) => d[s.key] === null));
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 shadow-card" aria-labelledby={`${id}-title`}>
-      <header className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 id={`${id}-title`} className="text-sm font-semibold">{title}</h3>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
-        </div>
+    <CollapsiblePanel
+      title={title}
+      titleId={`${id}-title`}
+      subtitle={subtitle}
+      headingLevel="h3"
+      className="rounded-lg border border-border bg-card shadow-card"
+      bodyClassName="p-4 pt-0"
+    >
+      <div className="mb-3 flex justify-end">
         <RangeSelector value={range} onChange={setRange} customMin={customMin} onCustomMin={setCustomMin} label={title} />
-      </header>
+      </div>
       <div className="mt-1">
         {error ? (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-3 text-sm text-destructive">
@@ -76,6 +80,6 @@ export default function GraphPanel({ id, title, subtitle, unit, kind, series, yM
           <Icon name="ExclamationTriangleIcon" size={12} /> Gap in the series: telemetry was not received for a short period.
         </p>
       )}
-    </section>
+    </CollapsiblePanel>
   );
 }

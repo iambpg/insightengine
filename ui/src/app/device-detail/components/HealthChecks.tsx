@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from '@/components/ui/AppIcon';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type { HealthCheck } from '@/lib/types';
 
@@ -13,18 +14,19 @@ export default function HealthChecks({ checks, runAt, running }: { checks: Healt
   const pass = checks?.filter((c) => c.result === 'pass').length ?? 0;
   const total = checks?.length ?? 0;
   return (
-    <section className="h-full overflow-hidden rounded-lg border border-border bg-background shadow-card" aria-labelledby="hc-title">
-      <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <div>
-          <h2 id="hc-title" className="text-base font-semibold">Automatic health check</h2>
-          <p className="font-mono-data text-xs text-muted-foreground">{runAt ? `Last run ${runAt} UTC` : 'Running…'}</p>
-        </div>
-        {checks && (
+    <CollapsiblePanel
+      title="Automatic health check"
+      titleId="hc-title"
+      subtitle={runAt ? `Last run ${runAt} UTC` : 'Running…'}
+      className="h-full overflow-hidden rounded-lg border border-border bg-background shadow-card"
+      meta={
+        checks ? (
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular ${pass === total ? 'bg-success/10 text-success' : 'bg-warning/15 text-foreground'}`}>
             {pass}/{total} passed
           </span>
-        )}
-      </header>
+        ) : null
+      }
+    >
       <ul className={`divide-y divide-border transition-opacity ${running ? 'opacity-50' : ''}`}>
         {checks === null
           ? Array.from({ length: 5 }, (_, i) => (
@@ -44,6 +46,6 @@ export default function HealthChecks({ checks, runAt, running }: { checks: Healt
               );
             })}
       </ul>
-    </section>
+    </CollapsiblePanel>
   );
 }

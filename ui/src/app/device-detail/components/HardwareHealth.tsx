@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from '@/components/ui/AppIcon';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type { HardwareItem } from '@/lib/types';
 
@@ -22,18 +23,19 @@ export default function HardwareHealth({ items }: { items: HardwareItem[] | null
   const ok = items?.filter((i) => i.status === 'ok').length ?? 0;
   const total = items?.length ?? 0;
   return (
-    <section className="h-full overflow-hidden rounded-lg border border-border bg-background shadow-card" aria-labelledby="hw-title">
-      <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <div>
-          <h2 id="hw-title" className="text-base font-semibold">Hardware health</h2>
-          <p className="text-xs text-muted-foreground">Power, cooling, temperature and resources</p>
-        </div>
-        {items && (
+    <CollapsiblePanel
+      title="Hardware health"
+      titleId="hw-title"
+      subtitle="Power, cooling, temperature and resources"
+      className="h-full overflow-hidden rounded-lg border border-border bg-background shadow-card"
+      meta={
+        items ? (
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular ${ok === total ? 'bg-success/10 text-success' : 'bg-warning/15 text-foreground'}`}>
             {ok}/{total} OK
           </span>
-        )}
-      </header>
+        ) : null
+      }
+    >
       <ul className="divide-y divide-border">
         {items === null
           ? Array.from({ length: 6 }, (_, i) => (
@@ -59,6 +61,6 @@ export default function HardwareHealth({ items }: { items: HardwareItem[] | null
               );
             })}
       </ul>
-    </section>
+    </CollapsiblePanel>
   );
 }

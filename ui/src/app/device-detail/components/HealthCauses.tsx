@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import type { DeviceHealth, HealthCause } from '@/lib/types';
 
 export type HealthFilter = 'all' | 'critical' | 'warning' | 'info';
@@ -29,33 +30,39 @@ export default function HealthCauses({
   filter: HealthFilter;
   onFilter: (next: HealthFilter) => void;
 }) {
+  const [open, setOpen] = useState(true);
   const visible = filter === 'all' ? items : items.filter((item) => item.severity === filter);
   return (
-    <section id="health" tabIndex={-1} data-health={health} className="rounded-none border-x-0 border-y border-border bg-card shadow-card outline-none" aria-labelledby="health-causes-title">
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-4 py-2.5">
-        <div>
-          <h2 id="health-causes-title" className="text-base font-semibold">Health</h2>
-          <p className="text-xs text-muted-foreground">Every item that sets this device&apos;s health badge.</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5" role="toolbar" aria-label="Health severity">
-          {CHIPS.map((chip) => {
-            const count = chip.key === 'all' ? items.length : items.filter((item) => item.severity === chip.key).length;
-            const on = filter === chip.key;
-            return (
-              <button
-                key={chip.key}
-                type="button"
-                aria-pressed={on}
-                onClick={() => onFilter(chip.key)}
-                className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${on ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted'}`}
-              >
-                {chip.label} <span className="tabular">{count}</span>
-              </button>
-            );
-          })}
-        </div>
-      </header>
-      <div className="p-3">
+    <CollapsiblePanel
+      title="Health"
+      titleId="health-causes-title"
+      subtitle="Every item that sets this device's health badge."
+      open={open}
+      onOpenChange={setOpen}
+      className="rounded-none border-x-0 border-y border-border bg-card shadow-card outline-none"
+      actions={
+        open ? (
+          <div className="flex flex-wrap gap-1.5" role="toolbar" aria-label="Health severity">
+            {CHIPS.map((chip) => {
+              const count = chip.key === 'all' ? items.length : items.filter((item) => item.severity === chip.key).length;
+              const on = filter === chip.key;
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => onFilter(chip.key)}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${on ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted'}`}
+                >
+                  {chip.label} <span className="tabular">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null
+      }
+    >
+      <div id="health" tabIndex={-1} data-health={health} className="p-3 outline-none">
         {visible.length === 0 ? (
           <p className="px-1 py-6 text-center text-sm text-muted-foreground">
             {items.length === 0 ? 'No issues — healthy' : `No ${filter} issues.`}
@@ -81,6 +88,6 @@ export default function HealthCauses({
           </ul>
         )}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
