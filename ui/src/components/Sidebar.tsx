@@ -37,6 +37,7 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
         label: 'NetBridge',
         icon: 'ArrowsRightLeftIcon',
       },
+      { href: '/device-parents', label: 'Device parents', icon: 'ShareIcon' },
     ],
   },
   {
