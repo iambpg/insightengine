@@ -1073,9 +1073,17 @@ def test_ap_online_from_info_without_oper_metric(stack):
                 {"metric": {"__name__": "ie_wlc_ap_info", "ap": "AP-REG", "ap_name": "AP-REG", "mac": "11:22:33:44:55:66", "ap_operation_state": "ewlc-ap-state-registered", "wlc": "OiOB-Bree-WLC01"}, "value": [NOW, "1"]},
                 {"metric": {"__name__": "ie_wlc_ap_info", "ap": "AP-OLD", "ap_name": "AP-OLD", "mac": "22:22:33:44:55:66", "wlc": "OiOB-Bree-WLC01"}, "value": [NOW - 3600, "1"]},
                 {"metric": {"__name__": "ie_wlc_ap_info", "ap": "AP-DOWN", "ap_name": "AP-DOWN", "mac": "33:22:33:44:55:66", "ap_state/ap_operation_state": "ewlc-ap-state-deregistered", "wlc": "OiOB-Bree-WLC01"}, "value": [NOW, "1"]},
+                {"metric": {"__name__": "ie_wlc_ap_info", "ap": "wc18-ms-ap01", "ap_name": "wc18-ms-ap01", "mac": "58:ac:78:78:09:a0", "wlc": "wlc-a"}, "value": [NOW, "1"]},
             ]
-        if query.startswith("ie_wlc_radio_channel ") or query == "ie_wlc_radio_channel":
-            return [{"metric": {"__name__": "ie_wlc_radio_channel", "ap": "radio-only", "wlc": "wlc-a", "radio": "1"}, "value": [NOW, "36"]}]
+        if "ie_wlc_radio_channel" in query and "util" not in query:
+            return [
+                {"metric": {"__name__": "ie_wlc_radio_channel", "ap": "radio-only", "wlc": "wlc-a", "radio": "1"}, "value": [NOW, "36"]},
+                {"metric": {"__name__": "ie_wlc_radio_channel", "ap": "58:ac:78:78:09:a0", "wlc": "wlc-a", "radio": "0", "band": "radio-80211bg"}, "value": [NOW, "1"]},
+            ]
+        if "ie_wlc_client_radio_snr_avg" in query:
+            return [{"metric": {"__name__": "ie_wlc_client_radio_snr_avg", "ap": "wc18-ms-ap01", "wlc": "wlc-a", "radio": "0"}, "value": [NOW, "24.5"]}]
+        if "ie_wlc_radio_interference" in query:
+            return [{"metric": {"__name__": "ie_wlc_radio_interference", "ap": "wc18-ms-ap01", "wlc": "wlc-a", "radio": "0"}, "value": [NOW, "8"]}]
         if "ie_wlc_ap_oper_up" in query and "radio" not in query:
             return [{"metric": {"__name__": "ie_wlc_ap_oper_up", "ap_name": "ap-1", "wlc": "aireos"}, "value": [NOW, "1"]}]
         return []
@@ -1093,3 +1101,8 @@ def test_ap_online_from_info_without_oper_metric(stack):
     assert rows[("AP-DOWN", "33:22:33:44:55:66")] == "down"
     assert rows[("radio-only", "")] == "up"
     assert rows[("ap-1", "")] == "up"
+    joined = next(row for row in body.json()["rows"] if row["name"] == "wc18-ms-ap01")
+    radio = next(item for item in joined["radios"] if str(item["slot"]) == "0")
+    assert radio["channel"] == 1
+    assert radio["snrAvg"] == 24.5
+    assert radio["interference"] == 8

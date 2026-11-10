@@ -14,12 +14,14 @@ interface PortGlyphProps {
   showLabel?: boolean;
   labelBelow?: boolean;
   labelText?: string;
+  silk?: string | number | null;
+  silkBelow?: boolean;
   onHover: (port: PortInfo | null, el: SVGGElement | null) => void;
   onSelect: (port: PortInfo) => void;
 }
 
 // A single port cutout: recessed housing, inner pins/cage, coloured status rim, state glyph and LED.
-export default function PortGlyph({ port, x, y, size = 20, uid, selected, showLabel, labelBelow, labelText, onHover, onSelect }: PortGlyphProps) {
+export default function PortGlyph({ port, x, y, size = 20, uid, selected, showLabel, labelBelow, labelText, silk, silkBelow, onHover, onSelect }: PortGlyphProps) {
   const c = STATE_COLOR[port.state];
   const isFiber = port.type === 'SFP' || port.type === 'SFP+' || port.type === 'QSFP';
   const w = isFiber ? size * 1.15 : size;
@@ -81,6 +83,11 @@ export default function PortGlyph({ port, x, y, size = 20, uid, selected, showLa
       {showLabel && (
         <text x={w / 2} y={labelBelow ? h + 14 : -4} textAnchor="middle" fontSize={5.6} fill="var(--down)" fontFamily="var(--font-mono)">
           {labelText ?? port.name.replace(/^\D+[\d/]*\//, '')}
+        </text>
+      )}
+      {silk != null && silk !== '' && (
+        <text x={w / 2} y={silkBelow ? h + 12 : -3} textAnchor="middle" fontSize={String(silk).includes('/') ? 4.4 : 6.5} fill="var(--down)" fontFamily="var(--font-mono)" style={{ pointerEvents: 'all' }}>
+          {silk}
         </text>
       )}
     </g>

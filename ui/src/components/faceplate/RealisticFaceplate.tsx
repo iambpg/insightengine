@@ -6,7 +6,8 @@ import { STATE_COLOR, STATE_GLYPH, STATE_LABEL } from './palette';
 import { assignByOpening, hasNamedFaceplateMatch } from './library/assign';
 import { canonicalIface, faceplatePosition, namesMatch } from './library/ifname';
 import type { FaceplateModel, FaceplatePortBox } from './library/catalog';
-import { FACEPLATE_HEIGHT } from './size';
+import { locksChassisFrame } from './library/fortigate';
+import { CHASSIS_WIDTH, FACEPLATE_HEIGHT } from './size';
 
 interface Props {
   device: FaceplateDevice;
@@ -14,6 +15,7 @@ interface Props {
   selectedPortId?: string | null;
   onHover: (port: PortInfo | null, el: SVGGElement | null) => void;
   onSelect: (port: PortInfo) => void;
+  caption?: boolean;
 }
 
 function livePorts(device: FaceplateDevice): PortInfo[] {
@@ -70,6 +72,9 @@ function Hotspot({
   const y = box.y * height;
   const w = Math.max(box.w * width, 1);
   const h = Math.max(box.h * height, 1);
+  const reach = h * 0.55;
+  const hitY = box.y < 0.5 ? Math.max(0, y - reach) : y;
+  const hitH = box.y < 0.5 ? h + (y - hitY) : h + reach;
   return (
     <g
       tabIndex={0}
@@ -108,8 +113,9 @@ function Hotspot({
         stroke={color.rim}
         strokeWidth={disabled ? 1.6 : 1.2}
         strokeDasharray={disabled ? '3 2' : undefined}
-        style={{ pointerEvents: 'all' }}
+        style={{ pointerEvents: 'none' }}
       />
+      <rect x={x} y={hitY} width={w} height={hitH} fill="transparent" style={{ pointerEvents: 'all' }} />
       <text
         x={x + w / 2}
         y={y + h / 2}
@@ -168,7 +174,7 @@ function hotspots({
   });
 }
 
-export default function RealisticFaceplate({ device, model, selectedPortId = null, onHover, onSelect }: Props) {
+export default function RealisticFaceplate({ device, model, selectedPortId = null, onHover, onSelect, caption = true }: Props) {
   const ports = livePorts(device);
   const frameRef = useRef<HTMLDivElement>(null);
   // Port fractions were measured against the library frame. The picture is
@@ -201,22 +207,32 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
   }, [width, model.raster]);
 
   const title = device.modelName || device.model || device.hostname || model.model;
+  const locked = locksChassisFrame(model);
+  const frameW = locked ? CHASSIS_WIDTH : width;
+  const frameH = locked ? FACEPLATE_HEIGHT : height;
 
   return (
     <div>
-      <p className="mb-2 text-xs text-muted-foreground">{title}</p>
+      {caption ? <p className="mb-2 text-xs text-muted-foreground">{title}</p> : null}
       {model.front ? (
         <div
           ref={frameRef}
-          className="mx-auto w-full"
-          style={{ maxWidth: model.raster ? width : undefined, height: height * scale, padding: 0, border: 'none' }}
+          className="relative mx-auto w-full"
+          style={locked ? { aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}`, width: '100%', padding: 0, border: 'none' } : { maxWidth: model.raster ? width : undefined, height: height * scale, padding: 0, border: 'none' }}
         >
           <div
             data-chassis=""
             data-testid="faceplate-stage"
-            style={{
-              width,
-              height,
+            style={locked ? {
+              position: 'relative',
+              width: '100%',
+              aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}`,
+              lineHeight: 0,
+              padding: 0,
+              border: 'none',
+            } : {
+              width: frameW,
+              height: frameH,
               transform: `scale(${scale})`,
               transformOrigin: 'top left',
               position: 'relative',
@@ -229,14 +245,25 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
               src={model.front}
               alt=""
               data-testid="faceplate-image"
-              width={width}
-              height={height}
+              width={locked ? undefined : width}
+              height={locked ? undefined : height}
               draggable={false}
               onLoad={rememberNatural}
-              style={{
+              style={locked ? {
+                position: 'absolute',
+                inset: 0,
                 display: 'block',
-                width,
-                height,
+                width: '100%',
+                height: '100%',
+                objectFit: 'fill',
+                objectPosition: 'left top',
+                pointerEvents: 'none',
+                padding: 0,
+                border: 'none',
+              } : {
+                display: 'block',
+                width: frameW,
+                height: frameH,
                 objectFit: 'fill',
                 objectPosition: 'left top',
                 pointerEvents: 'none',
@@ -251,7 +278,7 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
               aria-label={`${model.model} faceplate`}
               data-testid="realistic-faceplate"
               data-faceplate-source={model.source}
-              style={{ position: 'absolute', left: 0, top: 0, width, height, display: 'block', padding: 0 }}
+              style={locked ? { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', padding: 0 } : { position: 'absolute', left: 0, top: 0, width: frameW, height: frameH, display: 'block', padding: 0 }}
             >
               {hotspots({ model, ports, width, height, selectedPortId, onHover, onSelect })}
             </svg>

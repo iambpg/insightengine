@@ -4,6 +4,7 @@ import React from 'react';
 import type { PortInfo } from '@/lib/types';
 import ChassisBody, { EngravedText, StatusLeds, VentGrille } from '../Chassis';
 import PortGlyph from '../Port';
+import { lockedChassis } from '../size';
 
 export interface LayoutCommon {
   uid: string;
@@ -26,26 +27,64 @@ export const SW_H = 96;
 
 const CABLE_TYPES = new Set(['RJ45', 'SFP', 'SFP+', 'QSFP', 'MGMT']);
 
-function portNumbers(name: string): number[] {
+/** The number printed on the jack: Gi0/1, Fa0/1 and Gi1/0/1 are all face port 1. */
+export function faceNumber(name: string): number | null {
   const found = name.match(/\d+/g);
-  return found ? found.map((part) => Number(part)) : [];
+  if (!found?.length) return null;
+  return Number(found[found.length - 1]);
+}
+
+/** Uplink cages named like Te1/1/1 through Te1/1/4. They are not access port 1. */
+const UPLINK_END = /(\d+)\/1\/([1-4])$/;
+
+export function uplinkEnd(name: string): { member: number; port: number } | null {
+  const match = name.trim().match(UPLINK_END);
+  if (!match) return null;
+  return { member: Number(match[1]), port: Number(match[2]) };
+}
+
+export function silkLabel(name: string): string {
+  const uplink = uplinkEnd(name);
+  if (uplink) return `${uplink.member}/1/${uplink.port}`;
+  const number = faceNumber(name);
+  return number == null ? '' : String(number);
+}
+
+function byFace(left: PortInfo, right: PortInfo): number {
+  const a = faceNumber(left.name);
+  const b = faceNumber(right.name);
+  if (a === 0 && b !== 0) return 1;
+  if (b === 0 && a !== 0) return -1;
+  if (a !== b) return (a ?? Number.MAX_SAFE_INTEGER) - (b ?? Number.MAX_SAFE_INTEGER);
+  return left.name.localeCompare(right.name);
 }
 
 export function cablePorts(ports: PortInfo[]): PortInfo[] {
-  const copper = ports.filter((port) => port.type === 'RJ45' || port.type === 'MGMT');
-  const fiber = ports.filter((port) => port.type === 'SFP' || port.type === 'SFP+' || port.type === 'QSFP');
-  const rest = ports.filter((port) => !CABLE_TYPES.has(port.type) && port.type !== 'CONSOLE' && port.type !== 'USB');
-  const ordered = [...copper, ...fiber, ...rest];
-  return ordered.sort((left, right) => {
-    const a = portNumbers(left.name);
-    const b = portNumbers(right.name);
-    const length = Math.max(a.length, b.length);
-    for (let index = 0; index < length; index += 1) {
-      const delta = (a[index] ?? -1) - (b[index] ?? -1);
-      if (delta) return delta;
-    }
-    return left.name.localeCompare(right.name);
+  const uplinks: PortInfo[] = [];
+  const body = ports.filter((port) => {
+    if (!uplinkEnd(port.name)) return true;
+    uplinks.push(port);
+    return false;
   });
+  const copper = body.filter((port) => port.type === 'RJ45' || port.type === 'MGMT');
+  const fiber = body.filter((port) => port.type === 'SFP' || port.type === 'SFP+' || port.type === 'QSFP');
+  const rest = body.filter((port) => !CABLE_TYPES.has(port.type) && port.type !== 'CONSOLE' && port.type !== 'USB');
+  const zeros: PortInfo[] = [];
+  const keep = (list: PortInfo[]) => {
+    const numbered: PortInfo[] = [];
+    for (const port of list) {
+      if (faceNumber(port.name) === 0) zeros.push(port);
+      else numbered.push(port);
+    }
+    return numbered.sort(byFace);
+  };
+  uplinks.sort((left, right) => {
+    const a = uplinkEnd(left.name)!;
+    const b = uplinkEnd(right.name)!;
+    if (a.member !== b.member) return a.member - b.member;
+    return a.port - b.port;
+  });
+  return [...keep(copper), ...keep(fiber), ...keep(rest), ...zeros.sort(byFace), ...uplinks];
 }
 
 export function switchWidth(portCount: number) {
@@ -57,10 +96,13 @@ export function switchWidth(portCount: number) {
 export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect, originX = 0, originY = 0, memberNumber, memberHealthColor, stackPorts }: SwitchProps) {
   const laid = cablePorts(ports);
   const cols = Math.max(1, Math.ceil(laid.length / 2));
-  const W = switchWidth(laid.length);
+  const W = lockedChassis().innerW;
   const startX = 74;
-
-  const colX = (c: number) => startX + c * 24 + Math.floor(c / 4) * 6;
+  const right = stackPorts ? 78 : 28;
+  const usable = Math.max(22, W - startX - right);
+  const pitch = usable / cols;
+  const glyph = Math.min(19, Math.max(12, pitch - 5));
+  const colX = (c: number) => startX + c * pitch + Math.max(0, (pitch - glyph) / 2);
 
   const anyFault = ports.some((p) => p.state === 'fault');
   const anyWarn = ports.some((p) => p.state === 'warning');
@@ -100,17 +142,11 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
           return (
             <React.Fragment key={`${uid}-col-${c + 1}`}>
               {top && (
-                <PortGlyph port={top} x={colX(c)} y={20} size={19} uid={uid} selected={selectedId === top.id} onHover={onHover} onSelect={onSelect} />
+                <PortGlyph port={top} x={colX(c)} y={20} size={glyph} uid={uid} selected={selectedId === top.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(top.name)} />
               )}
               {bottom && (
-                <PortGlyph port={bottom} x={colX(c)} y={52} size={19} uid={uid} selected={selectedId === bottom.id} onHover={onHover} onSelect={onSelect} />
+                <PortGlyph port={bottom} x={colX(c)} y={52} size={glyph} uid={uid} selected={selectedId === bottom.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(bottom.name)} silkBelow />
               )}
-              <text x={colX(c) + 9.5} y={14} textAnchor="middle" fontSize={5} fill="var(--down)" fontFamily="var(--font-mono)" aria-hidden="true">
-                {c * 2 + 1}
-              </text>
-              <text x={colX(c) + 9.5} y={SW_H - 8} textAnchor="middle" fontSize={5} fill="var(--down)" fontFamily="var(--font-mono)" aria-hidden="true">
-                {bottom ? c * 2 + 2 : ''}
-              </text>
             </React.Fragment>
           );
         })}

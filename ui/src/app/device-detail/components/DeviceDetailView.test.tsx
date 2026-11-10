@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/apiError';
 import { api } from '@/lib/apiClient';
-import type { DeviceDetailData, HealthCause } from '@/lib/types';
+import type { DeviceDetailData, HealthCause, PortInfo } from '@/lib/types';
 import DeviceDetailView from './DeviceDetailView';
 
 const queryState = vi.hoisted(() => ({ value: '' }));
@@ -37,6 +37,7 @@ vi.mock('@/lib/apiClient', () => ({
 }));
 
 vi.mock('./DeviceGraphs', () => ({ default: () => null }));
+vi.mock('@/components/charts/GraphPanel', () => ({ default: () => null }));
 vi.mock('@/components/faceplate/Faceplate', () => ({
   default: () => null,
   FaceplateLegend: () => null,
@@ -256,5 +257,99 @@ describe('DeviceDetailView client navigation', () => {
     await waitFor(() => expect(screen.queryByText('PSU failed')).toBeNull());
     expect(screen.getByText('CPU high')).toBeInTheDocument();
     expect(screen.getByText('83%')).toBeInTheDocument();
+  });
+
+  it('shows the faceplate in the header and opens port details in a drawer', async () => {
+    queryState.value = 'id=42';
+    const port: PortInfo = { id: 'p1', name: 'GigabitEthernet1/0/1', type: 'RJ45', speed: '1 Gbps', state: 'up', utilisation: 10, errors: 0 };
+    vi.mocked(api.getDevice).mockResolvedValue({
+      ...device('42', 'edge-42'),
+      faceplate: { form_factor: 'access-switch-48', role: 'Access switch', ports: [port] },
+    });
+    const user = userEvent.setup();
+    render(<DeviceDetailView />);
+    const header = await screen.findByRole('banner');
+    const faceplate = screen.getByTestId('device-faceplate');
+    expect(header).not.toContainElement(faceplate);
+    expect(header.compareDocumentPosition(faceplate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Faceplate/ })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Access Points' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Radio performance' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByRole('tab', { name: 'Interfaces' }));
+    await user.click(screen.getByRole('cell', { name: 'GigabitEthernet1/0/1' }));
+    const drawer = await screen.findByRole('dialog', { name: /GigabitEthernet1\/0\/1/ });
+    expect(drawer).toHaveClass('fixed', 'right-0');
+    expect(screen.getByRole('button', { name: 'Close port panel' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'edge-42' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close port panel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('adds an Access Points tab for a wireless controller', async () => {
+    queryState.value = 'id=42';
+    vi.mocked(api.getDevice).mockResolvedValue({
+      ...device('42', 'wlc-42'),
+      role: 'Wireless controller',
+      faceplate: { form_factor: 'wireless-controller', role: 'Wireless controller', ports: [] },
+      healthPanel: {
+        profile: 'iosxe-wlc',
+        profileLabel: 'Cisco Catalyst 9800',
+        groups: [],
+        interfacesSupported: true,
+        interfaces: [],
+        interfacesNote: '',
+        wlc: { joinedAps: 4, clients: 20, note: '' },
+        accessPoint: { note: '', status: '', clients: null, uptimeSeconds: null, radios: [] },
+      },
+    });
+    render(<DeviceDetailView />);
+    expect(await screen.findByRole('tab', { name: 'Access Points' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Radio performance' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('shows radio performance beside the faceplate only for an access point', async () => {
+    queryState.value = 'id=42';
+    vi.mocked(api.getDevice).mockResolvedValue({
+      ...device('42', 'ap-42'),
+      role: 'Access point',
+      faceplate: { form_factor: 'ceiling-ap', role: 'Access point', ports: [], radios: [], apState: 'up' },
+      healthPanel: {
+        profile: 'ap',
+        profileLabel: 'Cisco access point',
+        groups: [],
+        interfacesSupported: false,
+        interfaces: [],
+        interfacesNote: '',
+        wlc: null,
+        accessPoint: {
+          note: '',
+          status: 'up',
+          clients: 11,
+          uptimeSeconds: 100,
+          radios: [
+            { slot: '1', band: '5', channel: 36, utilization: 0.22, clients: 11, rssiAvg: -58, snrAvg: 30, interference: 8 },
+            { slot: '2', band: '6', channel: 37, utilization: 0.1, clients: 2, rssiAvg: -55, snrAvg: 32, interference: 4 },
+            { slot: '0', band: '2.4', channel: 6, utilization: 0.41, clients: 7, rssiAvg: -64, snrAvg: 24, interference: 14 },
+          ],
+        },
+      },
+    });
+    render(<DeviceDetailView />);
+    const board = await screen.findByRole('region', { name: 'Radio performance' });
+    const drawing = screen.getByTestId('device-faceplate').firstElementChild;
+    expect(drawing?.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const two = screen.getByRole('article', { name: '2.4 GHz radio' });
+    const five = screen.getByRole('article', { name: '5 GHz radio' });
+    const six = screen.getByRole('article', { name: '6 GHz radio' });
+    expect(two.compareDocumentPosition(five) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(five.compareDocumentPosition(six) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(five).toHaveTextContent('30 dB');
+    expect(five).toHaveTextContent('-58 dBm');
+    expect(five).toHaveTextContent('75%');
+    expect(five).toHaveTextContent('8%');
+    expect(five).toHaveTextContent('Clear of noise');
+    expect(two).toHaveTextContent('24 dB');
   });
 });

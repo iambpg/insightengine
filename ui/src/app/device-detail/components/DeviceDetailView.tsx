@@ -5,14 +5,10 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/AppIcon';
-import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
-import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
-import { FACEPLATE_HEIGHT } from '@/components/faceplate/size';
-import { countPorts, faceplateSummaryLine, SNMP_MISSING_HINT } from '@/components/faceplate/summary';
-import { namesMatch } from '@/components/faceplate/library/ifname';
+import Faceplate from '@/components/faceplate/Faceplate';
 import { portNameLine } from '@/components/faceplate/portText';
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
@@ -24,7 +20,7 @@ import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
-import type { DeviceDetailData, DeviceParentLink, HealthCause, InventorySide, PortInfo } from '@/lib/types';
+import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo, RadioInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
 import HealthChecks from './HealthChecks';
@@ -35,6 +31,24 @@ import PortTable from './PortTable';
 
 const FORMS = Object.keys(FACEPLATE_SAMPLES);
 const NEEDS_ID = 'Open a device from the list. This page needs a device id.';
+const BASE_TABS = [
+  { id: 'inventory', label: 'Inventory' },
+  { id: 'graphs', label: 'Graphs/Performance' },
+  { id: 'interfaces', label: 'Interfaces' },
+  { id: 'configs', label: 'Configs' },
+  { id: 'logs', label: 'Logs' },
+] as const;
+type DetailTab = (typeof BASE_TABS)[number]['id'] | 'access-points';
+
+function isWirelessController(device: DeviceDetailData | null | undefined): boolean {
+  if (!device) return false;
+  return Boolean(device.healthPanel?.wlc) || device.faceplate?.form_factor === 'wireless-controller';
+}
+
+function sectionTabs(wlc: boolean): { id: DetailTab; label: string }[] {
+  if (!wlc) return [...BASE_TABS];
+  return [BASE_TABS[0], { id: 'access-points', label: 'Access Points' }, ...BASE_TABS.slice(1)];
+}
 
 function isFaceplateKey(value: string): boolean {
   return FORMS.includes(value) || value.startsWith('fg-') || value.startsWith('pa-');
@@ -106,13 +120,12 @@ export default function DeviceDetailView() {
   const [rediscovering, setRediscovering] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [healthFilter, setHealthFilter] = useState<HealthFilter>('all');
+  const [detailTab, setDetailTab] = useState<DetailTab>('inventory');
+  const [stageLocked, setStageLocked] = useState(false);
   const [addAp, setAddAp] = useState(false);
-  const [cable, setCable] = useState<{ remotePort: string; localPort: string; plate: HTMLElement } | null>(null);
   const healthApplied = useRef('');
-  const localPlateRef = useRef<HTMLDivElement>(null);
-  const greyRef = useRef<HTMLDivElement>(null);
-  const plateRefs = useRef(new Map<string, HTMLDivElement>());
-  const plateBinders = useRef(new Map<string, (el: HTMLDivElement | null) => void>());
+  const stageRef = useRef<HTMLDivElement>(null);
+  const detailScroll = useRef<HTMLDivElement>(null);
   const discoveryJob = usePolledDeviceDiscovery(postedDiscovery, {
     onError: (job) => toast.error(job.message || 'Rediscover failed.'),
     onDone: () => toast.success('Rediscover finished.'),
@@ -123,43 +136,10 @@ export default function DeviceDetailView() {
   const canLoad = ready && (!live || Boolean(id));
   const loaded = useKeyedLoad<DeviceDetailData>(deviceKey, canLoad, attempt, 'this device', (key) => api.getDevice(key));
   const device = loaded.data;
-  const kin = useMemo(() => {
-    const rows: { id: string; localPort: string; remotePort: string }[] = [];
-    if (device?.parent) {
-      rows.push({ id: device.parent.id, localPort: device.parent.uplinkInterface, remotePort: device.parent.parentInterface });
-    }
-    for (const child of device?.children ?? []) {
-      rows.push({ id: child.id, localPort: child.parentInterface, remotePort: child.uplinkInterface });
-    }
-    return rows;
-  }, [device]);
-
-  const plateBinder = (id: string) => {
-    let binder = plateBinders.current.get(id);
-    if (!binder) {
-      binder = (el: HTMLDivElement | null) => {
-        if (el) plateRefs.current.set(id, el);
-        else plateRefs.current.delete(id);
-      };
-      plateBinders.current.set(id, binder);
-    }
-    return binder;
-  };
 
   useEffect(() => {
     setSelected(null);
-    setCable(null);
   }, [deviceKey]);
-
-  useEffect(() => {
-    if (!selected) {
-      setCable(null);
-      return;
-    }
-    const hit = kin.find((row) => portIs(selected, row.localPort));
-    const plate = hit ? plateRefs.current.get(hit.id) ?? document.querySelector<HTMLElement>(`[data-relation-id="${hit.id}"]`) : null;
-    setCable(hit && plate ? { remotePort: hit.remotePort, localPort: selected.name, plate } : null);
-  }, [selected, kin, device?.id]);
 
   useEffect(() => {
     if (!ready || !live || id) {
@@ -187,12 +167,35 @@ export default function DeviceDetailView() {
     const key = `${device.id}|${tab}|${severityQuery}`;
     if (healthApplied.current === key) return;
     healthApplied.current = key;
+    if (tab === 'inventory' || tab === 'graphs' || tab === 'interfaces' || tab === 'configs' || tab === 'logs' || (tab === 'access-points' && isWirelessController(device))) {
+      setDetailTab(tab);
+    }
     if (tab !== 'health') return;
     const next: HealthFilter = severityQuery === 'critical' || severityQuery === 'warning' || severityQuery === 'info' ? severityQuery : 'all';
     setHealthFilter(next);
-    const section = document.getElementById('health');
-    if (section && typeof section.scrollIntoView === 'function') section.scrollIntoView({ block: 'start' });
+    setDetailTab('inventory');
+    const stage = stageRef.current;
+    if (stage && typeof stage.scrollIntoView === 'function') stage.scrollIntoView({ block: 'start' });
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById('health');
+      const scroller = detailScroll.current;
+      if (!section || !scroller) return;
+      const top = section.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+      scroller.scrollTop = Math.max(0, top);
+    });
   }, [device, tab, severityQuery]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return undefined;
+    const onScroll = () => {
+      const locked = stage.getBoundingClientRect().top <= 68;
+      setStageLocked((current) => (current === locked ? current : locked));
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [device?.id]);
 
   const apDraft = useMemo(() => {
     const point = device?.healthPanel?.accessPoint;
@@ -255,6 +258,13 @@ export default function DeviceDetailView() {
     return items.filter((issue) => !/icmp|unreachable|not answering/i.test(`${issue.title} ${issue.detail}`));
   }, [device]);
 
+  const wlcView = isWirelessController(device);
+  const tabs = sectionTabs(wlcView);
+
+  useEffect(() => {
+    if (detailTab === 'access-points' && !wlcView) setDetailTab('inventory');
+  }, [detailTab, wlcView]);
+
   const allPorts = useMemo<PortInfo[]>(() => {
     if (!device) return [];
     const f = device.faceplate;
@@ -273,7 +283,7 @@ export default function DeviceDetailView() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="-mb-6 space-y-3">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 px-4 text-xs text-muted-foreground">
         <Link href="/" className="hover:text-foreground hover:underline">Devices</Link>
         <Icon name="ChevronRightIcon" size={12} />
@@ -281,9 +291,9 @@ export default function DeviceDetailView() {
       </nav>
 
       {/* header */}
-      <header className="rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card">
+      <header className="rounded-none border-x-0 border-y border-border bg-card px-3 py-2 shadow-card">
         {device ? (
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="rounded-lg border border-border bg-muted/50 px-3 py-1.5 font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
@@ -299,7 +309,7 @@ export default function DeviceDetailView() {
                   </span>
                 )}
               </div>
-              <dl className="mt-3 flex flex-wrap gap-2 text-sm">
+              <dl className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                 <Meta label="Role" value={device.role} shade={device.roleColor} />
                 <Meta label="Model" value={device.partNumber || device.faceplate.partNumber || device.faceplate.modelName || device.modelFamily} mono shade={toneShade(syncTones.tones.model)} />
                 <Meta label="Serial number" value={device.serialMasked} mono shade={toneShade(syncTones.tones.serial)} />
@@ -310,7 +320,7 @@ export default function DeviceDetailView() {
                 <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
             </div>
-            <div className="grid shrink-0 grid-cols-2 gap-2">
+            <div className="grid w-[17.5rem] shrink-0 grid-cols-2 gap-1.5 justify-self-end">
               <button
                 type="button"
                 disabled={rediscovering || !device.mgmtIp}
@@ -324,7 +334,7 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setRediscovering(false));
                 }}
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 text-sm font-medium transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
               >
                 <Icon name="MagnifyingGlassIcon" size={16} />
                 {rediscovering ? 'Rediscovering…' : 'Rediscover'}
@@ -348,7 +358,7 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setSyncing(false));
                 }}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
+                className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 text-sm font-medium text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
               >
                 <Icon name="ArrowsRightLeftIcon" size={16} />
                 {syncing ? 'Syncing…' : 'Netbox Sync'}
@@ -359,7 +369,7 @@ export default function DeviceDetailView() {
                   setRerun(true);
                   setTimeout(() => setRerun(false), 1100);
                 }}
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 text-center text-sm font-medium leading-tight transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="ArrowPathIcon" size={16} className={rerun ? 'animate-spin' : ''} />
                 {rerun ? 'Running checks…' : 'Re-run health check'}
@@ -370,13 +380,13 @@ export default function DeviceDetailView() {
                     ? `/device-cli?form=${encodeURIComponent(form)}`
                     : `/device-cli?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
                 }
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="CommandLineIcon" size={16} />
                 Open device
               </Link>
             </div>
-            <div className="basis-full">
+            <div className="xl:col-span-2">
               <DeviceDiscoveryStatus job={discoveryJob} />
             </div>
           </div>
@@ -389,143 +399,144 @@ export default function DeviceDetailView() {
         )}
       </header>
 
-      {apDraft.length > 0 ? (
-        <div className="px-4">
-          <button type="button" onClick={() => setAddAp(true)} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Add to NetBox</button>
-          <AddApDialog open={addAp} aps={apDraft} onClose={() => setAddAp(false)} onDone={() => undefined} />
-        </div>
-      ) : null}
-
-      {/* issues + hardware health + health check */}
-      <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Device status overview">
-        <div className="grid grid-cols-1 items-stretch gap-3 p-3 xl:grid-cols-3">
-          <div className="h-[25.6rem] min-h-0">
-            <HealthCauses
-              items={device ? healthItems : null}
-              health={device?.health ?? 'healthy'}
-              filter={healthFilter}
-              onFilter={setHealthFilter}
-              ports={allPorts}
-              onSelectPort={(port) => {
-                setSelected(port);
-                document.getElementById('fp-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-            />
-          </div>
-          <div className="h-[25.6rem] min-h-0">
-            <HardwareHealth items={device?.hardware ?? null} />
-          </div>
-          <div className="h-[25.6rem] min-h-0">
-            <HealthChecks checks={device?.checks ?? null} runAt={device?.checkRunAt ?? ''} running={rerun} />
-          </div>
-        </div>
-      </section>
-
-      {device?.healthPanel?.wlc ? <AccessPointList wlc={device.hostname} /> : null}
-
-      {/* faceplate */}
-      <CollapsiblePanel
-        title="Faceplate"
-        titleId="fp-title"
-        subtitle="Pick a device to see its own faceplate. Hover a port for details, click to open its graph."
-      >
-        {isMockMode() ? (
-        <div role="tablist" aria-label="Devices at this site" className="scroll-thin flex gap-2 overflow-x-auto border-b border-border bg-muted/40 px-4 py-2">
-          {FORMS.map((f) => {
-            const active = f === form;
-            return (
-              <button
-                key={`dev-${f}`}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setPickedForm(f)}
-                className={`inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
-                  active ? 'border-primary bg-primary/10 text-foreground shadow-card' : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                <Icon name={(DEVICE_ICON[f] ?? (f.startsWith('fg-') || f.startsWith('pa-') ? 'ShieldCheckIcon' : 'CubeIcon')) as any} size={16} />
-                {FACEPLATE_SAMPLES[f].label}
-              </button>
-            );
-          })}
-        </div>
-        ) : null}
-
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto]">
-          <div className="min-w-0 p-4">
-            <div ref={greyRef} className={`relative rounded-lg bg-gradient-to-b from-secondary to-background p-3 ${kin.length > 0 ? '' : 'scroll-thin overflow-x-auto'}`}>
-              <div className={`flex items-center gap-6 ${kin.length > 0 ? 'w-max max-w-full' : ''}`}>
-                <div ref={localPlateRef} className={kin.length > 0 ? 'scroll-thin min-w-0 overflow-x-auto' : 'shrink-0'}>
-                  {device ? (
-                    <div
-                      className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex w-max min-w-full items-center'}
-                      style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
+      {device ? (
+        <div ref={stageRef} data-testid="device-stage" className="sticky top-16 z-20 flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden bg-background">
+          <section aria-label="Faceplate" data-testid="device-faceplate" className="shrink-0 rounded-none border-x-0 border-y border-border bg-card px-3 py-2 shadow-card">
+            {isMockMode() ? (
+              <div role="tablist" aria-label="Devices at this site" className="scroll-thin mb-2 flex gap-2 overflow-x-auto">
+                {FORMS.map((f) => {
+                  const active = f === form;
+                  return (
+                    <button
+                      key={`dev-${f}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setPickedForm(f)}
+                      className={`inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-all active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+                        active ? 'border-primary bg-primary/10 text-foreground shadow-card' : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
                     >
-                      <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} />
-                    </div>
-                  ) : (
-                    <Skeleton className="h-[168px] w-full" />
-                  )}
-                </div>
-                {kin.length > 0 ? (
-                  <div className="flex w-max min-w-0 max-w-[50%] shrink-0 items-center gap-3 overflow-hidden">
-                    {device?.parent ? <RelationFaceplate link={device.parent} label="Parent" plateRef={plateBinder(device.parent.id)} className="w-40 min-w-[5.5rem] shrink-[0.2]" /> : null}
-                    {(device?.children ?? []).length > 0 ? (
-                      <div className="flex min-w-0 shrink items-center gap-2">
-                        {(device?.children ?? []).map((child) => (
-                          <RelationFaceplate key={child.id} link={child} label="Child" plateRef={plateBinder(child.id)} className="w-40 min-w-0 max-w-40 shrink" />
-                        ))}
-                      </div>
-                    ) : null}
+                      <Icon name={(DEVICE_ICON[f] ?? (f.startsWith('fg-') || f.startsWith('pa-') ? 'ShieldCheckIcon' : 'CubeIcon')) as any} size={16} />
+                      {FACEPLATE_SAMPLES[f].label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            <div className="relative w-full overflow-hidden rounded-md bg-gradient-to-b from-secondary to-background p-1">
+              <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} caption={false} />
+            </div>
+            {device.faceplate.form_factor === 'ceiling-ap' ? <ApRadioBoards device={device} /> : null}
+          </section>
+          <div role="tablist" aria-label="Device sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card px-3">
+            {tabs.map((item) => {
+              const active = detailTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    setDetailTab(item.id);
+                    if (detailScroll.current) detailScroll.current.scrollTop = 0;
+                  }}
+                  className={`shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                    active ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+          <div ref={detailScroll} className={`min-h-0 flex-1 ${stageLocked ? 'overflow-y-auto' : 'overflow-y-hidden'}`}>
+            {detailTab === 'inventory' ? (
+              <div className="space-y-3 pb-4">
+                {apDraft.length > 0 ? (
+                  <div className="px-4 pt-3">
+                    <button type="button" onClick={() => setAddAp(true)} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Add to NetBox</button>
+                    <AddApDialog open={addAp} aps={apDraft} onClose={() => setAddAp(false)} onDone={() => undefined} />
                   </div>
                 ) : null}
+                <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Device status overview">
+                  <div className="grid grid-cols-1 items-stretch gap-3 p-3 xl:grid-cols-3">
+                    <div className="h-[25.6rem] min-h-0">
+                      <HealthCauses
+                        items={healthItems}
+                        health={device.health}
+                        filter={healthFilter}
+                        onFilter={setHealthFilter}
+                        ports={allPorts}
+                        onSelectPort={setSelected}
+                      />
+                    </div>
+                    <div className="h-[25.6rem] min-h-0">
+                      <HardwareHealth items={device.hardware ?? null} />
+                    </div>
+                    <div className="h-[25.6rem] min-h-0">
+                      <HealthChecks checks={device.checks ?? null} runAt={device.checkRunAt ?? ''} running={rerun} />
+                    </div>
+                  </div>
+                </section>
+                {isMockMode() ? (
+                  <ExampleDataBanner text="Device, port and graph values below come from mock JSON in the API client." />
+                ) : (
+                  <Inventory device={device} />
+                )}
               </div>
-              {device ? <ParentBlock device={device} /> : null}
-              {cable ? <UplinkCable localRef={localPlateRef} greyRef={greyRef} remote={cable.plate} localPortName={cable.localPort} remotePortName={cable.remotePort} /> : null}
-            </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <FaceplateLegend />
-              <div className="text-xs text-muted-foreground">
-                <p data-testid="faceplate-summary">{faceplateSummaryLine(countPorts(allPorts), device?.faceplate.snmpAt)}</p>
-                {device?.faceplate.snmpMissing ? <p className="mt-1">{SNMP_MISSING_HINT}</p> : null}
+            ) : null}
+            {detailTab === 'graphs' ? (
+              <div className="p-3">
+                <DeviceGraphs deviceId={device.id} profile={device.healthPanel?.profile} />
               </div>
-            </div>
-            {selected && (
-              <div className="slide-in-right mt-3">
-                <PortThroughputGraph port={selected} deviceId={device?.id} />
+            ) : null}
+            {detailTab === 'interfaces' ? (
+              <div className="p-3">
+                <PortTable ports={allPorts} selectedId={selected?.id ?? null} onSelect={setSelected} />
               </div>
-            )}
+            ) : null}
+            {detailTab === 'configs' ? <ConfigBackup device={device} /> : null}
+            {detailTab === 'logs' ? <DeviceLogs deviceId={device.id} hostname={device.hostname} /> : null}
+            {detailTab === 'access-points' ? (
+              <div className="pb-4">
+                <AccessPointList wlc={device.hostname} />
+              </div>
+            ) : null}
           </div>
-          {selected && (
-            <div className="slide-in-right border-t border-border xl:w-[380px] xl:border-l xl:border-t-0">
-              <PortSidePanel port={selected} onClose={() => setSelected(null)} />
-            </div>
-          )}
         </div>
-      </CollapsiblePanel>
-
-      {isMockMode() ? (
-        <ExampleDataBanner text="Device, port and graph values below come from mock JSON in the API client." />
       ) : null}
 
-      {device && !isMockMode() ? <Inventory device={device} /> : null}
-
-      {device && <DeviceGraphs deviceId={device.id} profile={device.healthPanel?.profile} />}
-
-      {device && <PortTable ports={allPorts} selectedId={selected?.id ?? null} onSelect={setSelected} />}
+      {selected ? <PortDrawer port={selected} deviceId={device?.id} onClose={() => setSelected(null)} /> : null}
     </div>
+  );
+}
+
+function PortDrawer({ port, deviceId, onClose }: { port: PortInfo; deviceId?: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="drawer-in fixed inset-y-0 right-0 z-[90] flex w-full max-w-[420px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl" role="dialog" aria-modal="false" aria-label={`Port ${port.name} details`}>
+      <PortSidePanel port={port} onClose={onClose} />
+      <div className="px-4 pb-4">
+        <PortThroughputGraph port={port} deviceId={deviceId} />
+      </div>
+    </div>,
+    document.body,
   );
 }
 
 function Inventory({ device }: { device: DeviceDetailData }) {
   const sources = device.sources ?? [];
   return (
-    <CollapsiblePanel
-      title="Inventory"
-      className="rounded-none border-x-0 border-y border-border bg-card shadow-card"
-      bodyClassName="space-y-3 p-4"
-    >
+    <div className="space-y-3 rounded-none border-x-0 border-y border-border bg-card p-4 shadow-card">
       {sources.length > 0 ? (
         <ul className="flex flex-wrap gap-2 text-xs">
           {sources.map((source) => (
@@ -576,15 +587,231 @@ function Inventory({ device }: { device: DeviceDetailData }) {
           )}
         </div>
       </div>
-      <div>
-        <h2 className="text-sm font-semibold">Last config backup</h2>
-        {device.backup?.available ? (
-          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono-data text-xs">{device.backup.config || device.backup.status || 'Backup recorded'}</pre>
-        ) : (
-          <p className="mt-1 text-sm text-muted-foreground">{device.backup?.reason || 'Oxidized has no backup for this device.'}</p>
-        )}
-      </div>
-    </CollapsiblePanel>
+    </div>
+  );
+}
+
+function ConfigBackup({ device }: { device: DeviceDetailData }) {
+  return (
+    <div className="p-4">
+      <h2 className="text-sm font-semibold">Last config backup</h2>
+      {device.backup?.at ? <p className="mt-1 text-xs text-muted-foreground">{device.backup.at}{device.backup.status ? ` · ${device.backup.status}` : ''}</p> : null}
+      {device.backup?.available ? (
+        <pre className="mt-2 whitespace-pre-wrap rounded-md bg-muted p-3 font-mono-data text-xs">{device.backup.config || device.backup.status || 'Backup recorded'}</pre>
+      ) : (
+        <p className="mt-1 text-sm text-muted-foreground">{device.backup?.reason || 'Oxidized has no backup for this device.'}</p>
+      )}
+    </div>
+  );
+}
+
+function DeviceLogs({ deviceId, hostname }: { deviceId: string; hostname: string }) {
+  const [lines, setLines] = useState<{ at: string; severity: string; message: string }[]>([]);
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancel = false;
+    setLoading(true);
+    api.getDeviceLogs(deviceId, hostname)
+      .then((body) => {
+        if (cancel) return;
+        setLines(body.lines || []);
+        setReason(body.reason || '');
+      })
+      .catch((error) => {
+        if (cancel) return;
+        setLines([]);
+        setReason(isApiError(error) ? error.message : 'Syslog could not be loaded.');
+      })
+      .finally(() => {
+        if (!cancel) setLoading(false);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [deviceId, hostname]);
+
+  return (
+    <div className="p-4">
+      <h2 className="text-sm font-semibold">Syslog</h2>
+      <p className="mt-1 text-xs text-muted-foreground">Lines stored for {hostname} during the last day.</p>
+      {loading ? <p className="mt-3 text-sm text-muted-foreground">Loading logs…</p> : null}
+      {!loading && lines.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">{reason || 'No syslog lines for this device.'}</p> : null}
+      {lines.length > 0 ? (
+        <ul className="mt-3 space-y-1 font-mono-data text-xs">
+          {lines.map((line, index) => (
+            <li key={`${line.at}-${index}`} className="grid grid-cols-[9.5rem_4.5rem_minmax(0,1fr)] gap-2 border-b border-border/60 py-1">
+              <span className="text-muted-foreground">{line.at}</span>
+              <span>{line.severity || '—'}</span>
+              <span className="break-all">{line.message}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function bandName(radio: AccessPointRadio, fallback?: string): string {
+  const band = (radio.band || fallback || '').trim();
+  if (!band) return radio.slot ? `Radio ${radio.slot}` : 'Radio';
+  const text = band.toLowerCase();
+  if (/6\s?ghz|802\.?11.?6/.test(text)) return '6 GHz';
+  if (/802\.?11bg|802\.?11b|802\.?11g|2\.4|24\s?ghz/.test(text)) return '2.4 GHz';
+  if (/802\.?11a|5\s?ghz/.test(text)) return '5 GHz';
+  if (/ghz/i.test(band)) return band;
+  return `${band} GHz`;
+}
+
+function bandRank(title: string): number {
+  const found = title.match(/(\d+(?:\.\d+)?)/);
+  return found ? Number(found[1]) : 1000;
+}
+
+function reading(value: number | null | undefined, unit: string): string {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  const number = Number(value);
+  const shown = Number.isInteger(number) ? String(number) : number.toFixed(1);
+  return `${shown} ${unit}`;
+}
+
+function asPercent(value: number | null | undefined): number | null {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  const number = Number(value);
+  return Math.abs(number) <= 1 ? number * 100 : number;
+}
+
+function parseDbm(value?: string): number | null {
+  if (!value) return null;
+  const found = value.match(/-?\d+(\.\d+)?/);
+  return found ? Number(found[0]) : null;
+}
+
+type Tone = 'good' | 'fair' | 'poor' | 'none';
+
+function toneColor(tone: Tone): string {
+  if (tone === 'good') return 'var(--success)';
+  if (tone === 'fair') return 'var(--warning)';
+  if (tone === 'poor') return 'var(--destructive)';
+  return 'var(--muted-foreground)';
+}
+
+function snrTone(value: number | null): Tone {
+  if (value == null) return 'none';
+  if (value >= 25) return 'good';
+  if (value >= 15) return 'fair';
+  return 'poor';
+}
+
+function rssiTone(value: number | null): Tone {
+  if (value == null) return 'none';
+  if (value >= -67) return 'good';
+  if (value >= -75) return 'fair';
+  return 'poor';
+}
+
+function signalTone(value: number | null): Tone {
+  if (value == null) return 'none';
+  if (value >= 70) return 'good';
+  if (value >= 40) return 'fair';
+  return 'poor';
+}
+
+function interferenceTone(value: number | null): Tone {
+  if (value == null) return 'none';
+  if (value <= 10) return 'good';
+  if (value <= 25) return 'fair';
+  return 'poor';
+}
+
+function worstTone(tones: Tone[]): Tone {
+  if (tones.includes('poor')) return 'poor';
+  if (tones.includes('fair')) return 'fair';
+  if (tones.includes('good')) return 'good';
+  return 'none';
+}
+
+function ApRadioBoards({ device }: { device: DeviceDetailData }) {
+  const live = device.healthPanel?.accessPoint?.radios ?? [];
+  const drawn = device.faceplate.radios ?? [];
+  const boards = (live.length
+    ? live.map((radio, index) => {
+        const extra: RadioInfo | undefined = drawn[index];
+        const snr = radio.snrAvg ?? null;
+        const rssi = radio.rssiAvg ?? parseDbm(extra?.avgRssi);
+        const interference = asPercent(radio.interference);
+        const fromSnr = snr == null ? null : Math.max(0, Math.min(100, (snr / 40) * 100));
+        const fromRssi = rssi == null ? null : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100));
+        const signal = fromSnr ?? fromRssi ?? asPercent(radio.utilization ?? (extra ? extra.utilisation / 100 : null));
+        return {
+          id: `${radio.slot || extra?.id || index}`,
+          title: bandName(radio, extra?.band),
+          channel: radio.channel ?? extra?.channel ?? '—',
+          clients: radio.clients ?? extra?.clients ?? null,
+          snr,
+          rssi,
+          signal,
+          interference,
+        };
+      })
+    : drawn.map((radio) => {
+        const rssi = parseDbm(radio.avgRssi);
+        const signal = rssi == null ? asPercent(radio.utilisation) : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100));
+        return {
+          id: radio.id,
+          title: radio.band,
+          channel: radio.channel,
+          clients: radio.clients,
+          snr: null as number | null,
+          rssi,
+          signal,
+          interference: null as number | null,
+        };
+      })
+  ).sort((left, right) => bandRank(left.title) - bandRank(right.title) || left.title.localeCompare(right.title));
+
+  return (
+    <div className="mt-2 grid auto-cols-fr grid-flow-col gap-2" role="region" aria-label="Radio performance">
+      {boards.length === 0 ? (
+        <p className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-xs text-muted-foreground">No radio performance yet.</p>
+      ) : boards.map((board) => {
+        const tones = [snrTone(board.snr), rssiTone(board.rssi), signalTone(board.signal), interferenceTone(board.interference)];
+        const verdict = worstTone(tones);
+        const verdictLabel = verdict === 'good' ? 'Healthy' : verdict === 'fair' ? 'Watch' : verdict === 'poor' ? 'Poor' : 'No sample';
+        const rows = [
+          { label: 'SNR', value: reading(board.snr, 'dB'), hint: board.snr == null ? 'Not sampled' : board.snr >= 25 ? 'Clear of noise' : board.snr >= 15 ? 'Some noise' : 'Hard to hear', tone: snrTone(board.snr), bar: board.snr == null ? 0 : Math.max(0, Math.min(100, (board.snr / 40) * 100)) },
+          { label: 'RSSI', value: reading(board.rssi, 'dBm'), hint: board.rssi == null ? 'Not sampled' : board.rssi >= -67 ? 'Strong at the client' : board.rssi >= -75 ? 'Usable' : 'Weak at the client', tone: rssiTone(board.rssi), bar: board.rssi == null ? 0 : Math.max(0, Math.min(100, ((board.rssi + 90) / 50) * 100)) },
+          { label: 'Signal', value: board.signal == null ? '—' : `${Math.round(board.signal)}%`, hint: board.signal == null ? 'Not sampled' : board.signal >= 70 ? 'Strong link' : board.signal >= 40 ? 'Fair link' : 'Weak link', tone: signalTone(board.signal), bar: board.signal ?? 0 },
+          { label: 'Interference', value: board.interference == null ? '—' : `${Math.round(board.interference)}%`, hint: board.interference == null ? 'Not sampled' : board.interference <= 10 ? 'Quiet channel' : board.interference <= 25 ? 'Some competition' : 'Busy channel', tone: interferenceTone(board.interference), bar: board.interference ?? 0 },
+        ];
+        return (
+          <article key={board.id} className="flex min-w-[9.5rem] flex-col rounded-lg border border-border bg-card px-2.5 py-2 shadow-card" aria-label={`${board.title} radio`}>
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-sm font-semibold text-foreground">{board.title}</h3>
+              <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-semibold" style={{ color: toneColor(verdict), borderColor: toneColor(verdict) }}>{verdictLabel}</span>
+            </div>
+            <p className="mt-0.5 font-mono-data text-[11px] text-muted-foreground">
+              Channel {board.channel}{board.clients != null ? ` · ${board.clients} clients` : ''}
+            </p>
+            <dl className="mt-2 space-y-1.5">
+              {rows.map((row) => (
+                <div key={row.label}>
+                  <div className="flex items-baseline justify-between gap-2 text-[11px]">
+                    <dt className="text-muted-foreground">{row.label}</dt>
+                    <dd className="font-mono-data font-semibold" style={{ color: toneColor(row.tone) }}>{row.value}</dd>
+                  </div>
+                  <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                    <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, row.bar))}%`, backgroundColor: toneColor(row.tone) }} />
+                  </div>
+                  <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">{row.hint}</p>
+                </div>
+              ))}
+            </dl>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -594,153 +821,11 @@ function shadeColor(shade?: string): string {
   return text;
 }
 
-function portIs(port: PortInfo, wanted: string): boolean {
-  return [port.name, port.id, ...(port.names ?? [])].some((value) => namesMatch(value, wanted));
-}
-
-function portMatches(el: Element, wanted: string): boolean {
-  const values = [
-    el.getAttribute('data-port-name') || '',
-    el.getAttribute('data-port-id') || '',
-    ...(el.getAttribute('data-port-aliases') || '').split('|'),
-  ].filter(Boolean);
-  return values.some((value) => namesMatch(value, wanted));
-}
-
-function findPort(root: ParentNode, wanted: string): Element | null {
-  for (const node of root.querySelectorAll('[data-port-name]')) {
-    if (portMatches(node, wanted)) return node;
-  }
-  return null;
-}
-
-function cablePath(points: { x: number; y: number }[]): string {
-  const rounded = points.map((point) => ({ x: Math.round(point.x), y: Math.round(point.y) }));
-  const first = rounded[0];
-  let path = `M ${first.x} ${first.y}`;
-  let current = first;
-  for (const point of rounded.slice(1)) {
-    if (point.x !== current.x) path += ` H ${point.x}`;
-    if (point.y !== current.y) path += ` V ${point.y}`;
-    current = point;
-  }
-  return path;
-}
-
-function outsideCable(port: DOMRect, chassis: DOMRect, remotePort: DOMRect | null, remoteBox: DOMRect, grey: DOMRect): string {
-  const x = port.left + port.width / 2;
-  const y = port.top + port.height / 2;
-  const hug = 2;
-  const above = y <= (chassis.top + chassis.bottom) / 2;
-  const laneY = above ? Math.max(grey.top + hug, chassis.top - hug) : Math.min(grey.bottom - hug, chassis.bottom + hug);
-  const endX = remotePort ? remotePort.left + remotePort.width / 2 : remoteBox.left + remoteBox.width / 2;
-  const rawEndY = remotePort ? remotePort.top + remotePort.height / 2 : remoteBox.top + remoteBox.height / 2;
-  const endY = Math.max(grey.top + hug, Math.min(grey.bottom - hug, rawEndY));
-  return cablePath([
-    { x, y },
-    { x, y: laneY },
-    { x: endX, y: laneY },
-    { x: endX, y: endY },
-  ]);
-}
-
-function UplinkCable({
-  localRef,
-  greyRef,
-  remote,
-  localPortName,
-  remotePortName,
-}: {
-  localRef: React.RefObject<HTMLDivElement | null>;
-  greyRef: React.RefObject<HTMLDivElement | null>;
-  remote: HTMLElement;
-  localPortName: string;
-  remotePortName: string;
-}) {
-  const [path, setPath] = useState('');
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const local = localRef.current;
-    const grey = greyRef.current;
-    if (!local || !grey || !remote) return;
-    const measure = () => {
-      const localPort = findPort(local, localPortName);
-      const remotePort = findPort(remote, remotePortName);
-      if (!localPort) {
-        setPath('');
-        return;
-      }
-      const localBox = local.getBoundingClientRect();
-      const metal = local.querySelector('[data-chassis]');
-      const remoteBox = remote.getBoundingClientRect();
-      setSize({ w: window.innerWidth, h: window.innerHeight });
-      setPath(outsideCable(localPort.getBoundingClientRect(), metal ? metal.getBoundingClientRect() : localBox, remotePort ? remotePort.getBoundingClientRect() : null, remoteBox, grey.getBoundingClientRect()));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(local);
-    observer.observe(grey);
-    observer.observe(remote);
-    document.addEventListener('scroll', measure, true);
-    window.addEventListener('resize', measure);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('scroll', measure, true);
-      window.removeEventListener('resize', measure);
-    };
-  }, [localRef, greyRef, remote, localPortName, remotePortName]);
-  if (!path || size.w <= 0 || typeof document === 'undefined') return null;
-  return createPortal(
-    <svg width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} style={{ position: 'fixed', left: 0, top: 0, zIndex: 80, pointerEvents: 'none' }} aria-hidden="true">
-      <path d={path} fill="none" stroke="#1e293b" strokeWidth={7} strokeLinejoin="miter" strokeLinecap="butt" />
-      <path d={path} fill="none" stroke="#3b82f6" strokeWidth={3} strokeLinejoin="miter" strokeLinecap="butt" />
-    </svg>,
-    document.body,
-  );
-}
-
-function RelationFaceplate({ link, label, plateRef, className }: { link: DeviceParentLink; label: 'Parent' | 'Child'; plateRef: (el: HTMLDivElement | null) => void; className: string }) {
-  const face = link.faceplate ?? null;
-  return (
-    <Link
-      href={devicePath(link.id, link.formFactor || 'generic')}
-      aria-label={`Open ${label.toLowerCase()} ${link.hostname}`}
-      style={{ containerType: 'inline-size' }}
-      className={`relative flex flex-col items-center gap-1 self-center rounded-lg border border-border bg-card p-1.5 shadow-card transition-colors hover:border-primary ${className}`}
-    >
-      <div ref={plateRef} data-relation-id={link.id} className="relative w-full overflow-hidden rounded-md bg-background p-1">
-        <span className="pointer-events-none absolute left-1/2 top-0.5 z-10 -translate-x-1/2 text-[9px] font-bold uppercase leading-none tracking-wide text-foreground">{label}</span>
-        <div className="pointer-events-none">
-          {face ? <Faceplate device={face} compact /> : <div className="h-12" />}
-        </div>
-      </div>
-      <span className="max-w-full truncate font-mono-data text-[clamp(0.5rem,16cqw,0.75rem)] font-medium text-foreground" title={link.hostname}>{link.hostname}</span>
-    </Link>
-  );
-}
-
-function ParentBlock({ device }: { device: DeviceDetailData }) {
-  if (!device.unparented && !device.parentDown && !device.wlc) return null;
-  return (
-    <div className="mt-2 max-w-sm space-y-1.5 text-sm">
-      {device.parentDown ? (
-        <p role="status" className="font-medium text-destructive">Unreachable due to parent</p>
-      ) : null}
-      {device.unparented ? (
-        <p className="text-amber-800">No path to a subnet root. This device has no parent.</p>
-      ) : null}
-      {device.wlc ? (
-        <p>Joined WLC <span className="font-mono-data">{device.wlc}</span></p>
-      ) : null}
-    </div>
-  );
-}
-
 function Meta({ label, value, mono, link, shade }: { label: string; value: string; mono?: boolean; link?: string; shade?: string }) {
   const color = shadeColor(shade);
   return (
     <div
-      className="min-w-[7.5rem] max-w-[16rem] rounded-lg border border-border bg-muted/40 px-3 py-1.5"
+      className="flex h-14 w-full min-w-0 flex-col justify-center rounded-lg border border-border bg-muted/40 px-2.5 py-1"
       style={color ? { boxShadow: `0 10px 16px -10px ${color}, inset 3px 0 0 ${color}` } : undefined}
     >
       <dt className="label-caps text-muted-foreground">{label}</dt>

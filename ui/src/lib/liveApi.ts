@@ -114,6 +114,14 @@ export async function getThroughput(
   return request(`${API}/devices/${encodeURIComponent(String(deviceId))}/metrics/throughput?${params}`);
 }
 
+export async function getDeviceLogs(deviceId: string, hostname: string) {
+  const params = new URLSearchParams();
+  if (hostname) params.set('hostname', hostname);
+  return request<{ hostname: string; lines: { at: string; severity: string; message: string }[]; reason?: string }>(
+    `${API}/devices/${encodeURIComponent(deviceId)}/logs?${params}`,
+  );
+}
+
 export async function getResources(range: RangeKey, deviceId: string | number) {
   return request(
     `${API}/devices/${encodeURIComponent(String(deviceId))}/metrics/resources?range=${encodeURIComponent(range)}`

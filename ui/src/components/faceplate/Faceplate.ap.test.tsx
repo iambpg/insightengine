@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import Faceplate from './Faceplate';
+import { CHASSIS_WIDTH, FACEPLATE_HEIGHT, lockedChassis } from './size';
 
 vi.mock('./library/catalog', () => ({
   useFaceplateModel: () => ({
@@ -37,5 +38,9 @@ describe('access point faceplate', () => {
     expect(screen.getByText('TOP VIEW')).toBeInTheDocument();
     expect(screen.getByText('SIDE VIEW')).toBeInTheDocument();
     expect(screen.queryByTestId('faceplate-image')).toBeNull();
+    const frame = lockedChassis();
+    const svg = document.querySelector('svg');
+    expect(svg).toHaveAttribute('viewBox', `0 0 ${frame.vbW} ${frame.vbH}`);
+    expect(svg).toHaveStyle({ width: '100%', aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}` });
   });
 });

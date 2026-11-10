@@ -187,6 +187,10 @@ export async function getThroughput(
   return buildSeries(range, asSeed(seed), 1, customMin);
 }
 
+export async function getDeviceLogs(_deviceId: string, hostname: string) {
+  return { hostname, lines: [] as { at: string; severity: string; message: string }[], reason: 'Example data has no syslog lines.' };
+}
+
 export async function getResources(range: RangeKey, seed: string | number) {
   await delay(220);
   return buildResourceSeries(range, asSeed(seed));

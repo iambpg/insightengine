@@ -130,6 +130,11 @@ export const api = {
     return (await backend()).getThroughput(range, seed, customMin);
   },
 
+  // BACKEND: GET /api/v1/devices/{id}/logs?hostname=
+  async getDeviceLogs(deviceId: string, hostname: string) {
+    return (await backend()).getDeviceLogs(deviceId, hostname);
+  },
+
   // BACKEND: GET /api/v1/devices/{id}/metrics/resources?range=
   async getResources(range: RangeKey, seed: string | number) {
     return (await backend()).getResources(range, seed);
