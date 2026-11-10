@@ -361,6 +361,7 @@ export interface DeviceParentLink {
   uplinkInterface: string;
   formFactor?: string;
   parentDown?: boolean;
+  faceplate?: FaceplateDevice;
 }
 
 export interface HierarchyNode {

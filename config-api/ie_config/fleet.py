@@ -78,7 +78,10 @@ _ROW_SORT = {
 }
 _NUMERIC_SORT = {"portsUp", "portsTotal", "portsWarn", "portsFault"}
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_MEMBER_RE = re.compile(r"^[A-Za-z]+(\d+)/")
+# Switch 2 of a stack is GigabitEthernet2/0/1. GigabitEthernet1/0/1 is one chassis.
+# A stack cable (StackPort, StackWise) is not a second chassis.
+_SWITCH_MEMBER = re.compile(r"^[A-Za-z]+(\d+)/\d+/\d+")
+_STACK_CABLE = re.compile(r"stack", re.IGNORECASE)
 _SILENCE_HOURS = 24
 _PAGE_CAP = 40
 _ALERT_CAP = 5000
@@ -221,8 +224,6 @@ def _role_form(role_slug: str, role_name: str, model: str) -> tuple[str, str]:
     slug = (role_slug or "").strip().lower()
     name = (role_name or "").strip()
     blob = " ".join((slug, name.lower(), (model or "").lower()))
-    if "stack" in blob:
-        return "Switch stack", "switch-stack"
     if slug in ("access-point", "ap") or "access point" in blob or "access-point" in blob:
         return "Access point", "ceiling-ap"
     if "wireless" in blob or slug in ("wlc", "wireless-controller"):
@@ -233,9 +234,7 @@ def _role_form(role_slug: str, role_name: str, model: str) -> tuple[str, str]:
         return "Branch router", "branch-router"
     if "chassis" in blob or slug in ("core-switch", "modular-chassis"):
         return "Modular chassis", "modular-chassis"
-    if "distribution" in blob:
-        return "Switch stack", "switch-stack"
-    if "access" in blob or "switch" in blob:
+    if "access" in blob or "switch" in blob or "distribution" in blob:
         form = "access-switch-24" if re.search(r"(^|[^0-9])24([^0-9]|$)", model or "") else "access-switch-48"
         return "Access switch", form
     display = name or role_slug or "Unclassified"
@@ -608,16 +607,21 @@ def _ap_shaped(ports: list[dict]) -> bool:
     return len(radios) >= 1 and len(_ethernet_ports(ports)) <= 2
 
 
-def _is_stack(ports: list[dict], role_blob: str, model: str) -> bool:
-    blob = "%s %s" % (role_blob or "", model or "")
-    if "stack" in blob.lower() or "distribution" in blob.lower():
-        return True
+def _stack_members(ports: list[dict]) -> set[int]:
+    """Chassis numbers from real switch ports. A stack cable does not count."""
     members = set()
     for port in ports or []:
-        match = _MEMBER_RE.match(_port_name(port))
+        name = _port_name(port)
+        if not name or _STACK_CABLE.search(name):
+            continue
+        match = _SWITCH_MEMBER.match(name)
         if match:
             members.add(int(match.group(1)))
-    return len(members) >= 2
+    return members
+
+
+def _is_stack(ports: list[dict], _role_blob: str = "", _model: str = "") -> bool:
+    return len(_stack_members(ports)) >= 2
 
 
 def _switch_form_from_ports(ports: list[dict], model: str) -> str:
@@ -1319,7 +1323,7 @@ class FleetService:
         self.settings = settings
         self._client = client
         self._now = now or time.time
-        self.cache = _Cache(getattr(settings, "fleet_cache_seconds", 8.0) or 0)
+        self.cache = _Cache(getattr(settings, "fleet_cache_seconds", 30.0) or 0)
 
     def _session(self):
         if self._client is not None:
@@ -1637,7 +1641,7 @@ class FleetService:
                 out[key] = ({}, {})
             else:
                 out[key] = index(rows)
-        self.cache.put("prom-fleet", out, ttl=15)
+        self.cache.put("prom-fleet", out, ttl=30)
         return out
 
     def _selector(self, device: dict) -> str:
@@ -1929,7 +1933,7 @@ class FleetService:
             detail.setdefault("parent", None)
             detail.setdefault("children", [])
         body = self._with_degraded(detail, degraded)
-        self.cache.put("detail:" + key, body, ttl=15)
+        self.cache.put("detail:" + key, body, ttl=60)
         return body
 
     def _finish_health(self, detail: dict, found: dict, alerts: dict, rows: list[dict]) -> None:
@@ -2474,7 +2478,7 @@ class FleetService:
                 cached = self._load_ports(client, selector, device.get("name") or "")
             except UpstreamError:
                 cached = {"degraded": True, "ports": [], "cpu": None, "mem": None, "temp": None, "fans": [], "psus": [], "rtt": None}
-            self.cache.put("ports:" + device["name"], cached)
+            self.cache.put("ports:" + device["name"], cached, ttl=60)
         if cached.get("cpu") is None or cached.get("mem") is None:
             extra = self._resource_facts(client, device)
             if cached.get("cpu") is None and extra.get("cpu") is not None:
@@ -3168,7 +3172,7 @@ class FleetService:
                     _annotate_access_points(cached.get("rows") or [], devices)
             except UpstreamError:
                 cached = {"rows": [], "degraded": True}
-            self.cache.put("ap-snapshot", cached)
+            self.cache.put("ap-snapshot", cached, ttl=60)
         if cached.get("degraded"):
             degraded = ["prometheus"]
         body = page_rows(cached.get("rows") or [], page=page, page_size=page_size, q=q, wlc=wlc, site=site, status=status)
@@ -3177,25 +3181,48 @@ class FleetService:
         return body
 
     def _ap_snapshot(self, client) -> dict:
-        try:
-            status = self._prom(client, "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status or ie_wlc_ap_oper_up")
-            radio_oper = self._prom(client, "ie_wlc_radio_oper_up or ie_wlc_radio_oper_status")
-            clients = self._prom(client, "ie_wlc_ap_clients or ie_wlc_client_radio_clients")
-            uptime = self._prom(client, "ie_wlc_ap_uptime_centiseconds")
-            channels = self._prom(client, "ie_wlc_radio_channel")
-            utils = self._prom(client, "ie_wlc_radio_channel_util")
-            radio_clients = self._prom(client, "ie_wlc_radio_clients")
-            info = self._prom(client, "ie_wlc_ap_info or ie_wlc_ap_info_info")
-            noise = self._prom(client, "ie_wlc_radio_noise")
-            interference = self._prom(client, "ie_wlc_radio_interference")
-            power = self._prom(client, "ie_wlc_radio_tx_power_dbm or ie_wlc_radio_tx_power")
-            width = self._prom(client, "ie_wlc_radio_width")
-            rssi = self._prom(client, "ie_wlc_client_radio_rssi_avg")
-            snr = self._prom(client, "ie_wlc_client_radio_snr_avg")
-            ssids = self._prom(client, "ie_wlc_ssid_clients")
-            neighbors = self._prom(client, "ie_wlc_neighbor_info")
-        except UpstreamError:
+        queries = {
+            "status": "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status or ie_wlc_ap_oper_up",
+            "radio_oper": "ie_wlc_radio_oper_up or ie_wlc_radio_oper_status",
+            "clients": "ie_wlc_ap_clients or ie_wlc_client_radio_clients",
+            "uptime": "ie_wlc_ap_uptime_centiseconds",
+            "channels": "ie_wlc_radio_channel",
+            "utils": "ie_wlc_radio_channel_util",
+            "radio_clients": "ie_wlc_radio_clients",
+            "info": "ie_wlc_ap_info or ie_wlc_ap_info_info",
+            "noise": "ie_wlc_radio_noise",
+            "interference": "ie_wlc_radio_interference",
+            "power": "ie_wlc_radio_tx_power_dbm or ie_wlc_radio_tx_power",
+            "width": "ie_wlc_radio_width",
+            "rssi": "ie_wlc_client_radio_rssi_avg",
+            "snr": "ie_wlc_client_radio_snr_avg",
+            "ssids": "ie_wlc_ssid_clients",
+            "neighbors": "ie_wlc_neighbor_info",
+        }
+        fetched = self._prom_many(client, queries)
+        if all(value is None for value in fetched.values()):
             return {"rows": [], "degraded": True}
+
+        def series(name: str) -> list:
+            found = fetched.get(name)
+            return found if isinstance(found, list) else []
+
+        status = series("status")
+        radio_oper = series("radio_oper")
+        clients = series("clients")
+        uptime = series("uptime")
+        channels = series("channels")
+        utils = series("utils")
+        radio_clients = series("radio_clients")
+        info = series("info")
+        noise = series("noise")
+        interference = series("interference")
+        power = series("power")
+        width = series("width")
+        rssi = series("rssi")
+        snr = series("snr")
+        ssids = series("ssids")
+        neighbors = series("neighbors")
         rows: dict[int, dict] = {}
         by_mac: dict[tuple, dict] = {}
         by_name: dict[tuple, dict] = {}
@@ -3505,14 +3532,22 @@ class FleetService:
             write_scrape_file(sd_path)
         except OSError:
             log.warning("topology file_sd could not be written")
-        self.cache.put("hierarchy-report", report)
+        self.cache.put("hierarchy-report", report, ttl=90)
         return report
 
     def _neighbour_links(self, client) -> list[dict]:
+        cached = self.cache.get("neighbour-links")
+        if isinstance(cached, list):
+            return cached
         suffixes = self._suffixes()
-
-        def named(metric: str) -> list[dict]:
-            return self._prom(client, "%s or %s_info" % (metric, metric))
+        metrics = (
+            "cdpCacheDeviceId", "cdpCacheDevicePort", "cdpCacheAddress", "cdpCachePlatform",
+            "lldpRemSysName", "lldpRemPortId", "lldpRemPortDesc", "lldpRemManAddrIfId",
+            "lldpLocPortId", "ifDescr",
+        )
+        fetched = self._prom_many(client, {name: "%s or %s_info" % (name, name) for name in metrics})
+        if all(fetched.get(name) is None for name in metrics):
+            raise UpstreamError("prometheus", "Prometheus is not reachable")
 
         def grouped(samples) -> dict:
             found = {}
@@ -3522,19 +3557,23 @@ class FleetService:
                     found.setdefault(host, []).append(sample)
             return found
 
-        cdp_id = grouped(named("cdpCacheDeviceId"))
-        cdp_port = grouped(named("cdpCacheDevicePort"))
-        cdp_addr = grouped(named("cdpCacheAddress"))
-        cdp_plat = grouped(named("cdpCachePlatform"))
-        lldp_name = grouped(named("lldpRemSysName"))
-        lldp_port = grouped(named("lldpRemPortId"))
-        lldp_desc = grouped(named("lldpRemPortDesc"))
-        lldp_addr = grouped(named("lldpRemManAddrIfId"))
-        lldp_loc = grouped(named("lldpLocPortId"))
+        def rows(name: str) -> list:
+            found = fetched.get(name)
+            return found if isinstance(found, list) else []
+
+        cdp_id = grouped(rows("cdpCacheDeviceId"))
+        cdp_port = grouped(rows("cdpCacheDevicePort"))
+        cdp_addr = grouped(rows("cdpCacheAddress"))
+        cdp_plat = grouped(rows("cdpCachePlatform"))
+        lldp_name = grouped(rows("lldpRemSysName"))
+        lldp_port = grouped(rows("lldpRemPortId"))
+        lldp_desc = grouped(rows("lldpRemPortDesc"))
+        lldp_addr = grouped(rows("lldpRemManAddrIfId"))
+        lldp_loc = grouped(rows("lldpLocPortId"))
         # snmp_exporter puts the short name on the ifDescr series (ifName label).
         # There is no separate ifName series on these switches. CDP's local port
         # is cdpCacheIfIndex, which matches ifDescr's ifIndex.
-        descriptions = grouped(named("ifDescr"))
+        descriptions = grouped(rows("ifDescr"))
         hosts = set(cdp_id) | set(cdp_port) | set(lldp_name) | set(lldp_port)
         links = []
         for host in hosts:
@@ -3568,6 +3607,7 @@ class FleetService:
                     "remoteAddress": row.get("remoteAddress") or "",
                     "source": row.get("source") or "",
                 })
+        self.cache.put("neighbour-links", links, ttl=90)
         return links
 
     def hierarchy_write(self, nodes: list[dict], items: list[dict]) -> list[dict]:
@@ -3623,10 +3663,95 @@ class FleetService:
             }
         else:
             detail["parent"] = None
-        detail["children"] = list(node.get("children") or [])
+        detail["children"] = [dict(child) for child in (node.get("children") or [])]
         detail["wlc"] = node.get("wlc") or ""
         detail["unparented"] = bool(node.get("flagged"))
         detail["parentDown"] = bool(node.get("parentDown"))
+        try:
+            self._attach_relation_faceplates(detail)
+        except Exception:
+            log.warning("relation faceplates could not be attached for %s", host)
+
+    def _attach_relation_faceplates(self, detail: dict) -> None:
+        """Small parent and child drawings. One shared fetch, not a full device page each."""
+        links = []
+        if isinstance(detail.get("parent"), dict) and detail["parent"].get("id"):
+            links.append(detail["parent"])
+        for child in detail.get("children") or []:
+            if isinstance(child, dict) and child.get("id"):
+                links.append(child)
+        if not links:
+            return
+        try:
+            with self._session() as client:
+                self._oper_by_host(client)
+        except Exception:
+            log.warning("relation port series could not be read")
+
+        def paint(link: dict) -> None:
+            try:
+                face = self._cached_faceplate(str(link.get("id") or ""))
+            except Exception:
+                log.warning("relation faceplate failed for %s", link.get("id"))
+                return
+            if isinstance(face, dict):
+                link["faceplate"] = face
+
+        if len(links) == 1:
+            paint(links[0])
+            return
+        with ThreadPoolExecutor(max_workers=min(4, len(links))) as pool:
+            list(pool.map(paint, links))
+
+    def _cached_faceplate(self, device_id: str) -> dict | None:
+        key = "face:" + device_id
+        cached = self.cache.get(key)
+        if isinstance(cached, dict):
+            return cached
+        with self._session() as client:
+            rows, _meta, _degraded = self._decorated(client)
+            found = self._find_device(rows, device_id)
+            if found is None:
+                return None
+            device = found.get("_device") if isinstance(found.get("_device"), dict) else {}
+            name = str(device.get("name") or found.get("hostname") or "")
+            loaded = self.cache.get("ports:" + name) if name else None
+            if isinstance(loaded, dict):
+                ports = loaded.get("ports") or []
+            else:
+                oper = self._oper_by_host(client).get(name, []) if name else []
+                ports = _join_ports(oper, [], [], [], [], [])
+            face = _faceplate(
+                found.get("formFactor") or "generic",
+                found.get("role") or "",
+                found.get("hostname") or "",
+                device.get("model") or "",
+                ports,
+                {
+                    "model": device.get("model") or "",
+                    "part_number": device.get("part_number") or "",
+                    "slug": device.get("slug") or "",
+                    "manufacturer": device.get("manufacturer") or "",
+                },
+            )
+        self.cache.put(key, face, ttl=60)
+        return face
+
+    def _oper_by_host(self, client) -> dict:
+        cached = self.cache.get("oper-by-host")
+        if isinstance(cached, dict):
+            return cached
+        try:
+            samples = self._prom(client, "ifOperStatus_info or ifOperStatus")
+        except UpstreamError:
+            samples = []
+        grouped: dict[str, list] = {}
+        for sample in samples or []:
+            host = str((sample.get("metric") or {}).get("hostname") or "")
+            if host:
+                grouped.setdefault(host, []).append(sample)
+        self.cache.put("oper-by-host", grouped, ttl=60)
+        return grouped
 
 def _title(upstream: str) -> str:
     return {"netbox": "NetBox", "prometheus": "Prometheus", "alertmanager": "Alertmanager"}.get(upstream, upstream)
@@ -4306,10 +4431,23 @@ def _faceplate(form: str, role: str, hostname: str, model: str, ports: list[dict
         "manufacturer": str(ident.get("manufacturer") or ""),
     }
     if form == "switch-stack":
+        members_present = _stack_members(ports)
+        if len(members_present) < 2:
+            base["form_factor"] = _switch_form_from_ports(ports, model_name)
+            base["role"] = "Access switch"
+            base["ports"] = ports
+            return base
         groups: dict[int, list] = {}
         for port in ports:
-            match = _MEMBER_RE.match(port["name"])
-            number = int(match.group(1)) if match else 1
+            name = str(port.get("name") or "")
+            if _STACK_CABLE.search(name):
+                continue
+            match = _SWITCH_MEMBER.match(name)
+            if not match:
+                continue
+            number = int(match.group(1))
+            if number not in members_present:
+                continue
             groups.setdefault(number, []).append(port)
         members = []
         for number in sorted(groups):

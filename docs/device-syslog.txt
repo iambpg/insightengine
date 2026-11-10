@@ -1,0 +1,117 @@
+InsightEngine syslog
+=====================
+
+InsightEngine listens for syslog on UDP and TCP.
+The default port is 514. An install can set a different port with PORT_SYSLOG
+in its .env. Use the port from that install, not a port copied from another site.
+The address is the address of the server where InsightEngine is installed.
+That address is different at every site. Use the address of that install.
+
+The name stored with each log is the hostname configured on the device.
+Set that name before you turn syslog on. A short name is enough.
+A domain on the end is stored exactly as the device sends it.
+
+Where a command below says port 514, use this install's syslog port if it is different.
+The device must be able to reach the InsightEngine server on that port.
+If the device sends from a management VRF or a management interface, use that path.
+Send informational messages and anything more serious. Do not send debugging.
+
+Cisco IOS and IOS-XE (switches, routers, and IOS-XE wireless controllers)
+--------------------------------------------------------------------------
+
+Replace the address and the source interface. Use the VRF line only when
+management traffic is in a VRF.
+
+    configure terminal
+    hostname <short-name>
+    logging on
+    logging trap informational
+    logging source-interface <management-interface>
+    logging host <insightengine-address> transport udp port 514
+    end
+    write memory
+
+VRF example:
+
+    logging host <insightengine-address> vrf <management-vrf> transport udp port 514
+
+TCP is also accepted:
+
+    logging host <insightengine-address> transport tcp port 514
+
+Cisco ASA
+---------
+
+    hostname <short-name>
+    logging enable
+    logging timestamp
+    logging device-id hostname
+    logging trap informational
+    logging host <interface-name> <insightengine-address> 17/514
+    write memory
+
+17/514 means UDP port 514. Use 6/514 for TCP.
+
+Fortinet FortiGate
+-------------------
+
+Use format default or rfc5424. Those are the formats InsightEngine reads.
+Leave CSV and CEF off unless you already know you need them.
+Set source-ip to the address the firewall uses to reach InsightEngine.
+
+    config log syslogd setting
+        set status enable
+        set server "<insightengine-address>"
+        set mode udp
+        set port 514
+        set facility local7
+        set format default
+        set source-ip <management-ip>
+    end
+
+TCP instead of UDP:
+
+        set mode tcp
+
+Reliable delivery, still to the same port:
+
+        set mode reliable
+
+The name in the log is the FortiGate hostname (shown as devname). Set it with:
+
+    config system global
+        set hostname <short-name>
+    end
+
+Palo Alto Networks
+-------------------
+
+1. Device, Setup, Management. Set the hostname. Commit is required at the end.
+2. Device, Server Profiles, Syslog. Add a profile:
+      Name:       InsightEngine
+      Server:     <insightengine-address>
+      Transport:  UDP
+      Port:       514
+      Format:     BSD
+      Facility:   LOG_LOCAL7
+   TCP is also accepted. Keep the format on BSD.
+3. Device, Log Settings. Under System and under Configuration, add a match
+   that sends to the InsightEngine profile. Otherwise system and commit logs
+   stay on the firewall.
+4. Objects, Log Forwarding. Add a profile that sends Traffic, Threat, URL,
+   WildFire, Data, and Authentication logs to the InsightEngine profile.
+   Use that profile on the security rules, or set it as the default log
+   forwarding profile. A server profile alone does not send traffic logs.
+5. Commit.
+
+What you should see
+-------------------
+
+In Grafana, open the Loki datasource and search:
+
+    {vendor="cisco"}
+    {vendor="fortinet"}
+    {vendor="paloalto"}
+    {hostname="<short-name>"}
+
+Logs are kept for the retention set on that install (the default is 90 days).

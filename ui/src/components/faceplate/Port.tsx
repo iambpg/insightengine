@@ -35,6 +35,9 @@ export default function PortGlyph({ port, x, y, size = 20, uid, selected, showLa
       role="button"
       aria-label={label}
       aria-pressed={selected}
+      data-port-id={port.id}
+      data-port-name={port.name}
+      data-port-aliases={port.names?.join('|') || undefined}
       className="cursor-pointer outline-none"
       onMouseEnter={(e) => onHover(port, e.currentTarget)}
       onMouseLeave={() => onHover(null, null)}

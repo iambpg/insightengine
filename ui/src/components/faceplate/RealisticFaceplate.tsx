@@ -76,6 +76,9 @@ function Hotspot({
       role="button"
       aria-label={label}
       aria-pressed={selected}
+      data-port-id={port.id}
+      data-port-name={port.name}
+      data-port-aliases={port.names?.join('|') || undefined}
       data-testid={`port-hotspot-${box.name}`}
       className="cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
       style={{ pointerEvents: 'all' }}
@@ -209,6 +212,7 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
           style={{ maxWidth: model.raster ? width : undefined, height: height * scale, padding: 0, border: 'none' }}
         >
           <div
+            data-chassis=""
             data-testid="faceplate-stage"
             style={{
               width,
@@ -259,6 +263,7 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
           preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={`${model.model} faceplate`}
+          data-chassis=""
           data-testid="realistic-faceplate"
           data-faceplate-source={model.source}
           style={{ width: '100%', height: 'auto', display: 'block', aspectRatio: `${width} / ${height}` }}

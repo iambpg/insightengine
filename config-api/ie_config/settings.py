@@ -43,7 +43,7 @@ class Settings:
     prometheus_url: str = "http://prometheus:9090"
     alertmanager_url: str = "http://alertmanager:9093"
     ca_file: str = "/etc/ie-certs/ca.crt"
-    fleet_cache_seconds: float = 8.0
+    fleet_cache_seconds: float = 30.0
     alert_webhook_token_file: str = ""
     max_body: int = 6 * 1024 * 1024
     max_edit: int = 5 * 1024 * 1024
@@ -85,7 +85,7 @@ class Settings:
             prometheus_url=os.environ.get("PROMETHEUS_URL", "http://prometheus:9090").rstrip("/"),
             alertmanager_url=os.environ.get("ALERTMANAGER_URL", "http://alertmanager:9093").rstrip("/"),
             ca_file=os.environ.get("IE_CA_FILE", "/etc/ie-certs/ca.crt"),
-            fleet_cache_seconds=float(os.environ.get("FLEET_CACHE_SECONDS", "8") or "8"),
+            fleet_cache_seconds=float(os.environ.get("FLEET_CACHE_SECONDS", "30") or "30"),
             alert_webhook_token_file=os.environ.get("ALERT_WEBHOOK_TOKEN_FILE", ""),
             oxidized_url=os.environ.get("OXIDIZED_URL", "http://oxidized:8888").rstrip("/"),
             hostname_strip_suffixes=os.environ.get("HOSTNAME_STRIP_SUFFIXES", ""),
