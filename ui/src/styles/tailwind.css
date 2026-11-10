@@ -110,6 +110,9 @@
   .slide-in-right {
     animation: slideInRight 0.25s ease-out;
   }
+  .drawer-in {
+    animation: drawerIn 0.28s ease-out;
+  }
   .slide-up {
     animation: slideUp 0.2s ease-out;
   }
@@ -137,6 +140,10 @@
 @keyframes slideInRight {
   from { transform: translateX(24px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+@keyframes drawerIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 @keyframes slideUp {
   from { transform: translateY(12px); opacity: 0; }
@@ -177,6 +184,7 @@
   .flash-update,
   .fade-in,
   .slide-in-right,
+  .drawer-in,
   .slide-up,
   .pop-in,
   .led-warn-blink,

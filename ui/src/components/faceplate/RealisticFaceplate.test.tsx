@@ -6,6 +6,7 @@ import type { FaceplateDevice, PortInfo } from '@/lib/types';
 import type { FaceplateModel } from './library/catalog';
 import RealisticFaceplate from './RealisticFaceplate';
 import Faceplate from './Faceplate';
+import { CHASSIS_WIDTH, FACEPLATE_HEIGHT } from './size';
 
 function port(name: string, id = name): PortInfo {
   return {
@@ -66,13 +67,11 @@ describe('realistic faceplates', () => {
     const face = screen.getByTestId('realistic-faceplate');
     expect(face).toHaveAttribute('data-faceplate-source', source);
     expect(face).toHaveAttribute('viewBox', '0 0 1000 200');
-    expect(face).toHaveStyle({ position: 'absolute', left: '0px', top: '0px', width: '1000px', height: '200px' });
+    expect(face).toHaveStyle({ position: 'absolute', width: '100%', height: '100%' });
     const picture = screen.getByTestId('faceplate-image');
-    expect(picture).toHaveAttribute('width', '1000');
-    expect(picture).toHaveAttribute('height', '200');
-    expect(picture).toHaveStyle({ objectFit: 'fill', width: '1000px', height: '200px', pointerEvents: 'none' });
+    expect(picture).toHaveStyle({ objectFit: 'fill', width: '100%', height: '100%', pointerEvents: 'none' });
     const stage = screen.getByTestId('faceplate-stage');
-    expect(stage).toHaveStyle({ padding: '0px', width: '1000px', height: '200px' });
+    expect(stage).toHaveStyle({ padding: '0px', width: '100%', aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}` });
     await user.click(face);
     expect(onSelect).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /Gi1\/0\/1, Up/ }));

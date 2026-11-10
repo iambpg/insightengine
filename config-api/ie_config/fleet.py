@@ -1318,6 +1318,92 @@ def _round(value, places=1):
     return round(float(value), places)
 
 
+def _wlc_recent(query: str) -> str:
+    """Last sample from the past half hour.
+
+    The wireless scrape is large and sometimes late. An instant query then
+    goes empty and the access-point page has no radio performance.
+    """
+    return "last_over_time((%s)[30m:])" % query
+
+
+_RADIO_FIELDS = (
+    "channel", "utilization", "clients", "noise", "interference",
+    "txPowerDbm", "width", "rssiAvg", "snrAvg", "band",
+)
+
+
+def _fill_radio(dest: dict, src: dict) -> None:
+    for field in _RADIO_FIELDS:
+        if dest.get(field) in (None, "") and src.get(field) not in (None, ""):
+            dest[field] = src[field]
+
+
+def _coalesce_ap_rows(rows: dict) -> None:
+    """One access point is often split across its hostname and its radio MAC.
+
+    Channel samples use the radio MAC as ``ap``. SNR, RSSI and interference
+    use the hostname. Fold those into the same radio slot.
+    """
+    by_mac: dict[tuple, list] = {}
+    by_name: dict[tuple, list] = {}
+    for row in rows.values():
+        wlc = str(row.get("wlc") or "")
+        mac = canon_mac(str(row.get("mac") or ""))
+        name = str(row.get("name") or "").strip().lower()
+        if mac:
+            by_mac.setdefault((wlc, mac), []).append(row)
+        if name and not looks_like_mac(name):
+            by_name.setdefault((wlc, name), []).append(row)
+    seen: set[int] = set()
+    for (wlc, mac), group in by_mac.items():
+        names: list[str] = []
+        for row in group:
+            name = str(row.get("name") or "").strip().lower()
+            if name and not looks_like_mac(name) and name not in names:
+                names.append(name)
+        members: list[dict] = []
+        for row in group:
+            if id(row) in seen:
+                continue
+            seen.add(id(row))
+            members.append(row)
+        for name in names:
+            for other in by_name.get((wlc, name), []):
+                other_mac = canon_mac(str(other.get("mac") or ""))
+                if other_mac and other_mac != mac:
+                    continue
+                if id(other) in seen:
+                    continue
+                seen.add(id(other))
+                members.append(other)
+        if len(members) < 2:
+            continue
+        primary = members[0]
+        for other in members[1:]:
+            radios = {str(item.get("slot") or ""): item for item in primary.get("radios") or []}
+            for radio in other.get("radios") or []:
+                slot = str(radio.get("slot") or "")
+                dest = radios.get(slot)
+                if dest is None:
+                    radios[slot] = dict(radio)
+                else:
+                    _fill_radio(dest, radio)
+            primary["radios"] = list(radios.values())
+            if (not primary.get("name") or looks_like_mac(str(primary.get("name") or ""))) and other.get("name") and not looks_like_mac(str(other.get("name") or "")):
+                primary["name"] = other["name"]
+            if not primary.get("mac") and other.get("mac"):
+                primary["mac"] = other["mac"]
+            rows.pop(id(other), None)
+        radios = primary.get("radios") or []
+        rssi_vals = [item["rssiAvg"] for item in radios if item.get("rssiAvg") is not None]
+        snr_vals = [item["snrAvg"] for item in radios if item.get("snrAvg") is not None]
+        if rssi_vals:
+            primary["rssiAvg"] = round(sum(rssi_vals) / len(rssi_vals), 1)
+        if snr_vals:
+            primary["snrAvg"] = round(sum(snr_vals) / len(snr_vals), 1)
+
+
 class FleetService:
     def __init__(self, settings, client: httpx.Client | None = None, now=None):
         self.settings = settings
@@ -2469,6 +2555,66 @@ class FleetService:
             pass
         return remember({"available": True, "reason": "", "status": status, "at": at, "config": config})
 
+    def device_logs(self, hostname: str) -> dict:
+        name = re.sub(r"[^A-Za-z0-9._-]+", "", (hostname or "").strip())[:120]
+        if not name:
+            return {"hostname": "", "lines": [], "reason": "This device has no hostname."}
+        key = "logs:" + name.lower()
+        cached = self.cache.get(key)
+        if isinstance(cached, dict):
+            return cached
+        base = (os.environ.get("LOKI_URL") or "http://loki:3100").rstrip("/")
+        now = time.time()
+        query = '{hostname=~"(?i)%s(\\..*)?"}' % re.escape(name)
+        empty = {"hostname": name, "lines": [], "reason": ""}
+
+        def remember(body: dict) -> dict:
+            self.cache.put(key, body, ttl=30)
+            return body
+
+        try:
+            with self._session() as client:
+                response = client.get(
+                    base + "/loki/api/v1/query_range",
+                    params={
+                        "query": query,
+                        "limit": "200",
+                        "direction": "backward",
+                        "start": str(int((now - 86400) * 1e9)),
+                        "end": str(int(now * 1e9)),
+                    },
+                    timeout=httpx.Timeout(4.0, connect=2.0),
+                )
+        except httpx.HTTPError:
+            empty["reason"] = "Syslog store is not reachable."
+            return remember(empty)
+        if response.status_code != 200:
+            empty["reason"] = "Syslog store returned HTTP %s." % response.status_code
+            return remember(empty)
+        try:
+            payload = response.json()
+        except ValueError:
+            empty["reason"] = "Syslog store returned a response that was not JSON."
+            return remember(empty)
+        lines = []
+        for stream in ((payload.get("data") or {}).get("result") or []):
+            if not isinstance(stream, dict):
+                continue
+            severity = str((stream.get("stream") or {}).get("severity") or "")
+            for pair in stream.get("values") or []:
+                if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                    continue
+                try:
+                    at = datetime.fromtimestamp(int(pair[0]) / 1e9, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                except (TypeError, ValueError, OSError):
+                    at = ""
+                lines.append({"at": at, "severity": severity, "message": str(pair[1])})
+        lines.sort(key=lambda row: row["at"], reverse=True)
+        if not lines:
+            empty["reason"] = "No syslog lines for this device in the last day."
+            return remember(empty)
+        return remember({"hostname": name, "lines": lines[:200], "reason": ""})
+
     def _detail(self, client, row: dict, rows: list[dict]) -> dict:
         device = row["_device"]
         selector = self._selector(device)
@@ -3182,22 +3328,24 @@ class FleetService:
 
     def _ap_snapshot(self, client) -> dict:
         queries = {
-            "status": "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status or ie_wlc_ap_oper_up",
-            "radio_oper": "ie_wlc_radio_oper_up or ie_wlc_radio_oper_status",
-            "clients": "ie_wlc_ap_clients or ie_wlc_client_radio_clients",
-            "uptime": "ie_wlc_ap_uptime_centiseconds",
-            "channels": "ie_wlc_radio_channel",
-            "utils": "ie_wlc_radio_channel_util",
-            "radio_clients": "ie_wlc_radio_clients",
-            "info": "ie_wlc_ap_info or ie_wlc_ap_info_info",
-            "noise": "ie_wlc_radio_noise",
-            "interference": "ie_wlc_radio_interference",
-            "power": "ie_wlc_radio_tx_power_dbm or ie_wlc_radio_tx_power",
-            "width": "ie_wlc_radio_width",
-            "rssi": "ie_wlc_client_radio_rssi_avg",
-            "snr": "ie_wlc_client_radio_snr_avg",
-            "ssids": "ie_wlc_ssid_clients",
-            "neighbors": "ie_wlc_neighbor_info",
+            key: _wlc_recent(expr) for key, expr in {
+                "status": "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status or ie_wlc_ap_oper_up",
+                "radio_oper": "ie_wlc_radio_oper_up or ie_wlc_radio_oper_status",
+                "clients": "ie_wlc_ap_clients or ie_wlc_client_radio_clients",
+                "uptime": "ie_wlc_ap_uptime_centiseconds",
+                "channels": "ie_wlc_radio_channel",
+                "utils": "ie_wlc_radio_channel_util",
+                "radio_clients": "ie_wlc_radio_clients",
+                "info": "ie_wlc_ap_info or ie_wlc_ap_info_info",
+                "noise": "ie_wlc_radio_noise",
+                "interference": "ie_wlc_radio_interference",
+                "power": "ie_wlc_radio_tx_power_dbm or ie_wlc_radio_tx_power",
+                "width": "ie_wlc_radio_width",
+                "rssi": "ie_wlc_client_radio_rssi_avg",
+                "snr": "ie_wlc_client_radio_snr_avg",
+                "ssids": "ie_wlc_ssid_clients",
+                "neighbors": "ie_wlc_neighbor_info",
+            }.items()
         }
         fetched = self._prom_many(client, queries)
         if all(value is None for value in fetched.values()):
@@ -3412,6 +3560,7 @@ class FleetService:
             row = rows.get(key)
             if row is not None:
                 row["ssids"] = items
+        _coalesce_ap_rows(rows)
         ordered = []
         for row in rows.values():
             row["status"] = finish_ap_status(row.get("_explicit"), bool(row.get("_fresh")))
@@ -4839,6 +4988,11 @@ def mount_fleet(app, user_of) -> None:
     def device_one(device_id: str, request: Request):
         reader(request)
         return fleet().get_device(device_id)
+
+    @app.get("/api/v1/devices/{device_id}/logs")
+    def device_logs(device_id: str, request: Request):
+        reader(request)
+        return fleet().device_logs((request.query_params.get("hostname") or "")[:200])
 
     @app.post("/api/v1/devices/{device_id}/netbox-sync")
     def netbox_sync(device_id: str, request: Request):
