@@ -63,11 +63,12 @@ def test_compact_cisco_switches_omit_environment_groups():
     assert [group["id"] for group in panel["groups"]] == ["cpu", "memory"]
     assert panel["groups"][0]["value"] == "No sample"
     assert panel["groups"][1]["value"] == "91%"
+    assert panel["interfacesSupported"] is True
+    assert panel["interfaces"][0]["name"] == "Gi0/1"
     panel = build_health_panel("ios-basic", cpu=8, memory_ratio=0.4)
     assert [group["value"] for group in panel["groups"]] == ["8%", "40%"]
     assert all(group["id"] not in ("fan", "psu", "temperature") for group in panel["groups"])
     assert panel["interfacesSupported"] is True
-    assert panel["interfaces"][0]["name"] == "Gi0/1"
 
 
 def test_2960_temperature_can_be_status_only():

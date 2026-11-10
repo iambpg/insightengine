@@ -1518,6 +1518,7 @@ class FleetService:
                 status = str(status_raw.get("value") or status_raw.get("label") or "active")
             else:
                 status = str(status_raw or "active")
+            custom = raw.get("custom_fields") if isinstance(raw.get("custom_fields"), dict) else {}
             rows.append({
                 "id": str(raw.get("id")),
                 "name": str(raw.get("name") or ("device-%s" % raw.get("id"))),
@@ -1535,6 +1536,8 @@ class FleetService:
                 "sw_version": str((raw.get("custom_fields") or {}).get("ie_sw_version") or "") if isinstance(raw.get("custom_fields"), dict) else "",
                 "manufacturer": str(manufacturer.get("name") or ""),
                 "ip": address,
+                "prefix": str(primary.get("address") or ""),
+                "custom_fields": custom,
                 "serial": str(raw.get("serial") or ""),
                 "platform": str(platform.get("name") or ""),
                 "last_updated": str(raw.get("last_updated") or ""),
@@ -1919,6 +1922,12 @@ class FleetService:
         self._finish_health(detail, found, alerts, rows)
         for private in ("_snmp_neighbors", "_snmp_at", "_snmp_missing", "_health_inputs", "_ap"):
             detail.pop(private, None)
+        try:
+            self._attach_hierarchy(detail, found, self.hierarchy_report())
+        except Exception:
+            log.warning("hierarchy could not be attached for %s", found.get("hostname"))
+            detail.setdefault("parent", None)
+            detail.setdefault("children", [])
         body = self._with_degraded(detail, degraded)
         self.cache.put("detail:" + key, body, ttl=15)
         return body
@@ -3426,6 +3435,199 @@ class FleetService:
         return {"accessPoint": row, "events": events[-50:], "degraded": degraded}
 
 
+
+    def _hierarchy_paths(self) -> tuple[str, str]:
+        settings_path = os.environ.get("IE_HIERARCHY_SETTINGS") or os.path.join(
+            self.settings.config_root, "data", "hierarchy-settings.json"
+        )
+        sd_path = os.environ.get("IE_TOPOLOGY_SD") or os.path.join(
+            self.settings.config_root, "data", "prometheus-sd", "topology.yml"
+        )
+        return settings_path, sd_path
+
+    def hierarchy_report(self, force: bool = False) -> dict:
+        """Proposed tree. Reads NetBox and Prometheus. Does not write NetBox."""
+        if not force:
+            cached = self.cache.get("hierarchy-report")
+            if cached is not None:
+                return cached
+        from .hierarchy import approved_from_custom, build_hierarchy, read_auto_apply, write_scrape_file
+
+        degraded = []
+        with self._session() as client:
+            rows, _meta, degraded = self._decorated(client)
+            names = {str(row.get("id") or ""): str(row.get("hostname") or "") for row in rows}
+            devices = []
+            for row in rows:
+                if str(row.get("status") or "active") not in ("active", ""):
+                    continue
+                raw = row.get("_device") if isinstance(row.get("_device"), dict) else {}
+                approved = approved_from_custom(raw.get("custom_fields") or {}, names)
+                devices.append({
+                    "id": str(row.get("id") or ""),
+                    "hostname": str(row.get("hostname") or ""),
+                    "role": str(row.get("role_slug") or ""),
+                    "formFactor": str(row.get("formFactor") or ""),
+                    "mgmtIp": str(row.get("mgmtIp") or ""),
+                    "prefix": str(raw.get("prefix") or raw.get("ip") or row.get("mgmtIp") or ""),
+                    "probeDown": row.get("_probe") == 0,
+                    "wlc": "",
+                    **approved,
+                })
+            try:
+                links = self._neighbour_links(client)
+            except Exception:
+                log.warning("hierarchy neighbour query failed")
+                links = []
+                if "prometheus" not in degraded:
+                    degraded.append("prometheus")
+        aps = self._ap_rows()
+        by_host = {str(device.get("hostname") or "").lower(): device for device in devices}
+        for ap in aps:
+            device = by_host.get(str(ap.get("name") or "").lower())
+            if device is not None and ap.get("wlc"):
+                device["wlc"] = str(ap.get("wlc") or "")
+            switch = str(ap.get("neighborSwitch") or "")
+            if device is None or not switch:
+                continue
+            links.append({
+                "local": device["hostname"],
+                "localPort": "uplink",
+                "remoteName": switch,
+                "remotePort": str(ap.get("neighborPort") or ""),
+                "source": "cdp",
+            })
+        report = build_hierarchy(devices, links)
+        settings_path, sd_path = self._hierarchy_paths()
+        report["autoApply"] = read_auto_apply(settings_path)
+        report["degraded"] = list(degraded or [])
+        try:
+            write_scrape_file(sd_path)
+        except OSError:
+            log.warning("topology file_sd could not be written")
+        self.cache.put("hierarchy-report", report)
+        return report
+
+    def _neighbour_links(self, client) -> list[dict]:
+        suffixes = self._suffixes()
+
+        def named(metric: str) -> list[dict]:
+            return self._prom(client, "%s or %s_info" % (metric, metric))
+
+        def grouped(samples) -> dict:
+            found = {}
+            for sample in samples or []:
+                host = str((sample.get("metric") or {}).get("hostname") or "")
+                if host:
+                    found.setdefault(host, []).append(sample)
+            return found
+
+        cdp_id = grouped(named("cdpCacheDeviceId"))
+        cdp_port = grouped(named("cdpCacheDevicePort"))
+        cdp_addr = grouped(named("cdpCacheAddress"))
+        cdp_plat = grouped(named("cdpCachePlatform"))
+        lldp_name = grouped(named("lldpRemSysName"))
+        lldp_port = grouped(named("lldpRemPortId"))
+        lldp_desc = grouped(named("lldpRemPortDesc"))
+        lldp_addr = grouped(named("lldpRemManAddrIfId"))
+        lldp_loc = grouped(named("lldpLocPortId"))
+        # snmp_exporter puts the short name on the ifDescr series (ifName label).
+        # There is no separate ifName series on these switches. CDP's local port
+        # is cdpCacheIfIndex, which matches ifDescr's ifIndex.
+        descriptions = grouped(named("ifDescr"))
+        hosts = set(cdp_id) | set(cdp_port) | set(lldp_name) | set(lldp_port)
+        links = []
+        for host in hosts:
+            by_index: dict[str, str] = {}
+            for sample in descriptions.get(host) or []:
+                metric = sample.get("metric") or {}
+                index = str(metric.get("ifIndex") or "")
+                if not index:
+                    continue
+                short = str(metric.get("ifName") or "")
+                long_name = str(metric.get("ifDescr") or "")
+                if short:
+                    by_index[index] = short
+                elif index not in by_index and long_name:
+                    by_index[index] = long_name
+            ports = [{"id": index, "name": name} for index, name in by_index.items()]
+            rows = neighbors_from_cdp(
+                cdp_id.get(host), cdp_port.get(host), cdp_addr.get(host), cdp_plat.get(host),
+                ports, suffixes,
+            )
+            rows += neighbors_from_lldp(
+                lldp_name.get(host), lldp_port.get(host), lldp_desc.get(host),
+                lldp_addr.get(host), lldp_loc.get(host), ports, suffixes,
+            )
+            for row in rows:
+                links.append({
+                    "local": host,
+                    "localPort": row.get("localPort") or "",
+                    "remoteName": row.get("remoteName") or "",
+                    "remotePort": row.get("remotePort") or "",
+                    "remoteAddress": row.get("remoteAddress") or "",
+                    "source": row.get("source") or "",
+                })
+        return links
+
+    def hierarchy_write(self, nodes: list[dict], items: list[dict]) -> list[dict]:
+        """Patch parent custom fields. Caller must already have decided this write is approved."""
+        from .hierarchy import NetBoxHierarchyWriter, apply_changes
+
+        def request(method, path, body=None):
+            with self._session() as client:
+                response = self._send(
+                    client, method, self.settings.netbox_url + path,
+                    headers=self._headers(), json_body=body, upstream="netbox",
+                )
+                if response.status_code in (200, 201):
+                    if not response.content:
+                        return {}
+                    try:
+                        return response.json()
+                    except ValueError:
+                        raise UpstreamError("netbox", "NetBox returned a response that was not JSON")
+                if response.status_code in (401, 403):
+                    raise UpstreamError("netbox", "NetBox rejected the API token")
+                raise UpstreamError("netbox", "NetBox returned HTTP %s" % response.status_code)
+
+        results = apply_changes(NetBoxHierarchyWriter(request), nodes, items)
+        self.cache.drop("nb-devices")
+        self.cache.drop("hierarchy-report")
+        return results
+
+    def _attach_hierarchy(self, detail: dict, found: dict, report: dict) -> None:
+        ident = str(found.get("id") or "")
+        host = str(found.get("hostname") or "").lower()
+        node = None
+        forms = {}
+        for item in report.get("nodes") or []:
+            forms[str(item.get("id") or "")] = item.get("formFactor") or "generic"
+            if str(item.get("id") or "") == ident or str(item.get("hostname") or "").lower() == host:
+                node = item
+        if node is None:
+            detail["parent"] = None
+            detail["children"] = []
+            detail["wlc"] = ""
+            detail["unparented"] = False
+            detail["parentDown"] = False
+            return
+        parent_id = str(node.get("parentId") or "")
+        if parent_id:
+            detail["parent"] = {
+                "id": parent_id,
+                "hostname": node.get("parentHostname") or "",
+                "parentInterface": node.get("parentInterface") or "",
+                "uplinkInterface": node.get("uplinkInterface") or "",
+                "formFactor": forms.get(parent_id) or "generic",
+            }
+        else:
+            detail["parent"] = None
+        detail["children"] = list(node.get("children") or [])
+        detail["wlc"] = node.get("wlc") or ""
+        detail["unparented"] = bool(node.get("flagged"))
+        detail["parentDown"] = bool(node.get("parentDown"))
+
 def _title(upstream: str) -> str:
     return {"netbox": "NetBox", "prometheus": "Prometheus", "alertmanager": "Alertmanager"}.get(upstream, upstream)
 
@@ -4589,3 +4791,6 @@ def mount_fleet(app, user_of) -> None:
         except Exception:
             raise ApiError(400, "bad_body", "body must be JSON")
         return fleet().accept_webhook(body, request.headers.get("authorization", ""))
+
+    from .hierarchy_http import mount_hierarchy
+    mount_hierarchy(app, user_of)

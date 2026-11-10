@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DeviceDetailData, DeviceRow } from '@/lib/types';
-import { buildDeviceTopology, buildSiteTopology, deviceNodeHref } from './topologyLinks';
+import { buildDeviceTopology, buildHierarchyTopology, buildSiteTopology, deviceNodeHref } from './topologyLinks';
+import type { HierarchyNode } from '@/lib/types';
 
 function row(partial: Partial<DeviceRow> & Pick<DeviceRow, 'id' | 'hostname' | 'formFactor'>): DeviceRow {
   return {
@@ -123,5 +124,54 @@ describe('topology links in live mode', () => {
     expect(unknown?.kind).not.toBe('ap');
     expect(unknown?.href?.startsWith('/device-detail?id=')).toBe(true);
     expect(unknown?.href?.startsWith('/device-detail?form=')).toBe(false);
+  });
+});
+
+function hierarchyNode(partial: Partial<HierarchyNode> & Pick<HierarchyNode, 'id' | 'hostname'>): HierarchyNode {
+  return {
+    role: 'access-switches',
+    mgmtIp: '10.129.32.17',
+    formFactor: 'access-switch-48',
+    root: false,
+    parentId: '',
+    parentHostname: '',
+    parentInterface: '',
+    uplinkInterface: '',
+    hops: 1,
+    flagged: false,
+    reason: '',
+    wlc: '',
+    parentDown: false,
+    differs: true,
+    children: [],
+    ...partial,
+  };
+}
+
+describe('buildHierarchyTopology', () => {
+  it('places the parent above the device and the access point below its switch', () => {
+    const core = hierarchyNode({ id: '1', hostname: 'core-sw', mgmtIp: '10.129.32.1', root: true, hops: 0, formFactor: 'switch-stack' });
+    const access = hierarchyNode({
+      id: '2', hostname: 'access-sw', parentId: '1', parentHostname: 'core-sw', parentInterface: 'Gi0/5', uplinkInterface: 'Gi1/0/23', hops: 1,
+    });
+    const ap = hierarchyNode({
+      id: '9', hostname: 'AP-WC18', parentId: '2', parentHostname: 'access-sw', parentInterface: 'Gi1/0/10', uplinkInterface: 'uplink',
+      hops: 2, formFactor: 'ceiling-ap', wlc: 'OiOB-Bree-WLC01', parentDown: true,
+    });
+    const laid = buildHierarchyTopology([core, access, ap], true, { focusId: '2', currentHostname: 'access-sw' });
+    expect(laid).not.toBeNull();
+    const parent = laid!.nodes.find((node) => node.id === '1');
+    const self = laid!.nodes.find((node) => node.id === '2');
+    const child = laid!.nodes.find((node) => node.id === '9');
+    const wlc = laid!.nodes.find((node) => node.label === 'OiOB-Bree-WLC01');
+    expect(parent && self && parent.y < self.y).toBe(true);
+    expect(child && self && child.y > self.y).toBe(true);
+    expect(child?.sub).toBe('Unreachable due to parent');
+    expect(wlc?.sub).toBe('Joined WLC');
+    const uplink = laid!.links.find((link) => link.to === '2');
+    expect(uplink?.label).toContain('Gi1/0/23');
+    expect(uplink?.label).toContain('Gi0/5');
+    expect(laid!.links.some((link) => link.label === 'joined' && link.to === '9')).toBe(true);
+    expect(laid!.links.some((link) => link.from === wlc?.id && link.label !== 'joined')).toBe(false);
   });
 });

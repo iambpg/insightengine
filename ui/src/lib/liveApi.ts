@@ -64,6 +64,24 @@ export async function syncNetbox(deviceId: string): Promise<import('@/lib/types'
   return request(`${API}/devices/${encodeURIComponent(deviceId)}/netbox-sync`, { method: 'POST', body: {} });
 }
 
+export async function getHierarchy() {
+  return request<import('@/lib/types').HierarchyReport>(`${API}/hierarchy`);
+}
+
+export async function saveHierarchySettings(autoApply: boolean) {
+  return request<{ autoApply: boolean }>(`${API}/hierarchy/settings`, { method: 'PUT', body: { autoApply } });
+}
+
+export async function approveHierarchy(body: {
+  all?: boolean;
+  items?: { id: string; parentId?: string; parentInterface?: string; uplinkInterface?: string }[];
+}) {
+  return request<{ results: { id: string; ok: boolean; error?: string; hostname?: string }[] }>(
+    `${API}/hierarchy/approve`,
+    { method: 'POST', body }
+  );
+}
+
 export async function getAccessPointDetail(wlc: string, name: string) {
   const params = new URLSearchParams();
   if (wlc) params.set('wlc', wlc);

@@ -15,7 +15,7 @@ import { portNameLine } from '@/components/faceplate/portText';
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
-import { isMockMode } from '@/lib/apiMode';
+import { devicePath, isMockMode } from '@/lib/apiMode';
 import { deviceHealthPath } from '@/lib/deviceHealthPath';
 import AddApDialog from '@/components/AddApDialog';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
@@ -190,20 +190,29 @@ export default function DeviceDetailView() {
     return { tones, synced: differs.length === 0, differs };
   }, [device]);
 
+  const visibleIssues = useMemo(() => {
+    const issues = device?.issues ?? [];
+    if (!device?.parentDown) return issues;
+    return issues.filter((issue) => !/icmp|unreachable|not answering/i.test(`${issue.title} ${issue.detail}`));
+  }, [device]);
+
   const healthItems = useMemo<HealthCause[]>(() => {
     if (!device) return [];
-    if (Array.isArray(device.healthItems)) return device.healthItems;
-    return (device.issues ?? []).map((issue) => ({
-      id: issue.id,
-      severity: issue.severity,
-      title: issue.title,
-      detail: issue.detail,
-      value: issue.target,
-      threshold: '—',
-      source: 'alertmanager',
-      since: issue.since,
-      target: issue.target,
-    }));
+    const items = Array.isArray(device.healthItems)
+      ? device.healthItems
+      : (device.issues ?? []).map((issue) => ({
+          id: issue.id,
+          severity: issue.severity,
+          title: issue.title,
+          detail: issue.detail,
+          value: issue.target,
+          threshold: '—',
+          source: 'alertmanager',
+          since: issue.since,
+          target: issue.target,
+        }));
+    if (!device.parentDown) return items;
+    return items.filter((issue) => !/icmp|unreachable|not answering/i.test(`${issue.title} ${issue.detail}`));
   }, [device]);
 
   const allPorts = useMemo<PortInfo[]>(() => {
@@ -240,10 +249,13 @@ export default function DeviceDetailView() {
                 <h1 className="rounded-lg border border-border bg-muted/50 px-3 py-1.5 font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
                 <HealthBadge health={device.health} href={deviceHealthPath(device.id || id, device.faceplate.form_factor, device.health)} />
                 <StatusBadge status={device.status} />
-                {device.issues.filter((i) => i.severity === 'critical').length > 0 && (
+                {device.faceplate.modelName && (
+                  <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono-data text-xs font-semibold text-foreground">{device.faceplate.modelName}</span>
+                )}
+                {visibleIssues.filter((i) => i.severity === 'critical').length > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-2.5 py-0.5 text-xs font-bold text-destructive-foreground">
                     <Icon name="BellAlertIcon" size={12} variant="solid" />
-                    {device.issues.filter((i) => i.severity === 'critical').length} critical
+                    {visibleIssues.filter((i) => i.severity === 'critical').length} critical
                   </span>
                 )}
               </div>
@@ -257,6 +269,7 @@ export default function DeviceDetailView() {
                 <Meta label="Last poll" value={device.lastPoll} mono />
                 <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
+              <ParentBlock device={device} />
             </div>
             <div className="grid shrink-0 grid-cols-2 gap-2">
               <button
@@ -522,6 +535,52 @@ function shadeColor(shade?: string): string {
   const text = (shade || '').trim();
   if (/^[0-9a-fA-F]{6}$/.test(text)) return `#${text}`;
   return text;
+}
+
+function ParentBlock({ device }: { device: DeviceDetailData }) {
+  const parent = device.parent;
+  const children = device.children ?? [];
+  if (!parent && !device.unparented && !device.parentDown && !device.wlc && children.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-1.5 text-sm">
+      {device.parentDown ? (
+        <p role="status" className="font-medium text-destructive">Unreachable due to parent</p>
+      ) : null}
+      {parent ? (
+        <p>
+          Parent{' '}
+          <Link href={devicePath(parent.id, parent.formFactor || 'generic')} className="font-mono-data font-medium text-primary hover:underline">
+            {parent.hostname}
+          </Link>
+          <span className="font-mono-data text-muted-foreground">
+            {' '}{parent.uplinkInterface} → {parent.hostname} {parent.parentInterface}
+          </span>
+        </p>
+      ) : device.unparented ? (
+        <p className="text-amber-800">No path to a subnet root. This device has no parent.</p>
+      ) : null}
+      {device.wlc ? (
+        <p>Joined WLC <span className="font-mono-data">{device.wlc}</span></p>
+      ) : null}
+      {children.length > 0 ? (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Children</p>
+          <ul className="mt-1 space-y-0.5">
+            {children.map((child) => (
+              <li key={child.id}>
+                <Link href={devicePath(child.id, child.formFactor || 'generic')} className="font-mono-data text-primary hover:underline">
+                  {child.hostname}
+                </Link>
+                <span className="font-mono-data text-muted-foreground">
+                  {' '}{child.uplinkInterface} → {device.hostname} {child.parentInterface}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function Meta({ label, value, mono, link, shade }: { label: string; value: string; mono?: boolean; link?: string; shade?: string }) {

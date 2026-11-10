@@ -46,6 +46,8 @@ def device_dict(device):
         "manufacturer": _text(getattr(manufacturer, "slug", "")),
         "snmp_module": _text(custom.get("snmp_module")),
         "snmp_auth": _text(custom.get("snmp_auth")),
+        "parent": _text(custom.get("parent_name")),
+        "topology_parent": _text(custom.get("topology_parent")),
     }
 
 
@@ -57,6 +59,18 @@ class PrometheusDevicesView(APIView):
 
         mapping = load_map(default_map_path())
         auth_by_ip = load_auth_map(default_auth_map_path())
+        # Names and "who is a parent" come from every active device, before the
+        # role filter, so an access-switch page can still name its core parent.
+        named = {}
+        parent_ids = set()
+        for device in Device.objects.filter(status="active").only("id", "name", "custom_field_data"):
+            named[device.pk] = _text(getattr(device, "name", ""))
+            custom = getattr(device, "custom_field_data", None) or {}
+            parent = custom.get("parent_device")
+            if isinstance(parent, dict):
+                parent = parent.get("id")
+            if parent:
+                parent_ids.add(int(parent))
         qs = Device.objects.filter(status="active").select_related(
             "role", "device_type", "device_type__manufacturer", "platform", "site",
             "site__region", "site__group", "tenant", "primary_ip4",
@@ -69,7 +83,15 @@ class PrometheusDevicesView(APIView):
             qs = qs.filter(status=status)
         targets = []
         for device in qs:
-            item = target_for(device_dict(device), mapping, auth_by_ip)
+            custom = getattr(device, "custom_field_data", None) or {}
+            parent = custom.get("parent_device")
+            if isinstance(parent, dict):
+                parent = parent.get("id")
+            data = device_dict(device)
+            if parent:
+                data["parent"] = named.get(int(parent), "")
+            data["topology_parent"] = "yes" if device.pk in parent_ids else "no"
+            item = target_for(data, mapping, auth_by_ip)
             if item:
                 targets.append(item)
         return Response(targets)

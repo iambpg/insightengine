@@ -1,5 +1,5 @@
 import type { DeviceKind } from '@/app/topology/components/DeviceArt';
-import type { DeviceDetailData, DeviceHealth, DeviceRow, PortInfo } from '@/lib/types';
+import type { DeviceDetailData, DeviceHealth, DeviceRow, HierarchyNode, PortInfo } from '@/lib/types';
 
 export interface TopoNode {
   id: string;
@@ -213,4 +213,101 @@ export function buildSiteTopology(devices: DeviceRow[], live = false, currentHos
   });
   const H = (apList.length > 0 ? apY : rowY) + 60;
   return { nodes, links, W, H };
+}
+
+/** Parent above, children below. Returns null when this hierarchy has nothing to draw. */
+export function buildHierarchyTopology(
+  all: HierarchyNode[],
+  live: boolean,
+  opts?: {
+    focusId?: string;
+    onlyIds?: string[];
+    currentHostname?: string;
+    healthById?: Record<string, DeviceHealth>;
+  },
+): { nodes: TopoNode[]; links: TopoLink[]; W: number; H: number } | null {
+  if (!all.length) return null;
+  const byId = new Map(all.map((node) => [node.id, node]));
+  let chosen = all;
+  if (opts?.focusId) {
+    const focus = byId.get(opts.focusId);
+    if (!focus) return null;
+    const ids = new Set<string>([focus.id]);
+    if (focus.parentId) ids.add(focus.parentId);
+    for (const node of all) {
+      if (node.parentId === focus.id) ids.add(node.id);
+    }
+    chosen = all.filter((node) => ids.has(node.id));
+  } else if (opts?.onlyIds && opts.onlyIds.length) {
+    const wanted = new Set(opts.onlyIds);
+    const ids = new Set<string>();
+    for (const node of all) {
+      if (!wanted.has(node.id)) continue;
+      ids.add(node.id);
+      if (node.parentId && byId.has(node.parentId)) ids.add(node.parentId);
+    }
+    chosen = all.filter((node) => ids.has(node.id));
+  }
+  if (!chosen.length) return null;
+  const levels = new Map<number, HierarchyNode[]>();
+  for (const node of chosen) {
+    const hop = node.hops == null || node.flagged ? 8 : node.hops;
+    const row = levels.get(hop) ?? [];
+    row.push(node);
+    levels.set(hop, row);
+  }
+  const W = 960;
+  const topoNodes: TopoNode[] = [];
+  const links: TopoLink[] = [];
+  const placed = new Set<string>();
+  let y = 48;
+  for (const hop of [...levels.keys()].sort((a, b) => a - b)) {
+    const row = (levels.get(hop) ?? []).slice().sort((a, b) => a.hostname.localeCompare(b.hostname));
+    const gap = row.length > 1 ? Math.min(210, (W - 120) / (row.length - 1)) : 0;
+    const start = W / 2 - ((row.length - 1) * gap) / 2;
+    row.forEach((node, index) => {
+      const health: DeviceHealth = node.parentDown ? 'unreachable' : opts?.healthById?.[node.id] ?? 'healthy';
+      topoNodes.push({
+        id: node.id,
+        label: node.hostname,
+        sub: node.parentDown ? 'Unreachable due to parent' : node.mgmtIp || node.role || '',
+        kind: kindFromForm(node.formFactor),
+        health,
+        x: start + index * gap,
+        y,
+        current: Boolean(opts?.currentHostname) && node.hostname === opts?.currentHostname,
+        href: deviceNodeHref(live, node.id, node.formFactor || 'generic'),
+      });
+      placed.add(node.id);
+    });
+    y += 110;
+  }
+  for (const node of chosen) {
+    if (node.parentId && placed.has(node.parentId) && placed.has(node.id)) {
+      links.push({
+        id: `h-${node.id}`,
+        from: node.parentId,
+        to: node.id,
+        label: `${node.uplinkInterface || 'uplink'} → ${node.parentInterface || ''}`.trim(),
+        state: node.parentDown ? 'fault' : 'up',
+      });
+    }
+    if (!node.wlc) continue;
+    const wid = `wlc:${node.wlc}`;
+    if (!placed.has(wid)) {
+      const self = topoNodes.find((item) => item.id === node.id);
+      topoNodes.push({
+        id: wid,
+        label: node.wlc,
+        sub: 'Joined WLC',
+        kind: 'controller',
+        health: 'healthy',
+        x: (self?.x ?? W / 2) + 180,
+        y: self?.y ?? y,
+      });
+      placed.add(wid);
+    }
+    links.push({ id: `wlc-${node.id}`, from: wid, to: node.id, label: 'joined', state: 'up' });
+  }
+  return { nodes: topoNodes, links, W, H: y + 40 };
 }

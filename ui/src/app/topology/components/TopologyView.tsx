@@ -16,7 +16,8 @@ import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDetailData, DeviceHealth, DeviceRow, SiteRow } from '@/lib/types';
 import DeviceArt, { ArtDefs } from '@/app/topology/components/DeviceArt';
 import TopologySiteList from '@/app/topology/components/TopologySiteList';
-import { buildDeviceTopology, buildSiteTopology, deviceNodeHref, type TopoLink, type TopoNode } from '@/app/topology/components/topologyLinks';
+import { buildDeviceTopology, buildHierarchyTopology, buildSiteTopology, deviceNodeHref, type TopoLink, type TopoNode } from '@/app/topology/components/topologyLinks';
+import type { HierarchyReport } from '@/lib/types';
 
 const FORMS = Object.keys(FACEPLATE_SAMPLES);
 const NODE_W = 128;
@@ -185,21 +186,43 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
     const device = await api.getDevice(key);
     const siteKey = isMockMode() ? 3 : device.siteId;
     const siteDevices = siteKey ? await api.listSiteDevices(siteKey) : [];
-    return { device, siteDevices };
+    const tree = await api.getHierarchy().catch(() => null);
+    return { device, siteDevices, tree };
   });
   const device = loaded.data?.device ?? null;
   const siteDevices = loaded.data?.siteDevices ?? null;
+  const tree = loaded.data?.tree ?? null;
   const error = loaded.error;
 
   const live = !isMockMode();
-  const devTopo = useMemo(() => (device ? buildDeviceTopology(device, siteDevices ?? [], live) : null), [device, siteDevices, live]);
+  const healthById = useMemo(() => {
+    const map: Record<string, DeviceRow['health']> = {};
+    for (const row of siteDevices ?? []) map[row.id] = row.health;
+    if (device?.id) map[device.id] = device.health;
+    return map;
+  }, [siteDevices, device]);
+  const devTopo = useMemo(() => {
+    if (device && tree?.nodes?.length) {
+      const laid = buildHierarchyTopology(tree.nodes, live, { focusId: device.id, currentHostname: device.hostname, healthById });
+      if (laid) return laid;
+    }
+    return device ? buildDeviceTopology(device, siteDevices ?? [], live) : null;
+  }, [device, siteDevices, tree, live, healthById]);
   const siteTopo = useMemo(() => {
     if (!device || !siteDevices) return null;
+    if (tree?.nodes?.length) {
+      const laid = buildHierarchyTopology(tree.nodes, live, {
+        onlyIds: siteDevices.map((row) => row.id),
+        currentHostname: device.hostname,
+        healthById,
+      });
+      if (laid) return laid;
+    }
     const merged: DeviceRow[] = siteDevices.map((s) => ({ ...s }));
     const idx = merged.findIndex((s) => (device.id ? s.id === device.id : s.formFactor === form));
     if (idx >= 0) merged[idx] = { ...merged[idx], hostname: device.hostname, mgmtIp: device.mgmtIp, health: device.health, formFactor: device.faceplate.form_factor };
     return buildSiteTopology(merged, live, device.hostname);
-  }, [device, siteDevices, form, live]);
+  }, [device, siteDevices, form, live, tree, healthById]);
 
   if (error) {
     return <div className="px-3 sm:px-4"><ErrorBox text={error} onRetry={() => setReload((n) => n + 1)} /></div>;
@@ -243,7 +266,9 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
           <div>
             <h2 id="dev-topo-title" className="text-base font-semibold">Device topology</h2>
-            <p className="text-xs text-muted-foreground">Direct neighbours of this device, learned from LLDP on its ports.</p>
+            <p className="text-xs text-muted-foreground">
+              {tree?.nodes?.length ? 'Parent above and children below, from CDP and LLDP.' : 'Direct neighbours of this device, learned from LLDP on its ports.'}
+            </p>
           </div>
           {devTopo && <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular text-muted-foreground">{devTopo.links.length} neighbours</span>}
         </div>
@@ -288,23 +313,40 @@ function DeviceTopologyPage({ form, deviceKey }: { form: string; deviceKey: stri
 
 function SiteTopologyPage({ site, onBack }: { site: SiteRow; onBack: () => void }) {
   const [devices, setDevices] = useState<DeviceRow[] | null>(null);
+  const [tree, setTree] = useState<HierarchyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setDevices(null);
+    setTree(null);
     setError(null);
     api
       .listSiteDevices(site.id)
-      .then((d) => !cancelled && setDevices(d))
+      .then(async (d) => {
+        if (cancelled) return;
+        setDevices(d);
+        const hierarchy = await api.getHierarchy().catch(() => null);
+        if (!cancelled) setTree(hierarchy);
+      })
       .catch((cause) => !cancelled && setError(reportLoadError(cause, 'the topology for this site')));
     return () => {
       cancelled = true;
     };
   }, [site.id, reload]);
 
-  const topo = useMemo(() => (devices ? buildSiteTopology(devices, !isMockMode()) : null), [devices]);
+  const topo = useMemo(() => {
+    if (!devices) return null;
+    const live = !isMockMode();
+    if (tree?.nodes?.length) {
+      const healthById: Record<string, DeviceRow['health']> = {};
+      for (const row of devices) healthById[row.id] = row.health;
+      const laid = buildHierarchyTopology(tree.nodes, live, { onlyIds: devices.map((row) => row.id), healthById });
+      if (laid) return laid;
+    }
+    return buildSiteTopology(devices, live);
+  }, [devices, tree]);
 
   return (
     <div className="space-y-3 px-3 sm:px-4">

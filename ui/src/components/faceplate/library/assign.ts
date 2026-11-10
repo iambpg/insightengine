@@ -6,7 +6,7 @@ export interface Opening {
   type?: string;
 }
 
-const SKIP = /^(vlan|vl|po|portchannel|loopback|lo|tunnel|tu|null|nve)/;
+const SKIP = /^(vlan|vl\d*|port-?channel|po\d+|po$|loopback|lo\d*|tunnel|tu\d*|null\d*|nve)/;
 
 function devicePorts(device: FaceplateDevice): { name: string; type?: string }[] {
   if (device.members?.length) {

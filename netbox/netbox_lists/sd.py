@@ -106,6 +106,11 @@ def target_for(device: dict, mapping: dict, auth_by_ip: dict | None = None) -> d
         "__meta_netbox_snmp_module": module,
         "__meta_netbox_snmp_auth": auth,
     }
+    parent = _slug(device.get("parent"))
+    if parent:
+        labels["__meta_netbox_parent"] = parent
+    if _slug(device.get("topology_parent")) == "yes":
+        labels["__meta_netbox_topology_parent"] = "yes"
     return {"targets": [ip], "labels": labels}
 
 

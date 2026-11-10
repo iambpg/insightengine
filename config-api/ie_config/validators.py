@@ -91,9 +91,16 @@ def _prepare_prometheus(content: str, work: str, rules_text: str | None) -> str:
         os.makedirs(certs, exist_ok=True)
         open(os.path.join(certs, "ca.crt"), "a", encoding="utf-8").close()
     open(os.path.join(work, "netbox.token"), "a", encoding="utf-8").close()
+    sd_dir = os.path.join(work, "ie-file-sd")
+    os.makedirs(sd_dir, exist_ok=True)
+    topology = os.path.join(sd_dir, "topology.yml")
+    if not os.path.isfile(topology):
+        with open(topology, "w", encoding="utf-8") as fh:
+            fh.write("[]\n")
     rewritten = (
         content.replace("/etc/prometheus/", work + "/")
         .replace("/etc/ie-certs/", os.path.join(work, "ie-certs") + "/")
+        .replace("/etc/ie-file-sd/", sd_dir + "/")
         .replace("/run/ie-secrets/netbox_token", os.path.join(work, "netbox.token"))
         .replace("/run/secrets/netbox_token", os.path.join(work, "netbox.token"))
     )

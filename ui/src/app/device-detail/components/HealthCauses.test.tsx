@@ -21,8 +21,8 @@ describe('HealthCauses', () => {
     expect(screen.queryByText('CPU high')).toBeNull();
     expect(screen.getByText('0')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Probe failed/ }));
-    expect(screen.getByText(/The ICMP probe is not succeeding/)).toBeInTheDocument();
-    expect(screen.getByText(/This comes from Prometheus/)).toBeInTheDocument();
+    expect(screen.getByText(/The reading is 0 and the threshold is 1/)).toBeInTheDocument();
+    expect(screen.getByText(/This comes from Prometheus, since 6m ago/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Warning/ }));
     expect(onFilter).toHaveBeenCalledWith('warning');
     rerender(<HealthCauses items={items} health="critical" filter="warning" onFilter={onFilter} />);

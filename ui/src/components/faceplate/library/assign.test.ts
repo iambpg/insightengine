@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { PortInfo } from '@/lib/types';
+import type { PortInfo, PortType } from '@/lib/types';
 import { assignByOpening, faceplatePortCount, hasNamedFaceplateMatch, vendorFaceplateFits } from './assign';
 
-function port(name: string, type = 'RJ45'): PortInfo {
+function port(name: string, type: PortType = 'RJ45'): PortInfo {
   return { id: name, name, type, speed: '1 Gbps', state: 'up', utilisation: 0, errors: 0 };
 }
 

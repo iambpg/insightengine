@@ -9,6 +9,9 @@ data/*
 !data/migration/
 data/migration/*
 !data/migration/.gitkeep
+!data/prometheus-sd/
+data/prometheus-sd/*
+!data/prometheus-sd/topology.yml
 migration/migrate.conf
 migration/imported/
 *.dump

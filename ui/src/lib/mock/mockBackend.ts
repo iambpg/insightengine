@@ -123,6 +123,21 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
   return buildDeviceDetail(form);
 }
 
+export async function getHierarchy() {
+  await delay(40);
+  return { autoApply: false, roots: [], flagged: [], nodes: [] };
+}
+
+export async function saveHierarchySettings(autoApply: boolean) {
+  await delay(40);
+  return { autoApply };
+}
+
+export async function approveHierarchy() {
+  await delay(40);
+  return { results: [] };
+}
+
 const ACCESS_POINTS = [
   {
     name: 'ap-ams01-114', mac: '0.17.34.1.0.1', wlc: 'wlc-ein02', site: 'Rotterdam', netboxSite: 'Rotterdam', status: 'up', clients: 18, uptimeSeconds: 86400,

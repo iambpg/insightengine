@@ -97,6 +97,24 @@ export const api = {
     return (await backend()).syncNetbox(deviceId);
   },
 
+  // BACKEND: GET /api/v1/hierarchy
+  async getHierarchy() {
+    return (await backend()).getHierarchy();
+  },
+
+  // BACKEND: PUT /api/v1/hierarchy/settings  { autoApply }
+  async saveHierarchySettings(autoApply: boolean) {
+    return (await backend()).saveHierarchySettings(autoApply);
+  },
+
+  // BACKEND: POST /api/v1/hierarchy/approve
+  async approveHierarchy(body: {
+    all?: boolean;
+    items?: { id: string; parentId?: string; parentInterface?: string; uplinkInterface?: string }[];
+  }) {
+    return (await backend()).approveHierarchy(body);
+  },
+
   // BACKEND: GET /api/v1/access-points?wlc=&page=&page_size=&q=
   async listAccessPoints(query: { wlc?: string; site?: string; q?: string; status?: string; page?: number; pageSize?: number }) {
     return (await backend()).listAccessPoints(query);

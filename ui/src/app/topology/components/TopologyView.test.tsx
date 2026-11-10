@@ -24,7 +24,12 @@ vi.mock('@/lib/apiMode', () => ({
 }));
 
 vi.mock('@/lib/apiClient', () => ({
-  api: { getDevice: vi.fn(), listSiteDevices: vi.fn(), listSites: vi.fn() },
+  api: {
+    getDevice: vi.fn(),
+    listSiteDevices: vi.fn(),
+    listSites: vi.fn(),
+    getHierarchy: vi.fn(),
+  },
 }));
 
 function device(id: string, hostname: string): DeviceDetailData {
@@ -66,6 +71,8 @@ describe('TopologyView client navigation', () => {
     vi.mocked(api.getDevice).mockReset();
     vi.mocked(api.listSiteDevices).mockReset();
     vi.mocked(api.listSiteDevices).mockResolvedValue([]);
+    vi.mocked(api.getHierarchy).mockReset();
+    vi.mocked(api.getHierarchy).mockResolvedValue({ autoApply: false, roots: [], flagged: [], nodes: [] });
   });
 
   it('does not fetch a device until the id is in the query', async () => {
