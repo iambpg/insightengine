@@ -21,6 +21,18 @@ PROFILES = {
         "psu": True,
         "temperature": "status",
     },
+    # 2960, 3560, Catalyst 1000 and the SG small-business switches have a CPU
+    # and RAM. They do not report fans, power supplies or temperature.
+    "ios-basic": {
+        "label": "Cisco switch",
+        "interfaces": True,
+        "cpu": True,
+        "memory": True,
+        "fan": False,
+        "psu": False,
+        "temperature": False,
+        "hide_unsupported": True,
+    },
     "iosxe": {
         "label": "Cisco IOS-XE",
         "interfaces": True,
@@ -82,6 +94,7 @@ PROFILES = {
     "ap": {
         "label": "Cisco access point",
         "interfaces": False,
+        "cpu": False,
         "memory": False,
         "fan": False,
         "psu": False,
@@ -123,6 +136,8 @@ def classify_profile(role: str = "", platform: str = "", manufacturer: str = "",
         return "iosxe-wlc"
     if wlc or "aireos" in text or "air-ct" in text:
         return "aireos"
+    if any(token in text for token in ("2960", "3560", "c1000", "catalyst 1000", "sg350", "sg500")):
+        return "ios-basic"
     if any(token in text for token in ("nx-os", "nxos", "nexus")):
         return "nxos"
     if "asa" in text.split() or "adaptive security" in text:
@@ -213,7 +228,7 @@ def interface_rows(ports: list[dict], critical_names: set[str], limit: int = 8) 
             "ifIndex": str(port.get("id") or ""),
             "utilization": None if port.get("utilisation") is None else round(float(port.get("utilisation") or 0) / 100.0, 4),
             "dropsRate": None if drops is None else round(float(drops), 4),
-            "errorsRate": None if port.get("errors") is None else round(float(port.get("errors") or 0) / 60.0, 4),
+            "errorsRate": None if port.get("errors") is None else round(float(port.get("errors") or 0) / 300.0, 4),
             "criticalPath": bool(marked),
         })
     return rows
@@ -222,6 +237,7 @@ def interface_rows(ports: list[dict], critical_names: set[str], limit: int = 8) 
 def build_health_panel(
     profile_id: str,
     *,
+    cpu: float | None = None,
     memory_ratio: float | None = None,
     memory_detail: str = "",
     fan_states: list[str] | None = None,
@@ -237,6 +253,13 @@ def build_health_panel(
     profile = PROFILES.get(profile_id) or PROFILES["generic"]
     groups = []
 
+    if profile.get("cpu", True):
+        if cpu is None:
+            groups.append(_missing("cpu", "CPU", "No CPU sample yet"))
+        else:
+            cpu_status = "fail" if cpu >= 95 else "warn" if cpu >= 80 else "ok"
+            groups.append(_known("cpu", "CPU", cpu_status, "%.0f%%" % cpu, "5 minute average"))
+
     if profile["memory"]:
         if memory_ratio is None:
             groups.append(_missing("memory", "Memory", memory_detail or "No memory sample yet"))
@@ -246,7 +269,7 @@ def build_health_panel(
                 "%.0f%%" % (memory_ratio * 100),
                 memory_detail or "Used ratio",
             ))
-    else:
+    elif not profile.get("hide_unsupported"):
         groups.append(_unsupported("memory", "Memory"))
 
     if profile["fan"]:
@@ -265,7 +288,8 @@ def build_health_panel(
         detail = NOT_SUPPORTED
         if profile_id == "aireos":
             detail = "AireOS exposes fan failure as a trap, not a polled table. " + NOT_SUPPORTED
-        groups.append(_unsupported("fan", "Fans", detail))
+        if not profile.get("hide_unsupported"):
+            groups.append(_unsupported("fan", "Fans", detail))
 
     if profile["psu"]:
         states = [item for item in (psu_states or []) if item and item.lower() not in ("notpresent", "false")]
@@ -281,14 +305,16 @@ def build_health_panel(
                 "States: %s" % ", ".join(raw),
             ))
     else:
-        groups.append(_unsupported("psu", "Power supplies"))
+        if not profile.get("hide_unsupported"):
+            groups.append(_unsupported("psu", "Power supplies"))
 
     temp_mode = profile["temperature"]
     if not temp_mode:
         detail = NOT_SUPPORTED
         if profile_id == "aireos":
             detail = "AireOS has no polled temperature table. " + NOT_SUPPORTED
-        groups.append(_unsupported("temperature", "Temperature", detail))
+        if not profile.get("hide_unsupported"):
+            groups.append(_unsupported("temperature", "Temperature", detail))
     elif temp_c is None and not temp_state:
         groups.append(_missing(
             "temperature", "Temperature",
@@ -401,8 +427,10 @@ MEMORY_WARN = 0.90
 MEMORY_CRITICAL = 0.95
 TEMP_WARN = 60.0
 TEMP_CRITICAL = 75.0
-# Fleet interface warnings are rate(ifInErrors[5m]) > 1, which is 60 errors per minute.
-ERROR_PER_MIN = 60.0
+# Port error counts are the increase over 5 minutes. A warning stays on the
+# port and does not move the device badge. Fifty or more is critical and does.
+ERRORS_WARN_5M = 20.0
+ERRORS_CRITICAL_5M = 50.0
 CRIT_PATH_UTIL = 80.0
 RADIO_UTIL = 0.75
 
@@ -533,19 +561,21 @@ def _interface_items(snapshot: dict, since: str) -> list[dict]:
             if not isinstance(port, dict):
                 continue
             name = str(port.get("name") or port.get("id") or "interface")
-            state = str(port.get("state") or "")
-            if state == "fault":
-                items.append(_cause(
-                    "if-down-%s" % name, "critical", "Interface down",
-                    "%s is administratively up and operationally down." % name,
-                    "down", "up", "prometheus", since, name,
-                ))
             errors = _num(port.get("errors"))
-            if errors is not None and errors >= ERROR_PER_MIN:
+            if errors is not None and errors >= ERRORS_CRITICAL_5M:
+                items.append(_cause(
+                    "if-err-%s" % name, "critical", "Interface input errors",
+                    "%s has at least 50 input errors in 5 minutes." % name,
+                    "%.0f/5m" % errors, "50/5m", "prometheus", since, name,
+                ))
+            elif errors is not None and errors >= ERRORS_WARN_5M:
+                # Listed on the port as a warning. effect stays healthy so the
+                # device badge does not move.
                 items.append(_cause(
                     "if-err-%s" % name, "warning", "Interface input errors",
-                    "%s input errors are above 1 per second." % name,
-                    "%.0f/min" % errors, "60/min", "prometheus", since, name,
+                    "%s has at least 20 input errors in 5 minutes." % name,
+                    "%.0f/5m" % errors, "20/5m", "prometheus", since, name,
+                    effect="healthy",
                 ))
             util = _num(port.get("utilisation"))
             if util is None:
@@ -571,15 +601,16 @@ def _interface_items(snapshot: dict, since: str) -> list[dict]:
     warn = int(_num(snapshot.get("portsWarn")) or 0) if "portsWarn" in snapshot else 0
     if fault > 0:
         items.append(_cause(
-            "ports-fault", "critical", "Interfaces down",
-            "%d interface%s administratively up and operationally down." % (fault, "" if fault == 1 else "s"),
+            "ports-fault", "critical", "Interface input errors",
+            "%d interface%s with at least 50 input errors in 5 minutes." % (fault, "" if fault == 1 else "s"),
             str(fault), "0", "prometheus", since, "interfaces",
         ))
     if warn > 0:
         items.append(_cause(
             "ports-warn", "warning", "Interface input errors",
-            "%d interface%s with input errors above 1 per second." % (warn, "" if warn == 1 else "s"),
+            "%d interface%s with at least 20 input errors in 5 minutes." % (warn, "" if warn == 1 else "s"),
             str(warn), "0", "prometheus", since, "interfaces",
+            effect="healthy",
         ))
     return items
 
@@ -734,10 +765,7 @@ def explain_health(snapshot: dict | None = None) -> dict:
     items.extend(_ap_items(snap, since))
     items.extend(_alert_items(snap))
     health = _health_from_items(items)
-    public = []
-    for item in items:
-        public.append({key: value for key, value in item.items() if key != "effect"})
-    return {"health": health, "items": public}
+    return {"health": health, "items": items}
 
 
 def classify_health(probe, snmp_up, last_age_s, ports_fault, ports_warn, ports_total) -> str:

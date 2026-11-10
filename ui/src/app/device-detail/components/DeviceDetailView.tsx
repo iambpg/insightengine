@@ -9,7 +9,9 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate, { FaceplateLegend } from '@/components/faceplate/Faceplate';
+import { FACEPLATE_HEIGHT } from '@/components/faceplate/size';
 import { countPorts, faceplateSummaryLine, SNMP_MISSING_HINT } from '@/components/faceplate/summary';
+import { portNameLine } from '@/components/faceplate/portText';
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
@@ -20,11 +22,9 @@ import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
-import type { DeviceDetailData, HealthCause, PortInfo, SourceComparison } from '@/lib/types';
+import type { DeviceDetailData, HealthCause, InventorySide, PortInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
-import HealthPanel from './HealthPanel';
-import IssuesPanel from './IssuesPanel';
 import HealthChecks from './HealthChecks';
 import HardwareHealth from './HardwareHealth';
 import PortSidePanel, { PortThroughputGraph } from './PortSidePanel';
@@ -36,6 +36,46 @@ const NEEDS_ID = 'Open a device from the list. This page needs a device id.';
 
 function isFaceplateKey(value: string): boolean {
   return FORMS.includes(value) || value.startsWith('fg-') || value.startsWith('pa-');
+}
+
+const EMBER = '#c2410c';
+const UPTIME_ORANGE = '#f97316';
+const UPTIME_LIGHT_RED = '#fca5a5';
+
+function sameText(left: string, right: string): boolean {
+  return left.trim().toLowerCase().replace(/\s+/g, ' ') === right.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function inventoryTone(netbox?: string, netdisco?: string): 'match' | 'differ' | 'unknown' {
+  const left = (netbox || '').trim();
+  const right = (netdisco || '').trim();
+  if (!left && !right) return 'unknown';
+  if (!left || !right || !sameText(left, right)) return 'differ';
+  return 'match';
+}
+
+function modelTone(netbox: InventorySide | undefined, live?: string): 'match' | 'differ' | 'unknown' {
+  const right = (live || '').trim();
+  const left = (netbox?.model || '').trim();
+  const part = (netbox?.partNumber || '').trim();
+  if (!left && !part && !right) return 'unknown';
+  if (right && (sameText(left, right) || sameText(part, right))) return 'match';
+  return 'differ';
+}
+
+function toneShade(tone: 'match' | 'differ' | 'unknown'): string | undefined {
+  if (tone === 'match') return 'var(--success)';
+  if (tone === 'differ') return EMBER;
+  return undefined;
+}
+
+function uptimeShade(value: string): string | undefined {
+  const text = (value || '').trim();
+  if (!text || text === '—') return undefined;
+  const days = text.match(/(\d+)\s*d\b/i);
+  if (days) return Number(days[1]) > 5 ? 'var(--success)' : UPTIME_ORANGE;
+  if (/\d/.test(text)) return UPTIME_LIGHT_RED;
+  return undefined;
 }
 
 const DEVICE_ICON: Record<string, string> = {
@@ -62,6 +102,7 @@ export default function DeviceDetailView() {
   const [missingId, setMissingId] = useState(false);
   const [postedDiscovery, setPostedDiscovery] = useState<DeviceDiscoveryJob | null>(null);
   const [rediscovering, setRediscovering] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [healthFilter, setHealthFilter] = useState<HealthFilter>('all');
   const [addAp, setAddAp] = useState(false);
   const healthApplied = useRef('');
@@ -129,6 +170,26 @@ export default function DeviceDetailView() {
     }];
   }, [device]);
 
+  const syncTones = useMemo(() => {
+    const nb = device?.comparison?.netbox;
+    const nd = device?.comparison?.netdisco;
+    const live = device?.comparison?.observed;
+    const tones = {
+      model: modelTone(nb, live?.model || nd?.model),
+      serial: inventoryTone(nb?.serial, live?.serial || nd?.serial),
+      site: inventoryTone(nb?.site || (device?.site && device.site !== '—' ? device.site : ''), nd?.site),
+      firmware: inventoryTone(nb?.firmware || nb?.os, live?.firmware || nd?.firmware || nd?.os),
+    };
+    const labels: { key: keyof typeof tones; label: string }[] = [
+      { key: 'model', label: 'Model' },
+      { key: 'serial', label: 'Serial number' },
+      { key: 'site', label: 'Site' },
+      { key: 'firmware', label: 'Firmware' },
+    ];
+    const differs = labels.filter((item) => item.key !== 'site' && tones[item.key] !== 'match').map((item) => item.label);
+    return { tones, synced: differs.length === 0, differs };
+  }, [device]);
+
   const visibleIssues = useMemo(() => {
     const issues = device?.issues ?? [];
     if (!device?.parentDown) return issues;
@@ -137,18 +198,21 @@ export default function DeviceDetailView() {
 
   const healthItems = useMemo<HealthCause[]>(() => {
     if (!device) return [];
-    if (Array.isArray(device.healthItems)) return device.healthItems;
-    return (device.issues ?? []).map((issue) => ({
-      id: issue.id,
-      severity: issue.severity,
-      title: issue.title,
-      detail: issue.detail,
-      value: issue.target,
-      threshold: '—',
-      source: 'alertmanager',
-      since: issue.since,
-      target: issue.target,
-    }));
+    const items = Array.isArray(device.healthItems)
+      ? device.healthItems
+      : (device.issues ?? []).map((issue) => ({
+          id: issue.id,
+          severity: issue.severity,
+          title: issue.title,
+          detail: issue.detail,
+          value: issue.target,
+          threshold: '—',
+          source: 'alertmanager',
+          since: issue.since,
+          target: issue.target,
+        }));
+    if (!device.parentDown) return items;
+    return items.filter((issue) => !/icmp|unreachable|not answering/i.test(`${issue.title} ${issue.detail}`));
   }, [device]);
 
   const allPorts = useMemo<PortInfo[]>(() => {
@@ -181,8 +245,8 @@ export default function DeviceDetailView() {
         {device ? (
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="font-mono-data text-2xl font-semibold tracking-tight">{device.hostname}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="rounded-lg border border-border bg-muted/50 px-3 py-1.5 font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
                 <HealthBadge health={device.health} href={deviceHealthPath(device.id || id, device.faceplate.form_factor, device.health)} />
                 <StatusBadge status={device.status} />
                 {device.faceplate.modelName && (
@@ -195,19 +259,19 @@ export default function DeviceDetailView() {
                   </span>
                 )}
               </div>
-              <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3 xl:grid-cols-6">
-                <Meta label="Role" value={device.role} />
-                <Meta label="Model" value={device.modelFamily} mono />
-                <Meta label="Serial number" value={device.serialMasked} mono />
-                <Meta label="Site" value={device.site} link="/site-view" />
-                <Meta label="Management IP" value={device.mgmtIp} mono />
-                <Meta label="Uptime" value={device.uptime} mono />
+              <dl className="mt-3 flex flex-wrap gap-2 text-sm">
+                <Meta label="Role" value={device.role} shade={device.roleColor} />
+                <Meta label="Model" value={device.partNumber || device.faceplate.partNumber || device.faceplate.modelName || device.modelFamily} mono shade={toneShade(syncTones.tones.model)} />
+                <Meta label="Serial number" value={device.serialMasked} mono shade={toneShade(syncTones.tones.serial)} />
+                <Meta label="Site" value={device.site} link="/site-view" shade={toneShade(syncTones.tones.site)} />
+                <Meta label="Management IP" value={device.mgmtIp} mono shade={device.reachable ? 'var(--success)' : undefined} />
+                <Meta label="Uptime" value={device.uptime} mono shade={uptimeShade(device.uptime)} />
                 <Meta label="Last poll" value={device.lastPoll} mono />
-                <Meta label="Firmware" value={device.firmware} mono />
+                <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
               <ParentBlock device={device} />
             </div>
-            <div className="flex flex-col items-stretch gap-2">
+            <div className="grid shrink-0 grid-cols-2 gap-2">
               <button
                 type="button"
                 disabled={rediscovering || !device.mgmtIp}
@@ -225,6 +289,30 @@ export default function DeviceDetailView() {
               >
                 <Icon name="MagnifyingGlassIcon" size={16} />
                 {rediscovering ? 'Rediscovering…' : 'Rediscover'}
+              </button>
+              <button
+                type="button"
+                disabled={syncing || !device.id}
+                onClick={() => {
+                  setSyncing(true);
+                  api
+                    .syncNetbox(device.id)
+                    .then((result) => {
+                      const labels: Record<string, string> = { model: 'model', serial: 'serial number', firmware: 'firmware' };
+                      const written = (result.updated || []).map((key) => labels[key] || key);
+                      if (written.length) toast.success(`Updated ${written.join(', ')} in NetBox.${result.note ? ` ${result.note}` : ''}`);
+                      else toast.success(result.note || 'NetBox already has this model, serial number and firmware.');
+                      setAttempt((n) => n + 1);
+                    })
+                    .catch((error) => {
+                      toast.error(isApiError(error) ? error.message : 'NetBox sync failed.');
+                    })
+                    .finally(() => setSyncing(false));
+                }}
+                className={`inline-flex items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
+              >
+                <Icon name="ArrowsRightLeftIcon" size={16} />
+                {syncing ? 'Syncing…' : 'Netbox Sync'}
               </button>
               <button
                 type="button"
@@ -248,19 +336,6 @@ export default function DeviceDetailView() {
                 <Icon name="CommandLineIcon" size={16} />
                 Open device
               </Link>
-              <Link
-                href={
-                  isMockMode()
-                    ? `/topology?form=${encodeURIComponent(form)}`
-                    : `/topology?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
-                }
-                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
-              >
-                <Icon name="ShareIcon" size={16} />
-                Topology
-              </Link>
-              <ConfigButton label="IP SLA config" load={() => api.getIpSlaConfig(device.id || id)} />
-              <ConfigButton label="Controller config" load={() => api.getTelemetryConfig(device.id || id)} />
             </div>
             <div className="basis-full">
               <DeviceDiscoveryStatus job={discoveryJob} />
@@ -275,9 +350,6 @@ export default function DeviceDetailView() {
         )}
       </header>
 
-      {device ? (
-        <HealthCauses items={healthItems} health={device.health} filter={healthFilter} onFilter={setHealthFilter} />
-      ) : null}
       {apDraft.length > 0 ? (
         <div className="px-4">
           <button type="button" onClick={() => setAddAp(true)} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Add to NetBox</button>
@@ -287,23 +359,30 @@ export default function DeviceDetailView() {
 
       {/* issues + hardware health + health check */}
       <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Device status overview">
-        <div className="grid grid-cols-1 gap-3 p-3 xl:grid-cols-3">
-          <div>
-            <IssuesPanel issues={device ? visibleIssues : null} />
+        <div className="grid grid-cols-1 items-stretch gap-3 p-3 xl:grid-cols-3">
+          <div className="h-[25.6rem] min-h-0">
+            <HealthCauses
+              items={device ? healthItems : null}
+              health={device?.health ?? 'healthy'}
+              filter={healthFilter}
+              onFilter={setHealthFilter}
+              ports={allPorts}
+              onSelectPort={(port) => {
+                setSelected(port);
+                document.getElementById('fp-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            />
           </div>
-          <div>
+          <div className="h-[25.6rem] min-h-0">
             <HardwareHealth items={device?.hardware ?? null} />
           </div>
-          <div>
+          <div className="h-[25.6rem] min-h-0">
             <HealthChecks checks={device?.checks ?? null} runAt={device?.checkRunAt ?? ''} running={rerun} />
           </div>
         </div>
       </section>
 
-      {device?.healthPanel ? <HealthPanel panel={device.healthPanel} /> : null}
       {device?.healthPanel?.wlc ? <AccessPointList wlc={device.hostname} /> : null}
-
-      {device && !isMockMode() ? <ComparisonPanel comparison={device.comparison} /> : null}
 
       {/* faceplate */}
       <CollapsiblePanel
@@ -338,11 +417,14 @@ export default function DeviceDetailView() {
           <div className="min-w-0 p-4">
             <div className="scroll-thin overflow-x-auto rounded-lg bg-gradient-to-b from-secondary to-background p-3">
               {device ? (
-                <div className="mx-auto min-w-[640px]" style={{ maxWidth: 1180 }}>
+                <div
+                  className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex w-max min-w-full items-center'}
+                  style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
+                >
                   <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} />
                 </div>
               ) : (
-                <Skeleton className="h-52 w-full" />
+                <Skeleton className="h-[168px] w-full" />
               )}
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -372,55 +454,10 @@ export default function DeviceDetailView() {
 
       {device && !isMockMode() ? <Inventory device={device} /> : null}
 
-      {device && <DeviceGraphs deviceId={device.id} />}
+      {device && <DeviceGraphs deviceId={device.id} profile={device.healthPanel?.profile} />}
 
       {device && <PortTable ports={allPorts} selectedId={selected?.id ?? null} onSelect={setSelected} />}
     </div>
-  );
-}
-
-const COMPARE_ROWS: { key: keyof SourceComparison['netbox']; label: string }[] = [
-  { key: 'vendor', label: 'Vendor' },
-  { key: 'model', label: 'Model' },
-  { key: 'serial', label: 'Serial' },
-  { key: 'os', label: 'OS' },
-  { key: 'portCount', label: 'Port count' },
-];
-
-function ComparisonPanel({ comparison }: { comparison?: SourceComparison }) {
-  if (!comparison) return null;
-  const source = comparison.faceplateSource || 'none';
-  return (
-    <CollapsiblePanel
-      title="NetBox and Netdisco"
-      subtitle={`Faceplate built from ${source}.`}
-      className="rounded-none border-x-0 border-y border-border bg-card shadow-card"
-      bodyClassName="p-4"
-      meta={
-        comparison.differ ? (
-          <span className="rounded-md border border-warning/40 bg-warning/15 px-2 py-1 text-xs font-semibold text-foreground">NetBox and Netdisco differ</span>
-        ) : null
-      }
-    >
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="py-1.5 pr-3 font-semibold">Field</th>
-            <th className="py-1.5 pr-3 font-semibold">NetBox</th>
-            <th className="py-1.5 font-semibold">Netdisco</th>
-          </tr>
-        </thead>
-        <tbody>
-          {COMPARE_ROWS.map((row) => (
-            <tr key={row.key} className="border-b border-border/70">
-              <th scope="row" className="py-1.5 pr-3 text-left font-medium">{row.label}</th>
-              <td className="py-1.5 pr-3 font-mono-data">{String(comparison.netbox?.[row.key] ?? '—') || '—'}</td>
-              <td className="py-1.5 font-mono-data">{String(comparison.netdisco?.[row.key] ?? '—') || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </CollapsiblePanel>
   );
 }
 
@@ -449,9 +486,13 @@ function Inventory({ device }: { device: DeviceDetailData }) {
           {(device.interfaces ?? []).length === 0 && (device.addresses ?? []).length === 0 ? (
             <p className="mt-1 text-sm text-muted-foreground">NetBox did not return interfaces or IP addresses for this device.</p>
           ) : (
-            <ul className="mt-2 space-y-1 font-mono-data text-xs">
-              {(device.interfaces ?? []).slice(0, 40).map((row) => (
-                <li key={row.name}>{row.name} · {row.enabled ? 'enabled' : 'disabled'} · {row.type || '—'}</li>
+            <ul className="mt-2 max-h-72 space-y-1 overflow-auto font-mono-data text-xs">
+              {(device.interfaces ?? []).map((row) => (
+                <li key={row.name}>
+                  {portNameLine(row)}
+                  {row.description ? ` · ${row.description}` : ''}
+                  {' · '}{row.enabled ? 'enabled' : 'disabled'} · {row.type || '—'}
+                </li>
               ))}
               {(device.addresses ?? []).slice(0, 20).map((row) => (
                 <li key={row.address}>{row.address}{row.interface ? ` on ${row.interface}` : ''}</li>
@@ -490,66 +531,10 @@ function Inventory({ device }: { device: DeviceDetailData }) {
   );
 }
 
-function ConfigButton({ label, load }: { label: string; load: () => Promise<{ configured: boolean; reason: string; config: string; pushed?: boolean }> }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const show = () => {
-    setBusy(true);
-    load()
-      .then((body) => {
-        setText(body.config || '');
-        setNote(body.configured ? 'Generated for paste. Nothing is pushed to the device.' : body.reason || 'not configured');
-        setOpen(true);
-      })
-      .catch((error) => {
-        toast.error(isApiError(error) ? error.message : 'Could not load the config.');
-      })
-      .finally(() => setBusy(false));
-  };
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Copied.');
-    } catch {
-      toast.error('Copy failed.');
-    }
-  };
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={show}
-        disabled={busy}
-        className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
-      >
-        <Icon name="ClipboardDocumentIcon" size={16} />
-        {busy ? 'Loading…' : label}
-      </button>
-      {open ? (
-        <div className="basis-full rounded-md border border-border bg-muted/40 p-3" role="region" aria-label={label}>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">{note}</p>
-            <div className="flex gap-2">
-              {text ? (
-                <button type="button" onClick={copy} className="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
-                  Copy
-                </button>
-              ) : null}
-              <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-border px-3 py-1 text-xs font-semibold">
-                Close
-              </button>
-            </div>
-          </div>
-          {text ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono-data text-xs">{text}</pre> : null}
-        </div>
-      ) : null}
-    </>
-  );
+function shadeColor(shade?: string): string {
+  const text = (shade || '').trim();
+  if (/^[0-9a-fA-F]{6}$/.test(text)) return `#${text}`;
+  return text;
 }
 
 function ParentBlock({ device }: { device: DeviceDetailData }) {
@@ -598,9 +583,13 @@ function ParentBlock({ device }: { device: DeviceDetailData }) {
   );
 }
 
-function Meta({ label, value, mono, link }: { label: string; value: string; mono?: boolean; link?: string }) {
+function Meta({ label, value, mono, link, shade }: { label: string; value: string; mono?: boolean; link?: string; shade?: string }) {
+  const color = shadeColor(shade);
   return (
-    <div className="min-w-0">
+    <div
+      className="min-w-[7.5rem] max-w-[16rem] rounded-lg border border-border bg-muted/40 px-3 py-1.5"
+      style={color ? { boxShadow: `0 10px 16px -10px ${color}, inset 3px 0 0 ${color}` } : undefined}
+    >
       <dt className="label-caps text-muted-foreground">{label}</dt>
       <dd className={`mt-0.5 truncate text-sm ${mono ? 'font-mono-data' : 'font-medium'}`} title={value}>
         {link ? <Link href={link} className="hover:text-primary hover:underline">{value}</Link> : value}

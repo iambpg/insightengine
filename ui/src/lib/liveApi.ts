@@ -60,6 +60,10 @@ export async function getDevice(form: string): Promise<DeviceDetailData> {
   return request(`${API}/devices/${encodeURIComponent(form)}`);
 }
 
+export async function syncNetbox(deviceId: string): Promise<import('@/lib/types').NetboxSyncResult> {
+  return request(`${API}/devices/${encodeURIComponent(deviceId)}/netbox-sync`, { method: 'POST', body: {} });
+}
+
 export async function getHierarchy() {
   return request<import('@/lib/types').HierarchyReport>(`${API}/hierarchy`);
 }
@@ -168,6 +172,13 @@ export async function setDeviceRoles(ids: string[], role: string) {
   return request<{ ok: boolean; role: string; updated: string[] }>(`${API}/discovery/roles`, {
     method: 'POST',
     body: { ids, role },
+  });
+}
+
+export async function setDeviceSites(ids: string[], site: string) {
+  return request<{ ok: boolean; site: string; updated: string[] }>(`${API}/discovery/sites`, {
+    method: 'POST',
+    body: { ids, site },
   });
 }
 

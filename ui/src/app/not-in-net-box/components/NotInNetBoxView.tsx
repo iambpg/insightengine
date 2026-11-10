@@ -38,6 +38,20 @@ function roleValue(catalog: DiscoveryCatalog, current?: string): string {
   return hit?.name || current;
 }
 
+function siteNames(catalog: DiscoveryCatalog, current?: string): string[] {
+  const fromChoices = (catalog.siteChoices ?? []).map((choice) => choice.name).filter(Boolean);
+  const names = fromChoices.length ? fromChoices : catalog.sites;
+  const selected = siteValue(catalog, current);
+  if (selected && !names.includes(selected)) return [selected, ...names];
+  return names;
+}
+
+function siteValue(catalog: DiscoveryCatalog, current?: string): string {
+  if (!current) return '';
+  const hit = (catalog.siteChoices ?? []).find((choice) => choice.name === current || choice.slug === current);
+  return hit?.name || current;
+}
+
 const EMPTY_CATALOG: DiscoveryCatalog = { roles: [], sites: [], platforms: [] };
 
 function stamp(value: string): string {
@@ -54,6 +68,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [bulkRole, setBulkRole] = useState('');
+  const [bulkSite, setBulkSite] = useState('');
   const [scans, setScans] = useState<DiscoveryScan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -78,7 +93,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
         .listDiscovered()
         .then((data) => applyList(data))
         .catch(() => undefined);
-      toast.success('Discovery finished. If the device is not in NetBox, it is in this list.');
+      toast.success('Discovery finished. If the device is not in NetBox, it is in this list, including one you deleted there.');
     },
     onError: (job) => toast.error(job.message || 'Discovery failed.'),
   });
@@ -183,6 +198,22 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
       await api.setDeviceRoles(ids, chosen);
     } catch (cause) {
       toast.error(isApiError(cause) ? cause.message : 'The role was not saved.');
+      setReload((value) => value + 1);
+    }
+  };
+
+  const saveSite = async (ids: string[], site: string) => {
+    const chosen = site.trim();
+    if (!chosen || ids.length === 0) return;
+    setItems((current) =>
+      current?.map((device) =>
+        ids.includes(device.id) ? { ...device, suggested: { ...device.suggested, site: chosen } } : device
+      ) ?? current
+    );
+    try {
+      await api.setDeviceSites(ids, chosen);
+    } catch (cause) {
+      toast.error(isApiError(cause) ? cause.message : 'The site was not saved.');
       setReload((value) => value + 1);
     }
   };
@@ -470,6 +501,29 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                 Set role for selected
               </button>
             </label>
+            <label className="flex items-center gap-2 text-xs">
+              <span>Set site</span>
+              <select
+                aria-label="Site for selected devices"
+                value={bulkSite}
+                onChange={(event) => setBulkSite(event.target.value)}
+                className="h-7 rounded-md border border-navy-3 bg-navy-2 px-2 text-primary-foreground"
+              >
+                <option value="">Choose a site</option>
+                {siteNames(catalog).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => saveSite(selected, bulkSite)}
+                className="rounded-md bg-cyan px-2 py-1 font-semibold text-navy"
+              >
+                Set site for selected
+              </button>
+            </label>
             <button
               type="button"
               onClick={() => setSelected([])}
@@ -590,7 +644,22 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                       <td className="px-3 py-2.5">
                         {device.platform ? <Badge tone="cyan">{device.platform}</Badge> : '—'}
                       </td>
-                      <td className="px-3 py-2.5">{device.suggested.site ?? '—'}</td>
+                      <td className="px-3 py-2.5">
+                        <select
+                          aria-label={`Suggested site for ${name}`}
+                          value={siteValue(catalog, device.suggested.site)}
+                          disabled={!canWrite}
+                          onChange={(event) => saveSite([device.id], event.target.value)}
+                          className="h-8 max-w-[14rem] rounded-md border border-input bg-card px-2 text-sm disabled:opacity-60"
+                        >
+                          <option value="">Select a site</option>
+                          {siteNames(catalog, device.suggested.site).map((option) => (
+                            <option key={`${device.id}-site-${option}`} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="px-3 py-2.5">
                         <select
                           aria-label={`Suggested role for ${name}`}
@@ -700,21 +769,35 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm">
               Role
-              <input
-                list="disc-roles"
-                value={form.role}
+              <select
+                aria-label="Role"
+                value={roleValue(catalog, form.role)}
                 onChange={(event) => setForm({ ...form, role: event.target.value })}
-                className="mt-1 h-9 w-full rounded-md border border-input px-2"
-              />
+                className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2"
+              >
+                <option value="">Select a role</option>
+                {roleNames(catalog, form.role).map((option) => (
+                  <option key={`form-role-${option}`} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm">
               Site
-              <input
-                list="disc-sites"
-                value={form.site}
+              <select
+                aria-label="Site"
+                value={siteValue(catalog, form.site)}
                 onChange={(event) => setForm({ ...form, site: event.target.value })}
-                className="mt-1 h-9 w-full rounded-md border border-input px-2"
-              />
+                className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2"
+              >
+                <option value="">Select a site</option>
+                {siteNames(catalog, form.site).map((option) => (
+                  <option key={`form-site-${option}`} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm">
               Name
@@ -733,16 +816,6 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                 className="mt-1 h-9 w-full rounded-md border border-input px-2"
               />
             </label>
-            <datalist id="disc-roles">
-              {catalog.roles.map((option) => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
-            <datalist id="disc-sites">
-              {catalog.sites.map((option) => (
-                <option key={option} value={option} />
-              ))}
-            </datalist>
             <datalist id="disc-platforms">
               {catalog.platforms.map((option) => (
                 <option key={option} value={option} />

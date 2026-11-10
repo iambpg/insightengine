@@ -59,7 +59,7 @@ modules:
     walk: [bsnAPTable, bsnApIfTable]
   # Fortinet. FORTINET-FORTIGATE-MIB / FORTINET-CORE-MIB must be in snmp/mibs.
   if_mib_fortigate:
-    walk: [ifTable, ifXTable]
+    walk: [sysUpTime, ifTable, ifXTable]
   fortigate:
     walk: [fgSystemInfo, fgHwSensors]
   fortigate_bandwidth:
@@ -209,3 +209,8 @@ modules:
     walk:
       - cLApGlobalAPConnectCount
       - cLMobilityExtMCTotalClientCount
+
+  # Scalar only. Do not fold this into if_mib: the system module already
+  # exports sysUpTime, and a combined scrape must not publish it twice.
+  uptime:
+    walk: [sysUpTime]

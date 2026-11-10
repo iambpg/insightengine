@@ -70,7 +70,7 @@ describe('realistic faceplates', () => {
     const picture = screen.getByTestId('faceplate-image');
     expect(picture).toHaveAttribute('width', '1000');
     expect(picture).toHaveAttribute('height', '200');
-    expect(picture).toHaveStyle({ objectFit: 'none', width: '1000px', height: '200px', pointerEvents: 'none' });
+    expect(picture).toHaveStyle({ objectFit: 'fill', width: '1000px', height: '200px', pointerEvents: 'none' });
     const stage = screen.getByTestId('faceplate-stage');
     expect(stage).toHaveStyle({ padding: '0px', width: '1000px', height: '200px' });
     await user.click(face);
@@ -84,6 +84,40 @@ describe('realistic faceplates', () => {
     expect(rect).toHaveAttribute('y', '60');
     expect(Number(rect?.getAttribute('width'))).toBeGreaterThan(0);
     expect(Number(rect?.getAttribute('height'))).toBeGreaterThan(0);
+  });
+
+  it('puts a stack member port on the same faceplate opening', async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RealisticFaceplate
+        device={device('Gi2/0/1')}
+        model={model('visio', false, 'GigabitEthernet1/0/1')}
+        onHover={() => undefined}
+        onSelect={onSelect}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Gi2\/0\/1, Up/ }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    const hotspot = screen.getByTestId('port-hotspot-GigabitEthernet1/0/1');
+    expect(hotspot.querySelector('rect')).toHaveAttribute('x', '200');
+    expect(hotspot.querySelector('rect')).toHaveAttribute('y', '60');
+  });
+
+  it('places a non-Cisco port on the first 9200L opening', async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RealisticFaceplate
+        device={device('port1')}
+        model={model('visio', false, 'GigabitEthernet1/0/1')}
+        onHover={() => undefined}
+        onSelect={onSelect}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /port1, Up/ }));
+    expect(onSelect.mock.calls[0][0].name).toBe('port1');
+    expect(screen.getByTestId('port-hotspot-GigabitEthernet1/0/1').querySelector('rect')).toHaveAttribute('x', '200');
   });
 
   it('opens the drawn faceplate port through the same handler', async () => {

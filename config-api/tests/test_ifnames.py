@@ -1,6 +1,14 @@
 """Interface name normalisation, port state, and neighbour merge."""
 
-from ie_config.fleet import _canonical_port, _overlay_neighbours, _overlay_port_state, _port_state
+from ie_config.fleet import (
+    _canonical_port,
+    _is_virtual_port,
+    _overlay_neighbours,
+    _overlay_port_state,
+    _port_state,
+    _present_port,
+    parse_system_metrics,
+)
 from ie_config.ifnames import canonical_iface, names_match
 from ie_config.neighbours import merge_neighbors, neighbors_from_cdp, neighbors_from_lldp, parse_snmp_address
 
@@ -50,6 +58,16 @@ def test_long_and_short_names_share_one_key():
         assert names_match(left, right)
 
 
+def test_fortigate_lan_ports_are_physical():
+    assert not _is_virtual_port("internal1")
+    assert not _is_virtual_port("internal5")
+    assert not _is_virtual_port("wan1")
+    assert _is_virtual_port("internal")
+    assert _is_virtual_port("Internal-Data0/0")
+    assert _is_virtual_port("Vlan100")
+    assert _is_virtual_port("Loopback0")
+
+
 def test_different_ports_do_not_match():
     assert not names_match("GigabitEthernet0/1", "Gi0/2")
     assert not names_match("port1", "Po1")
@@ -62,10 +80,15 @@ def test_unconfirmed_enabled_port_is_unknown_and_admin_down_is_disabled():
     assert unknown["state"] == "unknown"
     disabled = _canonical_port({"name": "FastEthernet0/22", "enabled": False})
     assert disabled["state"] == "disabled"
-    assert _port_state("down", "up", 0, 0) == "fault"
-    assert _port_state(2, 1, 0, 0) == "fault"
+    assert _port_state("down", "up", 0, 0) == "not-connected"
+    assert _port_state(2, 1, 0, 0) == "not-connected"
     assert _port_state("up", "up", 0, 0) == "up"
     assert _port_state("down", "down", 0, 0) == "disabled"
+    assert _port_state("down", "down", 20, 0) == "warning"
+    assert _port_state("down", "down", 50, 0) == "fault"
+    assert _port_state("up", "up", 19, 0) == "up"
+    assert _port_state("up", "up", 20, 0) == "warning"
+    assert _port_state("notPresent", "up", 0, 0) == "disabled"
 
 
 def test_overlay_matches_long_netbox_name_to_short_ifname_and_alias():
@@ -110,6 +133,72 @@ def test_overlay_matches_long_netbox_name_to_short_ifname_and_alias():
         prom,
     )
     assert by_alias[0]["state"] == "up"
+    assert by_alias[0]["names"] == ["Fa0/21", "FastEthernet0/21"]
+    assert by_alias[0]["description"] == "uplink"
+
+
+def test_port_shows_short_name_long_name_and_description():
+    port = _canonical_port({
+        "name": "FastEthernet0/21",
+        "description": "till",
+        "enabled": True,
+        "type": "100base-tx",
+    })
+    assert port["description"] == "till"
+    overlaid = _overlay_port_state([port], [{
+        "id": "10021",
+        "name": "Fa0/21",
+        "names": ["Fa0/21", "FastEthernet0/21", "!Uplink_to_AP"],
+        "alias": "!Uplink_to_AP",
+        "description": "FastEthernet0/21",
+        "state": "up",
+        "utilisation": 1,
+        "errors": 0,
+        "speed": "100 Mbps",
+        "type": "RJ45",
+    }])
+    assert overlaid[0]["name"] == "FastEthernet0/21"
+    assert overlaid[0]["names"] == ["Fa0/21"]
+    assert overlaid[0]["description"] == "!Uplink_to_AP"
+    shown = _present_port({
+        "id": "1",
+        "name": "Gi1/0/1",
+        "names": ["Gi1/0/1", "GigabitEthernet1/0/1", "ARMS_SERVER"],
+        "alias": "ARMS_SERVER",
+        "description": "GigabitEthernet1/0/1",
+        "state": "up",
+    })
+    assert shown["name"] == "Gi1/0/1"
+    assert shown["names"] == ["GigabitEthernet1/0/1"]
+    assert shown["description"] == "ARMS_SERVER"
+    bluetooth = _present_port({
+        "name": "Bl0/4",
+        "names": ["Bl0/4", "Bluetooth0/4"],
+        "description": "Bluetooth0/4",
+        "alias": "",
+    })
+    assert bluetooth["names"] == ["Bluetooth0/4"]
+    assert "description" not in bluetooth
+    labeled = _overlay_port_state(
+        [_canonical_port({"name": "TILL19", "enabled": True})],
+        [{
+            "name": "Gi1/0/10",
+            "names": ["Gi1/0/10", "GigabitEthernet1/0/10", "TILL19"],
+            "alias": "TILL19",
+            "description": "GigabitEthernet1/0/10",
+            "state": "up",
+        }],
+    )
+    assert labeled[0]["description"] == "TILL19"
+    assert labeled[0]["names"] == ["Gi1/0/10", "GigabitEthernet1/0/10"]
+    null_port = _present_port({
+        "name": "Nu0",
+        "names": ["Nu0", "Null0"],
+        "description": "Null0",
+        "alias": "",
+    })
+    assert null_port["names"] == ["Null0"]
+    assert "description" not in null_port
 
 
 def test_cdp_neighbours_merge_with_netdisco_and_normalised_ports():
@@ -151,12 +240,14 @@ def test_cdp_neighbours_merge_with_netdisco_and_normalised_ports():
     ports = _overlay_neighbours(
         [_canonical_port({"name": "FastEthernet0/21", "enabled": True}), _canonical_port({"name": "FastEthernet0/1", "enabled": True})],
         [{"name": "FastEthernet0/21", "remoteName": "dist", "remotePort": "Gi1/0/1", "remoteAddress": "10.129.32.1"}],
-        [{"id": "9", "hostname": "dist", "mgmtIp": "10.129.32.1"}],
+        [{"id": "9", "hostname": "dist", "mgmtIp": "10.129.32.1", "role": "Access switch", "formFactor": "access-switch-24"}],
         merged,
         [".pnp.co.za"],
     )
     assert ports[0]["neighbour"]["source"] == "netdisco"
     assert ports[0]["neighbour"]["deviceId"] == "9"
+    assert ports[0]["neighbour"]["formFactor"] == "access-switch-24"
+    assert ports[1]["neighbour"]["deviceId"] == ""
     assert ports[1]["neighbour"]["device"] == "ap-hall"
     assert ports[1]["neighbour"]["source"] == "cdp"
 
@@ -176,3 +267,27 @@ def test_lldp_uses_local_port_id_and_management_address():
     assert rows[0]["remoteAddress"] == "10.0.0.1"
     assert rows[0]["localPort"] == "Fa0/21"
     assert rows[0]["source"] == "lldp"
+
+
+def test_ios_xe_system_metrics_keep_version_and_chassis_serial():
+    text = "\n".join([
+        'sysDescr{sysDescr="Cisco IOS Software [Bengaluru], Catalyst L3 Switch Software (CAT9K_LITE_IOSXE), Version 17.6.3, RELEASE SOFTWARE (fc4)\r\\nTechnical Support: http://www.cisco.com/techsupport"} 1',
+        'sysUpTime 3679792006',
+        'entPhysicalModelName{entPhysicalIndex="1",entPhysicalModelName="C9200L-24P-4G",entPhysicalSerialNum="FOC26425BF2",entPhysicalSoftwareRev=""} 1',
+        'entPhysicalModelName{entPhysicalIndex="1000",entPhysicalModelName="C9200L-24P-4G",entPhysicalSerialNum="FOC26425BF2",entPhysicalSoftwareRev="Bengaluru 17.06.03"} 1',
+        'entPhysicalModelName{entPhysicalIndex="2000",entPhysicalModelName="C9200L-24P-4G",entPhysicalSerialNum="FOC26499XYZ",entPhysicalSoftwareRev="Bengaluru 17.06.03"} 1',
+        'entPhysicalModelName{entPhysicalIndex="1013",entPhysicalModelName="PWR-C5-600WAC",entPhysicalSerialNum="QCS26294RKJ",entPhysicalSoftwareRev=""} 1',
+        'entPhysicalModelName{entPhysicalIndex="1092",entPhysicalModelName="SFP-10G-SR",entPhysicalSerialNum="ACW26211JF7",entPhysicalSoftwareRev=""} 1',
+    ])
+    facts = parse_system_metrics(text)
+    assert facts["firmware"] == "17.6.3"
+    assert facts["part"] == "C9200L-24P-4G"
+    assert facts["serial"] == "FOC26425BF2, FOC26499XYZ"
+    assert facts["uptime"] == 3679792006.0
+    coded = parse_system_metrics(
+        'entPhysicalModelName{entPhysicalIndex="2000",entPhysicalModelName="C9800-80-K9",entPhysicalSerialNum="FOX2643QALH",entPhysicalSoftwareRev="Dublin 17.12.05"} 1\n'
+        'entPhysicalModelName{entPhysicalIndex="24",entPhysicalModelName="C9800-AC-1100W",entPhysicalSerialNum="ART2718F845",entPhysicalSoftwareRev=""} 1\n'
+    )
+    assert coded["firmware"] == "17.12.05"
+    assert coded["serial"] == "FOX2643QALH"
+    assert coded["part"] == "C9800-80-K9"

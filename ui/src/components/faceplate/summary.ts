@@ -14,7 +14,8 @@ export function countPorts(ports: { state: string }[]): Record<string, number> {
 /** Visible faceplate line: up, down, disabled, unknown, then the SNMP sample time. */
 export function faceplateSummaryLine(counts: Record<string, number>, snmpAt?: string): string {
   const parts = SUMMARY_STATES.map((state) => `${counts[state] || 0} ${state}`);
-  if (counts.fault) parts.push(`${counts.fault} fault`);
+  if (counts['not-connected']) parts.push(`${counts['not-connected']} not connected`);
+  if (counts.fault) parts.push(`${counts.fault} critical`);
   if (counts.warning) parts.push(`${counts.warning} warning`);
   let text = parts.join(' · ');
   if (snmpAt) text += ` · SNMP ${snmpAt}`;
@@ -22,5 +23,5 @@ export function faceplateSummaryLine(counts: Record<string, number>, snmpAt?: st
 }
 
 export function isPortState(value: string): value is PortState {
-  return value === 'up' || value === 'down' || value === 'warning' || value === 'fault' || value === 'disabled' || value === 'unknown';
+  return value === 'up' || value === 'down' || value === 'warning' || value === 'fault' || value === 'disabled' || value === 'unknown' || value === 'not-connected';
 }

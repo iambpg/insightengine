@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalIface, mapIfName, namesMatch } from './ifname';
+import { canonicalIface, faceplatePosition, mapIfName, namesMatch } from './ifname';
 
 describe('ifName mapping', () => {
   it('treats Gi and GigabitEthernet as the same port', () => {
@@ -27,6 +27,13 @@ describe('ifName mapping', () => {
     expect(mapIfName('ethernet1/1', ['ethernet1/1', 'ethernet1/2'])).toBe('ethernet1/1');
     expect(mapIfName('eth1/1', ['ethernet1/1'])).toBe('ethernet1/1');
     expect(mapIfName('wan1', ['wan', 'lan1'])).toBe('wan');
+  });
+
+  it('aligns a stack member port with the faceplate opening', () => {
+    expect(faceplatePosition('Gi2/0/48')).toBe('gi/0/48');
+    expect(faceplatePosition('GigabitEthernet1/0/48')).toBe('gi/0/48');
+    expect(faceplatePosition('Gi1/0/1')).not.toBe(faceplatePosition('Gi1/0/10'));
+    expect(faceplatePosition('port1')).toBe('port1');
   });
 
   it('joins Meraki Port 1 to the library name', () => {

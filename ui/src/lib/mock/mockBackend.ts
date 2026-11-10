@@ -24,6 +24,7 @@ import {
   rejectUnapproved,
   resetDiscoveryStore,
   setRoles,
+  setSites,
   startScan as beginScan,
 } from '@/lib/mock/discoveryStore';
 import { readMockSetupState } from '@/lib/mock/setupState';
@@ -110,6 +111,11 @@ export async function listDevices(query: DeviceQuery): Promise<Paged<DeviceRow>>
     ? ((query.page - 1) * query.pageSize) % Math.max(1, rows.length)
     : ((query.page - 1) * query.pageSize) % windowSize;
   return { rows: rows.slice(offset, offset + query.pageSize), total, isExampleData: true };
+}
+
+export async function syncNetbox(_deviceId: string) {
+  await delay(40);
+  return { ok: true, updated: ['model', 'serial', 'firmware'], note: '' };
 }
 
 export async function getDevice(form: string): Promise<DeviceDetailData> {
@@ -251,6 +257,11 @@ export async function listDiscovered(query?: { page?: number; pageSize?: number;
 export async function setDeviceRoles(ids: string[], role: string) {
   await delay(40);
   return setRoles(ids, role);
+}
+
+export async function setDeviceSites(ids: string[], site: string) {
+  await delay(40);
+  return setSites(ids, site);
 }
 
 export async function netbridgeGet(path: string) {

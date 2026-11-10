@@ -255,6 +255,7 @@ export interface DiscoveryCatalog {
   roles: string[];
   roleChoices?: DiscoveryRoleChoice[];
   sites: string[];
+  siteChoices?: DiscoveryRoleChoice[];
   platforms: string[];
 }
 

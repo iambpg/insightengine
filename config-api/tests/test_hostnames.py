@@ -8,6 +8,11 @@ def test_strip_keeps_internal_dots_and_is_case_insensitive():
     suffixes = parse_suffixes(".pnp.co.za, example.net")
     assert suffixes == [".pnp.co.za", ".example.net"]
     assert strip_hostname("wc18.cc30-claremont-1rsw01.pnp.co.za", suffixes) == "wc18.cc30-claremont-1rsw01"
+    both = parse_suffixes(".pnp.co.za, .verginactive.co.za, .virginactive.co.za")
+    assert strip_hostname("wc00-kenilworth-asw01.pnp.co.za", both) == "wc00-kenilworth-asw01"
+    assert strip_hostname("wc00-kenilworth-asw01.verginactive.co.za", both) == "wc00-kenilworth-asw01"
+    assert strip_hostname("wc00-kenilworth-asw01.virginactive.co.za", both) == "wc00-kenilworth-asw01"
+    assert strip_hostname("wc18.cc30-claremont-1rsw01.pnp.co.za", both) == "wc18.cc30-claremont-1rsw01"
     assert strip_hostname("WC18.cc30-claremont-1rsw01.PNP.CO.ZA", suffixes) == "WC18.cc30-claremont-1rsw01"
     assert strip_hostname("wc18.cc30-claremont-1rsw01", suffixes) == "wc18.cc30-claremont-1rsw01"
     assert strip_hostname("other.example.net", suffixes) == "other"

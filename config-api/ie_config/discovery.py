@@ -409,16 +409,35 @@ class Discovery:
 
     def fetch_netbox_ips(self) -> set[str]:
         """IPs that already belong to a NetBox device (primary or any assigned address)."""
+        ips, _ids = self.fetch_netbox_presence()
+        return ips
+
+    def fetch_netbox_ids(self) -> set[str]:
+        _ips, ids = self.fetch_netbox_presence()
+        return ids
+
+    def fetch_netbox_presence(self) -> tuple[set[str], set[str]]:
+        """Primary IPs and device ids currently in NetBox."""
+        cached = getattr(self, "_presence", None)
+        stamp = getattr(self, "_presence_at", 0.0)
+        if cached is not None and time.monotonic() - stamp < 5:
+            return cached
         headers = self.netbox_headers()
         if not headers:
-            return set()
+            raise RuntimeError("netbox token is not set")
         ips: set[str] = set()
+        ids: set[str] = set()
         for device in self._netbox_get_all("/api/dcim/devices/?limit=1000&status=active"):
+            ident = device.get("id")
+            if ident is not None:
+                ids.add(str(ident))
             primary = device.get("primary_ip4") or device.get("primary_ip") or {}
             address = primary.get("address") if isinstance(primary, dict) else ""
             if address:
                 ips.add(str(address).split("/")[0])
-        return ips
+        self._presence = (ips, ids)
+        self._presence_at = time.monotonic()
+        return ips, ids
 
     def ip_assigned_in_netbox(self, ip: str) -> bool:
         headers = self.netbox_headers()
@@ -447,14 +466,29 @@ class Discovery:
         with psycopg.connect(url, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT host(ip)::text, COALESCE(dns, ''), COALESCE(description, ''), "
-                    "COALESCE(vendor, ''), COALESCE(model, '') FROM device"
+                    "SELECT host(ip)::text, COALESCE(name, ''), COALESCE(dns, ''), "
+                    "COALESCE(description, ''), COALESCE(vendor, ''), COALESCE(model, '') FROM device"
                 )
-                for ip, dns, descr, vendor, model in cur.fetchall():
+                for ip, sysname, dns, descr, vendor, model in cur.fetchall():
+                    hostname = (sysname or "").strip() or (dns or "").strip()
                     rows.append({
-                        "ip": ip, "name": dns or "", "sysdescr": descr or "",
+                        "ip": ip, "name": hostname, "sysdescr": descr or "",
                         "vendor": vendor or "", "model": model or "", "sysobjectid": "",
                     })
+                chassis: dict[str, str] = {}
+                try:
+                    cur.execute(
+                        "SELECT host(ip)::text, COALESCE(model, '') FROM device_module "
+                        "WHERE class = 'chassis' AND COALESCE(model, '') <> '' ORDER BY index"
+                    )
+                    for ip, part in cur.fetchall():
+                        chassis.setdefault(str(ip).split("/")[0], str(part or ""))
+                except Exception:
+                    log.warning("netdisco chassis part numbers could not be read")
+        for row in rows:
+            part = chassis.get(row["ip"]) or ""
+            if part:
+                row["part"] = part
         return rows
 
     def _out(self, name: str) -> str:
@@ -603,10 +637,18 @@ class Discovery:
         return False
 
     def refresh_unapproved(self) -> dict:
+        netbox_ok = True
         try:
             known = self.fetch_netbox_ips()
         except Exception:
             known = set()
+            netbox_ok = False
+        netbox_ids: set[str] = set()
+        if netbox_ok:
+            try:
+                netbox_ids = self.fetch_netbox_ids()
+            except Exception:
+                netbox_ids = set()
         try:
             found = self.fetch_netdisco_devices()
         except Exception as exc:
@@ -640,17 +682,29 @@ class Discovery:
                         db.delete(existing)
                         removed += 1
                     continue
+                if (
+                    netbox_ok
+                    and existing is not None
+                    and existing.status == "approved"
+                    and not (existing.netbox_device_id and str(existing.netbox_device_id) in netbox_ids)
+                ):
+                    # Approved, then deleted in NetBox. Rediscover can add it again.
+                    existing.status = "pending"
+                    existing.netbox_device_id = ""
                 guess = guess_device(row.get("sysobjectid") or "", row.get("sysdescr") or "", mapping)
                 site = site_for_ip(ip, prefixes)
-                short_name = strip_hostname(row.get("name") or "", self.hostname_suffixes()) or ip
+                short_name = strip_hostname(row.get("name") or "", self.hostname_suffixes())
+                part = catalog_part(row.get("part") or "")
+                family = (row.get("model") or "").strip()
+                model_name = part or family or guess["model"]
                 if existing is None:
                     db.add(DiscoveryCandidate(
                         ip=ip,
-                        name=short_name,
+                        name=short_name or ip,
                         sysdescr=row.get("sysdescr") or "",
                         sysobjectid=row.get("sysobjectid") or "",
                         vendor=row.get("vendor") or guess["manufacturer"],
-                        model=row.get("model") or guess["model"],
+                        model=model_name,
                         status="pending",
                         role_slug=guess["role"],
                         site_slug=site,
@@ -664,7 +718,10 @@ class Discovery:
                         existing.name = short_name
                     existing.sysdescr = row.get("sysdescr") or existing.sysdescr
                     existing.vendor = row.get("vendor") or existing.vendor
-                    existing.model = row.get("model") or existing.model
+                    if part:
+                        existing.model = part
+                    elif family and not (existing.model or "").strip():
+                        existing.model = family
                     if site and not (existing.site_slug or "").strip():
                         existing.site_slug = site
                     if guess.get("role") and not (existing.role_slug or "").strip():
@@ -1179,7 +1236,7 @@ class Discovery:
         now = time.monotonic()
         if self._catalog is not None and (now - self._catalog_at) < _CATALOG_TTL:
             return dict(self._catalog)
-        empty = {"ok": False, "roles": [], "sites": [], "platforms": [], "roleChoices": []}
+        empty = {"ok": False, "roles": [], "sites": [], "platforms": [], "roleChoices": [], "siteChoices": []}
         if not self.netbox_headers():
             return empty
         try:
@@ -1194,11 +1251,18 @@ class Discovery:
             if not name:
                 continue
             choices.append({"name": name, "slug": (row.get("slug") or "").strip()})
+        site_choices = []
+        for row in sites or []:
+            name = (row.get("name") or "").strip()
+            if not name:
+                continue
+            site_choices.append({"name": name, "slug": (row.get("slug") or "").strip()})
         body = {
             "ok": True,
             "roles": _names(roles),
             "roleChoices": choices,
             "sites": _names(sites),
+            "siteChoices": site_choices,
             "platforms": _names(platforms),
         }
         self._catalog = body
@@ -1244,6 +1308,29 @@ class Discovery:
                 updated.append(str(cid))
             db.commit()
         return {"ok": True, "role": chosen, "updated": updated, "missing": missing}
+
+    def set_sites(self, ids, site: str) -> dict:
+        """Remember the NetBox site on pending candidates. Approval reads it back."""
+        chosen = (site or "").strip()
+        if not chosen or len(chosen) > 100:
+            raise ValueError("site is required")
+        updated = []
+        missing = []
+        with self.sf() as db:
+            for raw in ids or []:
+                try:
+                    cid = int(raw)
+                except (TypeError, ValueError):
+                    missing.append(str(raw))
+                    continue
+                row = db.get(DiscoveryCandidate, cid)
+                if row is None or row.status != "pending":
+                    missing.append(str(cid))
+                    continue
+                row.site_slug = chosen
+                updated.append(str(cid))
+            db.commit()
+        return {"ok": True, "site": chosen, "updated": updated, "missing": missing}
 
 
 _SNMP_ERRORS = {
@@ -1488,6 +1575,33 @@ def _norm_model(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
 
 
+_FORTINET_PART = re.compile(r"(?i)^fgt[_-]?(.+)$")
+
+
+def catalog_part(value: str) -> str:
+    """Orderable part number. A FortiGate reports FGT_60F for the FG-60F."""
+    text = re.sub(r"\s+", " ", (value or "").strip())
+    if not text or text.lower() == "unknown":
+        return ""
+    match = _FORTINET_PART.match(text)
+    if match:
+        rest = match.group(1).strip(" _-").replace("_", "-")
+        if rest:
+            return ("FG-" + rest)[:64]
+    return text[:64]
+
+
+def part_lookup_names(value: str) -> list[str]:
+    """Spellings to try against a NetBox device type's part number."""
+    text = (value or "").strip()
+    names: list[str] = []
+    for item in (catalog_part(text), text, text.replace("_", "-")):
+        item = item.strip()[:64]
+        if item and item.lower() != "unknown" and item not in names:
+            names.append(item)
+    return names
+
+
 def load_device_aliases(path: str) -> dict:
     """Map a normalized Netdisco model string to library search hints."""
     data = load_yaml(path, {})
@@ -1523,7 +1637,8 @@ class NetBoxWriter:
         with httpx.Client(timeout=20.0) as client:
             resp = client.request(method, self.base + path, headers=self.headers, json=body)
             if resp.status_code >= 400:
-                raise RuntimeError("netbox %s %s -> %s" % (method, path, resp.status_code))
+                detail = (resp.text or "").strip().replace("\n", " ")[:240]
+                raise RuntimeError("netbox %s %s -> %s %s" % (method, path, resp.status_code, detail))
             if resp.content:
                 data = resp.json()
                 return data if isinstance(data, dict) else {"results": data}
@@ -1534,6 +1649,21 @@ class NetBoxWriter:
         results = found.get("results") or []
         if results:
             return results[0]
+        # A NetBox slug is not always the slug of the display name. "Core Switch"
+        # is stored as core-switches, so a lookup for core-switch misses and a
+        # create then fails because that name is already taken.
+        name = str(body.get("name") or "").strip()
+        if name:
+            try:
+                by_name = self._req("GET", "%s?name__ie=%s" % (list_path, quote(name, safe="")))
+            except RuntimeError:
+                by_name = {}
+            named = [
+                row for row in (by_name.get("results") or [])
+                if str(row.get("name") or "").strip().lower() == name.lower()
+            ]
+            if named:
+                return named[0]
         return self._req("POST", list_path, body)
 
     def _one_type(self, manufacturer_id: int, field: str, value: str) -> dict | None:
@@ -1558,10 +1688,11 @@ class NetBoxWriter:
         contains = [str(item) for item in (spec.get("contains") or []) if str(item).strip()]
         names = []
         for item in prefer + [model]:
-            if item not in names:
-                names.append(item)
+            for variant in part_lookup_names(item) or [item]:
+                if variant not in names:
+                    names.append(variant)
         for name in names:
-            for field in ("model", "part_number"):
+            for field in ("part_number", "model"):
                 found = self._one_type(manufacturer_id, field, name)
                 if found is not None:
                     return found
@@ -1601,15 +1732,19 @@ class NetBoxWriter:
         role_name = (guess.get("role") or sync_settings.get("default_role_slug") or "access-switch").strip()
         role_slug = _slug(role_name)
         mfr_name, mfr_slug = manufacturer_identity(candidate.get("vendor") or "", guess)
-        model = (guess.get("model") or "unknown")[:64]
+        raw_model = (guess.get("model") or "unknown")[:64]
         if (candidate.get("model") or "").strip():
-            model = candidate["model"].strip()[:64]
+            raw_model = candidate["model"].strip()[:64]
+        model = catalog_part(raw_model) or raw_model
         manufacturer = self.ensure("/api/dcim/manufacturers/", mfr_slug, {"name": mfr_name, "slug": mfr_slug})
         dtype = self.find_device_type(manufacturer["id"], model, aliases)
         if dtype is None:
             model_slug = _slug(model)[:40]
             dtype = self.ensure("/api/dcim/device-types/", model_slug, {
-                "manufacturer": manufacturer["id"], "model": model, "slug": model_slug,
+                "manufacturer": manufacturer["id"],
+                "model": model,
+                "slug": model_slug,
+                "part_number": model[:50],
             })
         role = self.ensure("/api/dcim/device-roles/", role_slug, {
             "name": role_name, "slug": role_slug, "color": "2196f3",
@@ -1695,14 +1830,17 @@ class NetBoxWriter:
         role_slug = _slug(role_name)
         site_name = (site or "").strip() or "discovered"
         site_slug = _slug(site_name)
-        model = (str(ap.get("model") or "").strip() or "Access Point")[:64]
+        model = catalog_part(str(ap.get("model") or "")) or (str(ap.get("model") or "").strip() or "Access Point")[:64]
         name = (str(ap.get("name") or "").strip() or "access-point")[:64]
         manufacturer = self.ensure("/api/dcim/manufacturers/", "cisco", {"name": "Cisco", "slug": "cisco"})
         dtype = self.find_device_type(manufacturer["id"], model, {})
         if dtype is None:
             model_slug = _slug(model)[:40] or "access-point"
             dtype = self.ensure("/api/dcim/device-types/", model_slug, {
-                "manufacturer": manufacturer["id"], "model": model, "slug": model_slug,
+                "manufacturer": manufacturer["id"],
+                "model": model,
+                "slug": model_slug,
+                "part_number": model[:50],
             })
         role_row = self.ensure("/api/dcim/device-roles/", role_slug, {
             "name": role_name, "slug": role_slug, "color": "2196f3",

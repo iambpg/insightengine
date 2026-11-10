@@ -5,8 +5,9 @@ import Icon from '@/components/ui/AppIcon';
 import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
-import { PortStateBadge } from '@/components/ui/Badge';
+import { PORT_STATE_META, PortStateBadge } from '@/components/ui/Badge';
 import type { PortInfo, PortState } from '@/lib/types';
+import { portNameLine } from '@/components/faceplate/portText';
 
 type Filter = PortState | 'all';
 
@@ -18,11 +19,16 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
 
   const rows = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return ports.filter((p) => (filter === 'all' || p.state === filter) && (!s || p.name.toLowerCase().includes(s) || p.neighbour?.device.toLowerCase().includes(s)));
+    return ports.filter((p) => {
+      if (filter !== 'all' && p.state !== filter) return false;
+      if (!s) return true;
+      const blob = `${portNameLine(p)} ${p.description || ''} ${p.neighbour?.device || ''}`.toLowerCase();
+      return blob.includes(s);
+    });
   }, [ports, filter, search]);
 
   const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
-  const FILTERS: Filter[] = ['all', 'up', 'warning', 'fault', 'down', 'disabled', 'unknown'];
+  const FILTERS: Filter[] = ['all', 'up', 'warning', 'fault', 'not-connected', 'down', 'disabled', 'unknown'];
 
   return (
     <CollapsiblePanel
@@ -42,7 +48,7 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
               setSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="Port or neighbour…"
+            placeholder="Port, description or neighbour…"
             className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm outline-none focus:border-ring"
           />
         </label>
@@ -59,7 +65,7 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
               }}
               className={`rounded-full border px-2.5 py-1 text-xs font-medium capitalize transition-all active:scale-95 ${filter === f ? 'border-navy bg-navy text-primary-foreground' : 'border-border text-muted-foreground hover:bg-muted'}`}
             >
-              {f}
+              {f === 'all' ? 'all' : PORT_STATE_META[f].label}
             </button>
           ))}
         </div>
@@ -72,6 +78,7 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
             <thead>
               <tr className="border-b border-border bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th scope="col" className="px-4 py-2.5">Port</th>
+                <th scope="col" className="px-3 py-2.5">Description</th>
                 <th scope="col" className="px-3 py-2.5">State</th>
                 <th scope="col" className="px-3 py-2.5">Type</th>
                 <th scope="col" className="px-3 py-2.5">Speed</th>
@@ -87,7 +94,8 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
                   onClick={() => onSelect(p)}
                   className={`cursor-pointer border-b border-border transition-colors even:bg-muted/20 hover:bg-accent/10 ${selectedId === p.id ? 'bg-accent/20' : ''}`}
                 >
-                  <td className="px-4 py-2 font-mono-data font-semibold">{p.name}</td>
+                  <td className="px-4 py-2 font-mono-data font-semibold">{portNameLine(p)}</td>
+                  <td className="max-w-[16rem] px-3 py-2 font-mono-data text-xs text-muted-foreground">{p.description || '—'}</td>
                   <td className="px-3 py-2"><PortStateBadge state={p.state} /></td>
                   <td className="px-3 py-2 font-mono-data text-xs text-muted-foreground">{p.type}</td>
                   <td className="px-3 py-2 font-mono-data text-xs">{p.speed}</td>
@@ -99,7 +107,7 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
                       <span className="font-mono-data text-xs tabular">{p.utilisation}%</span>
                     </div>
                   </td>
-                  <td className={`px-3 py-2 text-right font-mono-data text-xs tabular ${p.errors > 100 ? 'font-semibold text-destructive' : p.errors > 0 ? 'text-warning-foreground' : 'text-muted-foreground'}`}>
+                  <td className={`px-3 py-2 text-right font-mono-data text-xs tabular ${p.errors >= 50 ? 'font-semibold text-destructive' : p.errors >= 20 ? 'text-warning-foreground' : 'text-muted-foreground'}`}>
                     {p.errors.toLocaleString('en-US')}
                   </td>
                   <td className="px-3 py-2 font-mono-data text-xs text-muted-foreground">{p.neighbour ? `${p.neighbour.device} · ${p.neighbour.port}` : '—'}</td>

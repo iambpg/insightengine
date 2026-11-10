@@ -6,6 +6,7 @@ import type { PortInfo } from '@/lib/types';
 import { PORT_STATE_META } from '@/components/ui/Badge';
 import Icon from '@/components/ui/AppIcon';
 import { STATE_COLOR } from './palette';
+import { portNameLine } from './portText';
 
 interface Props {
   port: PortInfo;
@@ -36,16 +37,20 @@ export default function PortTooltip({ port, left, top }: Props) {
     <div
       role="tooltip"
       style={{ left, top, zIndex: 2147483647 }}
-      className="pointer-events-none fixed w-60 -translate-x-1/2 -translate-y-full rounded-lg border border-navy-3 bg-navy p-3 text-primary-foreground shadow-pop pop-in"
+      className="pointer-events-none fixed w-72 -translate-x-1/2 -translate-y-full rounded-lg border border-navy-3 bg-navy p-3 text-primary-foreground shadow-pop pop-in"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono-data text-sm font-semibold">{port.name}</span>
+        <span className="font-mono-data text-sm font-semibold break-all">{portNameLine(port)}</span>
         <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ borderColor: c.fill, color: c.fill }}>
           <Icon name={meta.icon} size={11} variant="solid" />
           {meta.label}
         </span>
       </div>
       <dl className="mt-2 space-y-1.5 text-xs">
+        <div className="flex justify-between gap-3">
+          <dt className="text-down">Description</dt>
+          <dd className="break-all text-right font-mono-data">{port.description || '—'}</dd>
+        </div>
         <div className="flex justify-between">
           <dt className="text-down">Speed</dt>
           <dd className="font-mono-data">{port.speed}</dd>

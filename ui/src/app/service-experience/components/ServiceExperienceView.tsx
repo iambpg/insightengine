@@ -92,9 +92,6 @@ function Section({ title, icon, section }: { title: string; icon: string; sectio
           ))}
         </ul>
       )}
-      <p className="mt-3 text-xs text-muted-foreground">
-        IP SLA and Controller config are on the device page, with a copy button. Nothing is pushed.
-      </p>
     </section>
   );
 }

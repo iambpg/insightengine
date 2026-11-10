@@ -6092,7 +6092,14 @@ modules:
     - 1.3.6.1.2.1.31.1.1.1.10
     - 1.3.6.1.2.1.31.1.1.1.18
     - 1.3.6.1.2.1.31.1.1.1.6
+    get:
+    - 1.3.6.1.2.1.1.3.0
     metrics:
+    - name: sysUpTime
+      oid: 1.3.6.1.2.1.1.3
+      type: gauge
+      help: The time (in hundredths of a second) since the network management portion
+        of the system was last re-initialized. - 1.3.6.1.2.1.1.3
     - name: ifInDiscards
       oid: 1.3.6.1.2.1.2.2.1.13
       type: counter
@@ -7572,3 +7579,15 @@ modules:
       indexes:
       - labelname: ciscoBfdSessIndex
         type: gauge
+
+  # Scalar only. Kept out of if_mib so a job that also scrapes the system
+  # module does not publish sysUpTime twice and fail the scrape.
+  uptime:
+    get:
+    - 1.3.6.1.2.1.1.3.0
+    metrics:
+    - name: sysUpTime
+      oid: 1.3.6.1.2.1.1.3
+      type: gauge
+      help: The time (in hundredths of a second) since the network management portion
+        of the system was last re-initialized. - 1.3.6.1.2.1.1.3

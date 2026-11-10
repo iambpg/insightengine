@@ -26,7 +26,7 @@ export default function PortGlyph({ port, x, y, size = 20, uid, selected, showLa
   const h = isFiber ? size * 0.85 : size * 0.9;
   const lit = port.state === 'up' || port.state === 'warning' || port.state === 'fault';
   const adminDown = port.state === 'disabled';
-  const label = `${port.name}, ${STATE_LABEL[port.state]}, ${port.speed}, ${port.utilisation}% utilisation, ${port.errors} errors`;
+  const label = `${port.name}${port.names?.length ? ` (${port.names.join(', ')})` : ''}${port.description ? `, ${port.description}` : ''}, ${STATE_LABEL[port.state]}, ${port.speed}, ${port.utilisation}% utilisation, ${port.errors} errors`;
 
   return (
     <g

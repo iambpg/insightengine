@@ -2,8 +2,9 @@
 
 NetBox is the inventory (devices, sites, roles, regions). Prometheus holds
 reachability, interface counters and CPU/memory. Alertmanager holds alerts.
-Writes are alert acknowledge (a silence) and adding a wireless access point
-to NetBox. Device health always comes from explain_health.
+Writes are alert acknowledge (a silence), adding a wireless access point
+to NetBox, and the device-page NetBox sync of model, serial and firmware.
+Device health always comes from explain_health.
 
 A fresh NetBox with no devices, and empty Prometheus / Alertmanager, returns
 empty lists and zero counts. A down upstream is 502 with
@@ -21,6 +22,7 @@ import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, unquote
@@ -29,7 +31,7 @@ import httpx
 from fastapi import Request
 
 from .errors import ApiError
-from .discovery import NetBoxWriter
+from .discovery import NetBoxWriter, _norm_model, catalog_part
 from .ap_status import (
     ap_identity as _ap_identity,
     canon_mac,
@@ -52,7 +54,8 @@ from .health import (
     suggest_ap_site,
 )
 from .hostnames import effective_suffixes, names_match, strip_device_label, strip_hostname, suffix_pattern
-from .ifnames import iface_match_keys
+from .ifnames import canonical_iface, iface_compact, iface_match_keys
+from .ifnames import names_match as iface_names_match
 from .neighbours import merge_neighbors, neighbors_from_cdp, neighbors_from_lldp
 
 log = logging.getLogger("ie-config.fleet")
@@ -92,6 +95,18 @@ def _as_upstream(exc: UpstreamError) -> ApiError:
     return ApiError(502, "upstream_unavailable", exc.message, {"upstream": exc.upstream})
 
 
+def _record_netbox_sync(request: Request, user, result: str, detail: str) -> None:
+    try:
+        from .app import _audit
+        from .auth import client_ip
+    except Exception:
+        return
+    sf = getattr(request.app.state, "sf", None)
+    if sf is None:
+        return
+    _audit(sf, user, "netbox-sync", client_ip(request), result, "netbox", "", "", detail)
+
+
 class _Cache:
     def __init__(self, ttl: float):
         self.ttl = max(0.0, float(ttl))
@@ -104,20 +119,29 @@ class _Cache:
         now = time.monotonic()
         with self._lock:
             hit = self._items.get(key)
-            if hit is None or now - hit[0] > self.ttl:
+            if hit is None:
+                return None
+            life = hit[2] if len(hit) > 2 else self.ttl
+            if now - hit[0] > life:
                 self._items.pop(key, None)
                 return None
             return hit[1]
 
-    def put(self, key: str, value):
+    def put(self, key: str, value, ttl: float | None = None):
         if self.ttl <= 0:
             return
+        life = self.ttl if ttl is None else max(0.0, float(ttl))
         with self._lock:
-            self._items[key] = (time.monotonic(), value)
+            self._items[key] = (time.monotonic(), value, life)
 
     def drop(self, key: str):
         with self._lock:
             self._items.pop(key, None)
+
+    def drop_prefix(self, prefix: str):
+        with self._lock:
+            for key in [name for name in self._items if name.startswith(prefix)]:
+                self._items.pop(key, None)
 
 
 def prom_escape(value: str) -> str:
@@ -174,8 +198,10 @@ _FW_MODEL = re.compile(r"(?i)(fortigate|\bfg-\d|\bpa-\d|\basa-?\d|\bfpr-?\d|fire
 _ROUTER_MODEL = re.compile(r"(?i)(\bisr-?\d|\basr-?\d)")
 _WLC_MODEL = re.compile(r"(?i)(\bc9800|\bair-ct|\bwlc\b|wireless\s+controller)")
 _SWITCH_MODEL = re.compile(r"(?i)(catalyst\s*\d|\bc9[23]\d{2}|\bc2960|\bc3850|\bc3650|\bnexus|\bn9k|fortiswitch)")
+# FortiGate copper LAN ports are internal1, internal2, ... The bare name "internal"
+# is the software switch. internal(?!\d) keeps Internal-Data virtual and internal1 physical.
 _VIRTUAL_NAME = re.compile(
-    r"(?i)^(vlan|vl\d|loopback|lo\d*|null\d*|tunnel|tu\d|bdi|nve|port-channel|po\d|cpu|stackport|internal)"
+    r"(?i)^(vlan|vl\d|loopback|lo\d*|null\d*|tunnel|tu\d|bdi|nve|port-channel|po\d|cpu|stackport|internal(?!\d))"
 )
 _FORM_KIND = {
     "access-switch-24": "switch",
@@ -275,6 +301,19 @@ def _is_radio(name: str, type_text: str = "") -> bool:
     return any(token in low for token in ("radio", "dot11", "802.11", "wlan"))
 
 
+def _is_access_point_interface(name: str, type_text: str = "") -> bool:
+    """A joined access point or its radio, not the socket a cable plugs into.
+
+    AppGigabitEthernet is the switch port the access-point cable uses, so it stays.
+    """
+    low = (name or "").strip().lower()
+    if _is_radio(name, type_text):
+        return True
+    if re.search(r"(^|[^a-z0-9])(capwap|lwapp)([^a-z0-9]|$)", low):
+        return True
+    return bool(re.match(r"^(ap|access-point)[-_]?\d+$", low))
+
+
 def _is_virtual_port(name: str, type_text: str = "") -> bool:
     low_type = (type_text or "").lower()
     if low_type in ("virtual", "lag", "bridge") or "virtual" in low_type:
@@ -286,8 +325,241 @@ def _norm_text(value: str) -> str:
     return re.sub(r"\s+", " ", (value or "").strip().lower())
 
 
+def _clean_inventory(value: str, limit: int = 64) -> str:
+    text = re.sub(r"\s+", " ", (value or "").strip().rstrip("$")).strip()
+    return text[:limit]
+
+
+def _fit_serial(value: str) -> str:
+    """NetBox stores one serial of at most 50 characters. A stack keeps the first chassis serial."""
+    text = _clean_inventory(value, 200)
+    if len(text) <= 50:
+        return text
+    return text.split(",")[0].strip()[:50]
+
+
+def _first_text(*values: str) -> str:
+    for value in values:
+        if value:
+            return value
+    return ""
+
+
+def live_inventory(snmp: dict | None, netdisco: dict | None, ap: dict | None = None) -> dict:
+    """Model, serial and firmware to store. The device's own SNMP report wins, then the controller, then Netdisco."""
+    snmp = snmp or {}
+    nd = netdisco or {}
+    ap = ap or {}
+    nd_firmware = _clean_inventory(str(nd.get("firmware") or ""))
+    if not nd_firmware:
+        nd_firmware = _clean_inventory(" ".join(part for part in (str(nd.get("os") or ""), str(nd.get("os_ver") or "")) if part))
+    return {
+        "model": _first_text(
+            catalog_part(str(snmp.get("part") or "")),
+            catalog_part(str(ap.get("model") or "")),
+            catalog_part(str(nd.get("model") or "")),
+        ),
+        "serial": _first_text(
+            _fit_serial(str(snmp.get("serial") or "")),
+            _fit_serial(str(ap.get("serial") or "")),
+            _fit_serial(str(nd.get("serial") or "")),
+        ),
+        "firmware": _first_text(
+            _clean_inventory(str(snmp.get("firmware") or "")),
+            _clean_inventory(str(ap.get("ios") or "")),
+            nd_firmware,
+        ),
+    }
+
+
+def live_model_names(snmp: dict | None, netdisco: dict | None, ap: dict | None = None) -> list[str]:
+    snmp = snmp or {}
+    nd = netdisco or {}
+    ap = ap or {}
+    names = []
+    for raw in (snmp.get("part"), (ap or {}).get("model"), nd.get("model")):
+        text = catalog_part(str(raw or "")) or _clean_inventory(str(raw or ""))
+        if text and text not in names:
+            names.append(text)
+    return names
+
+
+def _device_type_matches(found: dict | None, name: str) -> bool:
+    wanted = _norm_model(name)
+    if not wanted or not isinstance(found, dict):
+        return False
+    return any(_norm_model(str(found.get(field) or "")) == wanted for field in ("model", "part_number", "slug"))
+
+
+def _pick_device_type(writer, manufacturer_id, names: list[str], current_type: dict) -> tuple[dict | None, str]:
+    """An existing library type whose model or part number is the live model. Never creates a type."""
+    if not names:
+        return None, ""
+    for name in names:
+        if _device_type_matches(current_type, name):
+            return None, ""
+        found = writer.find_device_type(manufacturer_id, name, {}) if manufacturer_id else None
+        if _device_type_matches(found, name):
+            current_id = current_type.get("id") if isinstance(current_type, dict) else None
+            if current_id is not None and str(found.get("id")) == str(current_id):
+                return None, ""
+            return found, ""
+    return None, "No NetBox device type matches %s." % names[0]
+
+
+def inventory_patch(current: dict, live: dict, matched_type: dict | None) -> tuple[dict, list[str]]:
+    """PATCH body for model, serial and firmware. Empty live values are left untouched."""
+    body: dict = {}
+    updated: list[str] = []
+    if isinstance(matched_type, dict) and matched_type.get("id") not in (None, ""):
+        dtype = current.get("device_type") if isinstance(current.get("device_type"), dict) else {}
+        current_id = dtype.get("id") if dtype else current.get("device_type")
+        try:
+            same = int(matched_type["id"]) == int(current_id)
+        except (TypeError, ValueError):
+            same = False
+        if not same:
+            body["device_type"] = int(matched_type["id"])
+            updated.append("model")
+    serial = _fit_serial(str(live.get("serial") or ""))
+    if serial and _norm_text(serial) != _norm_text(str(current.get("serial") or "")):
+        body["serial"] = serial
+        updated.append("serial")
+    firmware = _clean_inventory(str(live.get("firmware") or ""))
+    custom = current.get("custom_fields") if isinstance(current.get("custom_fields"), dict) else {}
+    if firmware and _norm_text(firmware) != _norm_text(_clean_inventory(str(custom.get("ie_sw_version") or ""))):
+        body["custom_fields"] = {"ie_sw_version": firmware}
+        updated.append("firmware")
+    return body, updated
+
+
 def _port_name(port: dict) -> str:
     return str(port.get("name") or port.get("port") or "")
+
+
+_KNOWN_IFACE = re.compile(r"^(fa|gi|te|fo|hu|twe|eth|et|po|vl|lo|tu|mgmt|ma|ae|nu|port|wan|ha)\d")
+
+
+def _is_iface_spelling(value: str) -> bool:
+    """True when the text is a long or short interface name, not a description."""
+    text = (value or "").strip()
+    if not text or " " in text:
+        return False
+    compact = iface_compact(text)
+    canon = canonical_iface(text)
+    if not canon:
+        return False
+    if canon != compact:
+        return True
+    return bool(_KNOWN_IFACE.match(canon))
+
+
+def _looks_like_name(value: str) -> bool:
+    text = (value or "").strip()
+    if not text or " " in text or len(text) > 48:
+        return False
+    if _is_iface_spelling(text):
+        return True
+    # Bl0/4 and Bluetooth0/4. A label such as TILL19 is a description, not a name.
+    return bool(re.match(r"^[a-z]{1,20}\d+([/.]\d+)+$", iface_compact(text)))
+
+
+_NAME_TOKEN = re.compile(r"^([a-z]{2,20})(\d+(?:[/.]\d+)*)$")
+
+
+def _same_port_name(left: str, right: str) -> bool:
+    """FastEthernet0/21, Fa0/21, Bl0/4 / Bluetooth0/4 and Nu0 / Null0 are one interface."""
+    if not left or not right:
+        return False
+    if iface_names_match(left, right):
+        return True
+    if _is_iface_spelling(left) and _is_iface_spelling(right):
+        return False
+    token_left = _NAME_TOKEN.match(iface_compact(left))
+    token_right = _NAME_TOKEN.match(iface_compact(right))
+    if not token_left or not token_right or token_left.group(2) != token_right.group(2):
+        return False
+    prefix_left = token_left.group(1)
+    prefix_right = token_right.group(1)
+    short, longer = (prefix_left, prefix_right) if len(prefix_left) <= len(prefix_right) else (prefix_right, prefix_left)
+    return len(short) >= 2 and longer.startswith(short)
+
+
+def _interface_texts(port: dict) -> list[str]:
+    texts: list[str] = []
+
+    def add(value) -> None:
+        text = str(value or "").strip()
+        if text and text not in texts:
+            texts.append(text)
+
+    add(port.get("name"))
+    add(port.get("port"))
+    add(port.get("ifName"))
+    for item in port.get("names") or []:
+        add(item)
+    add(port.get("description"))
+    add(port.get("descr"))
+    add(port.get("alias"))
+    return texts
+
+
+def _interface_fields(port: dict, prom: dict | None = None) -> dict:
+    """Other spellings of the interface name, and the configured description.
+
+    Fa0/21 and FastEthernet0/21 are names. ifAlias, or the NetBox/Netdisco
+    description, is the description when it is not another spelling of the name.
+    A live ifAlias wins over the inventory description.
+    """
+    primary = str(port.get("name") or port.get("port") or "").strip()
+    texts = _interface_texts(port)
+    if prom:
+        for text in _interface_texts(prom):
+            if text not in texts:
+                texts.append(text)
+    anchor = ""
+    for text in texts:
+        if _looks_like_name(text):
+            anchor = text
+            break
+    if not anchor:
+        anchor = primary
+    spellings: list[str] = []
+    loose: list[str] = []
+    for text in texts:
+        if anchor and _same_port_name(text, anchor):
+            if text not in spellings:
+                spellings.append(text)
+        elif text not in loose:
+            loose.append(text)
+    alias = str((prom or {}).get("alias") or port.get("alias") or "").strip()
+    description = ""
+    # Keep a description that was stored as the port name (NetBox "TILL19").
+    primary_is_name = bool(primary) and _same_port_name(primary, anchor or primary)
+    if alias and not _same_port_name(alias, anchor or primary):
+        description = alias
+    else:
+        for text in loose:
+            if primary and text.lower() == primary.lower() and primary_is_name:
+                continue
+            if anchor and _same_port_name(text, anchor):
+                continue
+            description = text
+            break
+    extras = [item for item in spellings if not primary or item.lower() != primary.lower()]
+    return {"names": extras, "description": description}
+
+
+def _present_port(port: dict) -> dict:
+    """Copy a Prometheus port so the description is ifAlias, not ifDescr."""
+    shown = dict(port)
+    fields = _interface_fields(port)
+    shown["names"] = fields["names"]
+    if fields["description"]:
+        shown["description"] = fields["description"]
+    else:
+        shown.pop("description", None)
+    return shown
 
 
 def _port_type_text(port: dict) -> str:
@@ -308,15 +580,17 @@ def _medium_of(port: dict) -> str:
     return port_medium(_port_name(port), _port_type_text(port), _mbps(port.get("speed")))
 
 
+def _is_cable_port(port: dict) -> bool:
+    """A faceplate opening where a network cable connects. Radios and access points are not ports."""
+    name = _port_name(port)
+    kind = _port_type_text(port)
+    if not _is_physical(port) or _is_access_point_interface(name, kind):
+        return False
+    return _medium_of(port) not in ("CONSOLE", "USB")
+
+
 def _ethernet_ports(ports: list[dict]) -> list[dict]:
-    kept = []
-    for port in ports or []:
-        if not _is_physical(port) or _is_radio(_port_name(port), _port_type_text(port)):
-            continue
-        if _medium_of(port) in ("CONSOLE", "USB", "MGMT"):
-            continue
-        kept.append(port)
-    return kept
+    return [port for port in ports or [] if _is_cable_port(port)]
 
 
 def _copper_count(ports: list[dict]) -> int:
@@ -393,6 +667,11 @@ def _canonical_port(port: dict, fallback_state: str = "down") -> dict:
             "port": remote_port,
             "deviceId": str(port.get("deviceId") or ""),
         }
+    fields = _interface_fields(port)
+    if fields["names"]:
+        built["names"] = fields["names"]
+    if fields["description"]:
+        built["description"] = fields["description"]
     return built
 
 
@@ -407,13 +686,15 @@ def _inventory_ports(rows: list[dict] | None) -> list[dict]:
     return ports
 
 
-def _comparison_side(vendor: str, model: str, serial: str, os_name: str, port_count: int) -> dict:
+def _comparison_side(vendor: str, model: str, serial: str, os_name: str, port_count: int, site: str = "", firmware: str = "") -> dict:
     return {
         "vendor": vendor or "",
         "model": model or "",
-        "serial": mask_serial(serial) if (serial or "").strip() else "",
+        "serial": (serial or "").strip(),
         "os": os_name or "",
         "portCount": int(port_count or 0),
+        "site": site or "",
+        "firmware": firmware or "",
     }
 
 
@@ -503,14 +784,12 @@ def classify_device(netbox: dict | None, netdisco: dict | None) -> dict:
         form = "generic"
     nb_count = len(nb_ports)
     nd_count = len(nd_ports) if nd_ports else (port_count_hint if not nd.get("ports") else 0)
-    if nd_ports and nb_ports and len(nd_ports) != len(nb_ports):
-        face_ports = nd_ports
-        source = "netdisco"
-    elif nb_ports:
-        face_ports = nb_ports
+    # The faceplate shows NetBox's physical ports. Netdisco fills in only when NetBox has none.
+    if nb_ports:
+        face_ports = _ethernet_ports(nb_ports)
         source = "netbox"
     elif nd_ports:
-        face_ports = nd_ports
+        face_ports = _ethernet_ports(nd_ports)
         source = "netdisco"
     else:
         face_ports = []
@@ -518,8 +797,11 @@ def classify_device(netbox: dict | None, netdisco: dict | None) -> dict:
     os_nd = " ".join(part for part in (str(nd.get("os") or ""), str(nd.get("os_ver") or "")) if part).strip()
     raw_nb = {"serial": str(nb.get("serial") or "")}
     raw_nd = {"serial": str(nd.get("serial") or "")}
-    nb_side = _comparison_side(manufacturer, model, raw_nb["serial"], str(nb.get("platform") or ""), nb_count)
-    nd_side = _comparison_side(nd_vendor, nd_model, raw_nd["serial"], os_nd, nd_count if nd_count else len(nd_ports))
+    nb_firmware = str(nb.get("sw_version") or nb.get("platform") or "").strip().rstrip("$")
+    shown_model = str(nb.get("part_number") or "").strip() or model
+    nb_side = _comparison_side(manufacturer, shown_model, raw_nb["serial"], str(nb.get("platform") or ""), nb_count, str(nb.get("site") or ""), nb_firmware)
+    nb_side["partNumber"] = str(nb.get("part_number") or "")
+    nd_side = _comparison_side(nd_vendor, nd_model, raw_nd["serial"], os_nd, nd_count if nd_count else len(nd_ports), str(nd.get("location") or ""), os_nd)
     differ = _sides_differ(nb_side, nd_side, raw_nb, raw_nd)
     return {
         "role": display,
@@ -558,6 +840,17 @@ def _alert_health(alert: dict) -> dict:
     }
 
 
+def _basic_switch(row: dict) -> bool:
+    """2960, 3560, C1000, SG350 and SG500 do not contribute fan, power or temperature."""
+    device = row.get("_device") or {}
+    return classify_profile(
+        row.get("role_slug") or row.get("role") or "",
+        device.get("platform") or "",
+        device.get("manufacturer") or "",
+        device.get("model") or "",
+    ) == "ios-basic"
+
+
 def _row_health_snapshot(row: dict, alerts: list[dict]) -> dict:
     age = row.get("last_age")
     if age is not None and age >= 10**12:
@@ -576,12 +869,13 @@ def _row_health_snapshot(row: dict, alerts: list[dict]) -> dict:
         snap["cpu"] = row["_cpu"]
     if row.get("_memory") is not None:
         snap["memoryRatio"] = row["_memory"]
-    if row.get("_temp") is not None:
-        snap["tempC"] = row["_temp"]
-    if row.get("_fan_ok") is not None:
-        snap["fanOk"] = row["_fan_ok"]
-    if row.get("_psu_ok") is not None:
-        snap["psuOk"] = row["_psu_ok"]
+    if not _basic_switch(row):
+        if row.get("_temp") is not None:
+            snap["tempC"] = row["_temp"]
+        if row.get("_fan_ok") is not None:
+            snap["fanOk"] = row["_fan_ok"]
+        if row.get("_psu_ok") is not None:
+            snap["psuOk"] = row["_psu_ok"]
     return snap
 
 
@@ -591,6 +885,11 @@ def worst_health(values: list[str]) -> str:
     return max(values, key=lambda item: _HEALTH_RANK.get(item, 0))
 
 
+def display_serial(serial: str) -> str:
+    parts = [item.strip() for item in (serial or "").split(",") if item.strip()]
+    return ", ".join(parts) if parts else "—"
+
+
 def mask_serial(serial: str) -> str:
     text = (serial or "").strip()
     if not text:
@@ -598,6 +897,137 @@ def mask_serial(serial: str) -> str:
     if len(text) <= 4:
         return "•" * len(text)
     return text[:3] + ("•" * max(4, len(text) - 6)) + text[-3:]
+
+
+_LABEL_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)="((?:\\.|[^"\\])*)"')
+_VERSION_RE = re.compile(r"Version\s+([^,\s]+)", re.I)
+_VERSION_TOKEN_RE = re.compile(r"\d+\.\d[\w.()]*")
+_OPTIC_RE = re.compile(r"^(SFP|GLC|QSFP|CVR|MA-|X2-)", re.I)
+
+
+def _metric_lines(text: str) -> list[str]:
+    """Keep a quoted label together. IOS-XE sysDescr embeds a carriage return, which splitlines() treats as a new row and cuts the version off."""
+    normalized = (text or "").replace("\r\n", "\n").replace("\r", "")
+    lines = []
+    pending = ""
+    for raw in normalized.split("\n"):
+        pending = (pending + "\\n" + raw) if pending else raw
+        if pending.count('"') % 2 == 1:
+            continue
+        lines.append(pending)
+        pending = ""
+    if pending:
+        lines.append(pending)
+    return lines
+
+
+def _firmware_token(software: str) -> str:
+    cleaned = (software or "").rstrip("$").strip()
+    if not cleaned:
+        return ""
+    if " " not in cleaned:
+        return cleaned
+    # IOS-XE entity software is "Bengaluru 17.06.03" or "Dublin 17.12.05".
+    match = _VERSION_TOKEN_RE.search(cleaned)
+    return match.group(0).rstrip(".") if match else ""
+
+
+def parse_system_metrics(text: str) -> dict:
+    """sysUpTime, IOS version, chassis part number and chassis serial from an snmp_exporter scrape."""
+    uptime = None
+    descr = ""
+    parts = []
+    for raw in _metric_lines(text):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("sysUpTime"):
+            try:
+                uptime = float(line.split()[-1])
+            except (TypeError, ValueError):
+                pass
+            continue
+        if "{" not in line:
+            continue
+        name, _rest = line.split("{", 1)
+        labels = {
+            key: value.replace("\\n", "\n").replace('\\"', '"')
+            for key, value in _LABEL_RE.findall(line)
+        }
+        if name == "sysDescr":
+            descr = labels.get("sysDescr") or descr
+        elif name == "entPhysicalModelName":
+            model = (labels.get("entPhysicalModelName") or "").strip()
+            if model and not _OPTIC_RE.match(model):
+                parts.append((
+                    model,
+                    (labels.get("entPhysicalSoftwareRev") or "").strip(),
+                    (labels.get("entPhysicalSerialNum") or "").strip(),
+                ))
+    version = ""
+    match = _VERSION_RE.search(descr.replace("\n", " "))
+    if match:
+        version = match.group(1).strip().rstrip("$")
+    part = ""
+    ranked = sorted(parts, key=lambda item: (0 if item[2] else 1, 0 if item[1] else 1, len(item[0])))
+    if ranked:
+        part = ranked[0][0]
+    if not version:
+        ordered = [item for item in parts if item[0] == part] + parts
+        for _model, software, _serial in ordered:
+            version = _firmware_token(software)
+            if version:
+                break
+    serials = []
+    seen = set()
+    for model, _software, serial in parts:
+        if part and model != part:
+            continue
+        if not serial or serial in seen:
+            continue
+        seen.add(serial)
+        serials.append(serial)
+    if not serials:
+        for _model, _software, serial in ranked:
+            if serial and serial not in seen:
+                serials.append(serial)
+                break
+    return {"uptime": uptime, "firmware": version, "part": part, "serial": ", ".join(serials)}
+
+
+def parse_resource_metrics(text: str) -> dict:
+    """CPU percent and memory used percent from a cisco_pro/cisco_mem or FortiGate scrape."""
+    series: dict[str, list[float]] = {}
+    used = 0.0
+    free = 0.0
+    pools = 0
+    for raw in _metric_lines(text):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        name = line.split("{", 1)[0].split()[0]
+        try:
+            value = float(line.split()[-1])
+        except (TypeError, ValueError):
+            continue
+        if name in ("cpmCPUTotal5minRev", "cpmCPUTotal5min", "fgSysCpuUsage", "fgSysMemUsage"):
+            series.setdefault(name, []).append(value)
+        elif name == "ciscoMemoryPoolUsed":
+            used += value
+            pools += 1
+        elif name == "ciscoMemoryPoolFree":
+            free += value
+    cpu = None
+    for key in ("cpmCPUTotal5minRev", "cpmCPUTotal5min", "fgSysCpuUsage"):
+        if series.get(key):
+            cpu = sum(series[key]) / len(series[key])
+            break
+    memory = None
+    if pools and (used + free) > 0:
+        memory = used / (used + free) * 100.0
+    elif series.get("fgSysMemUsage"):
+        memory = sum(series["fgSysMemUsage"]) / len(series["fgSysMemUsage"])
+    return {"cpu": cpu, "mem": memory}
 
 
 def format_uptime(timeticks) -> tuple[str, float]:
@@ -818,16 +1248,28 @@ def _is_admin_up(state) -> bool:
     return state in ("up", 1, None)
 
 
-def _port_state(oper, admin, errors_per_min: float, util: float) -> str:
+# Input-error counts are over the last 5 minutes (rate(ifInErrors[5m]) * 300).
+# 20 errors is a port warning. 50 is a port critical. A warning does not move
+# device health; only the critical count does, in explain_health.
+ERRORS_WARN_5M = 20.0
+ERRORS_CRITICAL_5M = 50.0
+
+
+def _port_state(oper, admin, errors_5m: float, util: float) -> str:
+    if errors_5m >= ERRORS_CRITICAL_5M:
+        return "fault"
+    if errors_5m >= ERRORS_WARN_5M:
+        return "warning"
     if admin in ("down", 2) or oper in ("notPresent", 6):
         return "disabled"
     if _is_up(oper):
-        if errors_per_min >= 10 or util >= 85:
+        if util >= 85:
             return "warning"
         return "up"
+    # Admin enabled with no link is an empty port, not a fault.
     if oper in ("lowerLayerDown", 7, "dormant", 5, "down", 2):
         if _is_admin_up(admin) and admin is not None:
-            return "fault"
+            return "not-connected"
         return "down"
     if oper in ("testing", 3, "unknown", 4):
         return "warning"
@@ -890,7 +1332,8 @@ class FleetService:
 
     def _send(self, client, method: str, url: str, *, headers=None, params=None, json_body=None, upstream: str):
         try:
-            response = client.request(method, url, headers=headers, params=params, json=json_body)
+            timeout = httpx.Timeout(6.0, connect=2.0) if upstream == "snmp" else None
+            response = client.request(method, url, headers=headers, params=params, json=json_body, timeout=timeout)
         except httpx.HTTPError:
             raise UpstreamError(upstream, "%s is not reachable" % _title(upstream))
         return response
@@ -947,14 +1390,118 @@ class FleetService:
                 "city": _city(raw),
                 "last_updated": str(raw.get("last_updated") or ""),
             })
-        self.cache.put("nb-sites", rows)
+        self.cache.put("nb-sites", rows, ttl=60)
         return rows
+
+    def _catalog(self, client) -> dict:
+        """Role colours and device-type part numbers. Missing either stays blank."""
+        cached = self.cache.get("nb-catalog")
+        if cached is not None:
+            return cached
+        colors = {}
+        parts = {}
+        try:
+            for raw in self._walk(client, "/api/dcim/device-roles/?limit=200"):
+                colors[str(raw.get("slug") or "")] = str(raw.get("color") or "").strip()
+        except UpstreamError:
+            log.warning("NetBox device role colours could not be read")
+        try:
+            for raw in self._walk(client, "/api/dcim/device-types/?limit=1000"):
+                parts[str(raw.get("id") or "")] = str(raw.get("part_number") or "").strip()
+        except UpstreamError:
+            log.warning("NetBox part numbers could not be read")
+        payload = {"colors": colors, "parts": parts}
+        self.cache.put("nb-catalog", payload, ttl=120)
+        return payload
+
+    def _snmp_auth(self, ip: str, role_slug: str) -> str:
+        path = getattr(self.settings, "snmp_auth_map", "") or "/opt/insightengine/data/snmp/auth-by-ip.yml"
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                for raw in handle:
+                    line = raw.split("#", 1)[0].strip()
+                    if ":" not in line:
+                        continue
+                    left, right = line.split(":", 1)
+                    if left.strip().strip('"') == ip:
+                        name = right.strip().strip('"').strip("'")
+                        if name:
+                            return name
+        except OSError:
+            pass
+        if role_slug in ("wireless-controller", "wlc"):
+            return "ie_wlc_v2"
+        if role_slug == "distribution-switch":
+            return "ie_snmp_v2"
+        return "ntt_snmpv3_auth"
+
+    def _system_facts(self, client, device: dict) -> dict:
+        """Uptime, firmware and chassis part number. Prometheus does not scrape these on access switches."""
+        ip = str(device.get("ip") or "").split("/")[0].strip()
+        role = str(device.get("role_slug") or "")
+        if not ip or role in ("access-point", "ap", "wireless-ap", "wireless-ap"):
+            return {}
+        cached = self.cache.get("system:" + ip)
+        if cached is not None:
+            return cached
+        auth = self._snmp_auth(ip, role)
+        base = (getattr(self.settings, "snmp_exporter_url", "") or "http://scrape-lb:9116").rstrip("/")
+        try:
+            response = self._send(
+                client, "GET", base + "/snmp",
+                params={"module": "system", "auth": auth, "target": ip},
+                upstream="snmp",
+            )
+        except UpstreamError:
+            self.cache.put("system:" + ip, {})
+            return {}
+        if response.status_code != 200:
+            self.cache.put("system:" + ip, {})
+            return {}
+        facts = parse_system_metrics(response.text or "")
+        self.cache.put("system:" + ip, facts)
+        return facts
+
+    def _resource_facts(self, client, device: dict) -> dict:
+        """CPU and RAM when Prometheus has not scraped those modules yet."""
+        ip = str(device.get("ip") or "").split("/")[0].strip()
+        role = str(device.get("role_slug") or "")
+        if not ip or role in ("access-point", "ap", "wireless-ap"):
+            return {}
+        cached = self.cache.get("resources:" + ip)
+        if cached is not None:
+            return cached
+        auth = self._snmp_auth(ip, role)
+        base = (getattr(self.settings, "snmp_exporter_url", "") or "http://scrape-lb:9116").rstrip("/")
+        modules = ["fortinet_health"] if role in ("sdwan", "hub", "core-firewall", "firewall") else ["cisco_pro,cisco_mem"]
+        if role not in ("sdwan", "hub", "core-firewall", "firewall"):
+            modules.append("fortinet_health")
+        text = ""
+        for module in modules:
+            try:
+                response = self._send(
+                    client, "GET", base + "/snmp",
+                    params={"module": module, "auth": auth, "target": ip},
+                    upstream="snmp",
+                )
+            except UpstreamError:
+                continue
+            if response.status_code != 200:
+                continue
+            text += "\n" + (response.text or "")
+            parsed = parse_resource_metrics(text)
+            if parsed.get("cpu") is not None and parsed.get("mem") is not None:
+                break
+        facts = parse_resource_metrics(text)
+        self.cache.put("resources:" + ip, facts)
+        return facts
 
     def _devices_raw(self, client) -> list[dict]:
         cached = self.cache.get("nb-devices")
         if cached is not None:
             return cached
         sites = {row["id"]: row for row in self._sites_raw(client)}
+        catalog = self._catalog(client)
         rows = []
         for raw in self._walk(client, "/api/dcim/devices/?limit=1000"):
             site = raw.get("site") if isinstance(raw.get("site"), dict) else {}
@@ -984,7 +1531,9 @@ class FleetService:
                 "region": known.get("region") or "Unassigned",
                 "model": str(dtype.get("model") or ""),
                 "slug": str(dtype.get("slug") or ""),
-                "part_number": str(dtype.get("part_number") or ""),
+                "part_number": catalog["parts"].get(str(dtype.get("id") or ""), "") or str(dtype.get("part_number") or ""),
+                "role_color": catalog["colors"].get(str(role.get("slug") or ""), ""),
+                "sw_version": str((raw.get("custom_fields") or {}).get("ie_sw_version") or "") if isinstance(raw.get("custom_fields"), dict) else "",
                 "manufacturer": str(manufacturer.get("name") or ""),
                 "ip": address,
                 "prefix": str(primary.get("address") or ""),
@@ -993,7 +1542,7 @@ class FleetService:
                 "platform": str(platform.get("name") or ""),
                 "last_updated": str(raw.get("last_updated") or ""),
             })
-        self.cache.put("nb-devices", rows)
+        self.cache.put("nb-devices", rows, ttl=60)
         return rows
 
     # ----- Prometheus -------------------------------------------------------------
@@ -1016,6 +1565,25 @@ class FleetService:
             log.warning("prometheus query status was not success")
             return []
         return list((body.get("data") or {}).get("result") or [])
+
+    def _prom_many(self, client, queries: dict[str, str]) -> dict[str, list | None]:
+        """Run Prometheus queries together. None means that one query failed."""
+        def one(item: tuple[str, str]) -> tuple[str, list | None]:
+            key, query = item
+            try:
+                return key, self._prom(client, query)
+            except UpstreamError:
+                return key, None
+
+        items = list(queries.items())
+        if len(items) <= 1:
+            return dict(one(item) for item in items)
+        found: dict[str, list | None] = {}
+        workers = min(8, len(items))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for key, rows in pool.map(one, items):
+                found[key] = rows
+        return found
 
     def _prom_range(self, client, query: str, start: float, end: float, step: int) -> list[dict]:
         response = self._send(
@@ -1045,13 +1613,10 @@ class FleetService:
             "snmp_up": 'max by (hostname, instance) (up{hostname!=""})',
             "ports_total": "count by (hostname, instance) (ifOperStatus_info) or count by (hostname, instance) (ifOperStatus)",
             "ports_up": 'count by (hostname, instance) (ifOperStatus_info{ifOperStatus="up"}) or count by (hostname, instance) (ifOperStatus == 1)',
-            "ports_fault": (
-                'count by (hostname, instance) (ifOperStatus_info{ifOperStatus=~"down|lowerLayerDown"} '
-                'and on (hostname, instance, ifIndex) ifAdminStatus_info{ifAdminStatus="up"}) '
-                "or count by (hostname, instance) ((ifOperStatus == 2) and on (hostname, instance, ifIndex) (ifAdminStatus == 1))"
-            ),
-            "ports_warn": "count by (hostname, instance) (rate(ifInErrors[5m]) > 1)",
-            "uptime": "max by (hostname, instance) (sysUpTime)",
+            "ports_fault": "count by (hostname, instance) (rate(ifInErrors[5m]) * 300 >= 50)",
+            "ports_warn": "count by (hostname, instance) ((rate(ifInErrors[5m]) * 300 >= 20) and (rate(ifInErrors[5m]) * 300 < 50))",
+            # sysUpTime is hundredths of a second. FortiGate fgSysUpTime is seconds.
+            "uptime": "max by (hostname, instance) (sysUpTime or (fgSysUpTime * 100))",
             "last_poll": (
                 "max by (hostname, instance) (timestamp(ifHCInOctets)) "
                 'or max by (hostname, instance) (timestamp(up{hostname!=""}))'
@@ -1063,14 +1628,16 @@ class FleetService:
             "psu_ok": "min by (hostname, instance) (ie:device_psu_ok)",
         }
         out = {"degraded": False}
-        for key, query in queries.items():
+        fetched = self._prom_many(client, queries)
+        for key in queries:
             index = _index_min if key in ("fan_ok", "psu_ok") else _index_samples
-            try:
-                out[key] = index(self._prom(client, query))
-            except UpstreamError:
+            rows = fetched.get(key)
+            if rows is None:
                 out["degraded"] = True
                 out[key] = ({}, {})
-        self.cache.put("prom-fleet", out)
+            else:
+                out[key] = index(rows)
+        self.cache.put("prom-fleet", out, ttl=15)
         return out
 
     def _selector(self, device: dict) -> str:
@@ -1149,7 +1716,7 @@ class FleetService:
                 "site": device["site_name"],
                 "siteId": device["site_id"],
                 "mgmtIp": ip,
-                "modelFamily": device["model"] or device["platform"] or "—",
+                "modelFamily": device.get("part_number") or device["model"] or device["platform"] or "—",
                 "health": "healthy",
                 "portsUp": ports_up,
                 "portsTotal": ports_total,
@@ -1289,7 +1856,7 @@ class FleetService:
         if cached is not None:
             return cached
         index = netdisco_index(self._netdisco_url(), self._suffixes())
-        self.cache.put("nd-index", index)
+        self.cache.put("nd-index", index, ttl=60)
         return index
 
     def _find_device(self, rows: list[dict], device_id: str) -> dict | None:
@@ -1297,6 +1864,9 @@ class FleetService:
 
     def get_device(self, device_id: str) -> dict:
         key = unquote(device_id or "").strip()
+        cached_detail = self.cache.get("detail:" + key)
+        if isinstance(cached_detail, dict):
+            return cached_detail
         try:
             with self._session() as client:
                 rows, _meta, degraded = self._decorated(client)
@@ -1325,6 +1895,7 @@ class FleetService:
                     detail = _minimal_detail(found, self._now_dt())
                 alerts = self._alerts_raw(client)
                 self._attach_inventory(client, detail, found, rows)
+                self._stamp_observed(client, detail, found)
                 if alerts.get("degraded"):
                     for source in detail.get("sources") or []:
                         if source.get("name") == "alertmanager":
@@ -1357,7 +1928,9 @@ class FleetService:
             log.warning("hierarchy could not be attached for %s", found.get("hostname"))
             detail.setdefault("parent", None)
             detail.setdefault("children", [])
-        return self._with_degraded(detail, degraded)
+        body = self._with_degraded(detail, degraded)
+        self.cache.put("detail:" + key, body, ttl=15)
+        return body
 
     def _finish_health(self, detail: dict, found: dict, alerts: dict, rows: list[dict]) -> None:
         """Recompute the badge from the same items the Health section lists."""
@@ -1378,14 +1951,15 @@ class FleetService:
         if inputs.get("memoryPercent") is not None:
             snap.pop("memoryRatio", None)
             snap["memoryPercent"] = inputs["memoryPercent"]
-        if inputs.get("tempC") is not None:
-            snap["tempC"] = inputs["tempC"]
-        if inputs.get("fans"):
-            snap.pop("fanOk", None)
-            snap["fans"] = inputs["fans"]
-        if inputs.get("psus"):
-            snap.pop("psuOk", None)
-            snap["psus"] = inputs["psus"]
+        if not _basic_switch(found):
+            if inputs.get("tempC") is not None:
+                snap["tempC"] = inputs["tempC"]
+            if inputs.get("fans"):
+                snap.pop("fanOk", None)
+                snap["fans"] = inputs["fans"]
+            if inputs.get("psus"):
+                snap.pop("psuOk", None)
+                snap["psus"] = inputs["psus"]
         if inputs.get("apStatus"):
             snap["apStatus"] = inputs["apStatus"]
             snap["apName"] = inputs.get("apName") or found.get("hostname") or ""
@@ -1524,7 +2098,7 @@ class FleetService:
             "uptime": uptime,
             "lastPoll": "—",
             "firmware": ap.get("ios") or "—",
-            "serialMasked": mask_serial(ap.get("serial") or ""),
+            "serialMasked": display_serial(ap.get("serial") or ""),
             "faceplate": face,
             "issues": [_issue_from_alert(alert, index) for index, alert in enumerate(projected)],
             "checks": [],
@@ -1608,7 +2182,82 @@ class FleetService:
         if created_any:
             self.cache.drop("nb-devices")
             self.cache.drop("ap-snapshot")
+            self.cache.drop_prefix("detail:")
         return {"ok": all(row["status"] != "failed" for row in results), "results": results}
+
+    def sync_netbox_inventory(self, device_id: str) -> dict:
+        """Write the live model, serial number and firmware onto the NetBox device."""
+        key = unquote(device_id or "").strip()
+        if not key or is_form_key(key):
+            raise ApiError(404, "not_found", "unknown device")
+        headers = netbox_headers(self.settings.netbox_token_file)
+        if not headers:
+            raise ApiError(503, "netbox_token", "NetBox API token is not configured")
+        try:
+            with self._session() as client:
+                rows, _meta, _degraded = self._decorated(client)
+                found = self._find_device(rows, key)
+                if found is None:
+                    raise ApiError(404, "not_found", "unknown device")
+                device = found.get("_device") or {}
+                nb_id = str(device.get("id") or "")
+                if not nb_id.isdigit():
+                    raise ApiError(400, "not_in_netbox", "This device is not in NetBox")
+                nd = _index_hit(self._netdisco_index(), device.get("ip") or "", device.get("name") or "", self._suffixes()) or {}
+                ap = None
+                if str(device.get("role_slug") or "") in ("access-point", "ap", "wireless-ap"):
+                    ap = self._find_ap(str(device.get("name") or ""))
+                facts = self._system_facts(client, device)
+                live = live_inventory(facts, nd, ap)
+                names = live_model_names(facts, nd, ap)
+                hostname = str(device.get("name") or found.get("hostname") or nb_id)
+        except UpstreamError as exc:
+            raise _as_upstream(exc)
+        if not live["model"] and not live["serial"] and not live["firmware"]:
+            return {
+                "ok": True,
+                "updated": [],
+                "note": "SNMP and Netdisco did not report a model, serial number or firmware.",
+                "hostname": hostname,
+            }
+        writer = NetBoxWriter(self.settings.netbox_url, headers)
+        note = ""
+        body: dict = {}
+        updated: list[str] = []
+        try:
+            current = writer._req("GET", "/api/dcim/devices/%s/" % nb_id)
+            if not isinstance(current, dict):
+                raise ApiError(502, "netbox_error", "NetBox did not return this device")
+            dtype = current.get("device_type") if isinstance(current.get("device_type"), dict) else {}
+            manufacturer = dtype.get("manufacturer") if isinstance(dtype, dict) else None
+            if isinstance(manufacturer, dict):
+                manufacturer_id = manufacturer.get("id")
+            elif isinstance(manufacturer, int):
+                manufacturer_id = manufacturer
+            else:
+                manufacturer_id = None
+            matched, note = _pick_device_type(writer, manufacturer_id, names, dtype if isinstance(dtype, dict) else {})
+            body, updated = inventory_patch(current, live, matched)
+            if "firmware" in updated:
+                writer._ensure_text_field("ie_sw_version", "Software version")
+            if body:
+                writer._req("PATCH", "/api/dcim/devices/%s/" % nb_id, body)
+        except ApiError:
+            raise
+        except RuntimeError as exc:
+            if "-> 404" in str(exc):
+                raise ApiError(404, "not_found", "This device is not in NetBox")
+            log.warning("netbox inventory sync failed for %s", hostname)
+            raise ApiError(502, "netbox_error", "NetBox did not accept the model, serial number or firmware")
+        except Exception:
+            log.warning("netbox inventory sync failed for %s", hostname)
+            raise ApiError(502, "netbox_error", "NetBox did not accept the model, serial number or firmware")
+        if body:
+            self.cache.drop("nb-devices")
+            self.cache.drop_prefix("detail:")
+        if not body and not note:
+            note = "NetBox already has this model, serial number and firmware."
+        return {"ok": True, "updated": updated, "note": note, "hostname": hostname}
 
     def device_access(self, device_id: str) -> dict:
         """Hostname, management IP and platform. Used by the read-only CLI."""
@@ -1641,6 +2290,20 @@ class FleetService:
             "manufacturer": found["manufacturer"],
         }
 
+    def _stamp_observed(self, client, detail: dict, found: dict) -> None:
+        """Live model, serial and firmware the NetBox sync button writes."""
+        comparison = detail.get("comparison")
+        if not isinstance(comparison, dict):
+            return
+        device = found.get("_device") or {}
+        nd = comparison.get("netdisco") if isinstance(comparison.get("netdisco"), dict) else {}
+        ap = detail.get("_ap") if isinstance(detail.get("_ap"), dict) else None
+        try:
+            facts = self._system_facts(client, device) if device else {}
+        except Exception:
+            facts = {}
+        comparison["observed"] = live_inventory(facts, nd, ap)
+
     def _attach_inventory(self, client, detail: dict, found: dict, rows: list[dict]) -> None:
         """NetBox interfaces and IPs, Prometheus history, Oxidized and Netdisco.
 
@@ -1655,7 +2318,10 @@ class FleetService:
         addresses, addr_error = self._netbox_rows(
             client, "/api/ipam/ip-addresses/?device_id=%s&limit=200" % quote(device_id, safe="")
         )
-        detail["interfaces"] = [_public_interface(row) for row in interfaces if isinstance(row, dict)]
+        detail["interfaces"] = [
+            _public_interface(row) for row in interfaces
+            if isinstance(row, dict) and _is_cable_port(row)
+        ]
         panel = detail.get("healthPanel")
         if isinstance(panel, dict) and panel.get("interfacesSupported"):
             marked = critical_names_from_interfaces(detail["interfaces"])
@@ -1713,21 +2379,23 @@ class FleetService:
         source = classified["faceplate_source"]
         ports = list(classified["ports"])
         if source == "none":
-            ports = prom_ports
+            ports = [_present_port(port) for port in prom_ports]
             source = "prometheus" if prom_ports else "none"
         else:
             ports = _overlay_port_state(ports, prom_ports)
+        _annotate_interfaces(detail.get("interfaces") or [], prom_ports)
         ports = _overlay_neighbours(ports, snap.get("ports") or [], rows, detail.get("_snmp_neighbors") or [], self._suffixes())
         form = classified["form"] if classified["form"] in FORM_FACTORS else "generic"
         role = classified["role"]
         detail["role"] = role
         detail["status"] = found.get("status") or device.get("status") or "active"
+        shown_model = (device.get("part_number") or "").strip() or device.get("model") or (nd_device or {}).get("model") or ""
         face = _faceplate(
             form, role, detail.get("hostname") or "",
-            device.get("model") or (nd_device or {}).get("model") or "",
+            shown_model,
             ports,
             {
-                "model": device.get("model") or (nd_device or {}).get("model") or "",
+                "model": shown_model,
                 "part_number": device.get("part_number") or "",
                 "slug": device.get("slug") or "",
                 "manufacturer": device.get("manufacturer") or "",
@@ -1753,23 +2421,31 @@ class FleetService:
             return [], exc.message
 
     def _oxidized_backup(self, client, name: str) -> dict:
+        cached = self.cache.get("oxidized:" + (name or ""))
+        if isinstance(cached, dict):
+            return cached
         empty = {"available": False, "reason": "", "status": "", "at": "", "config": ""}
+
+        def remember(body: dict) -> dict:
+            self.cache.put("oxidized:" + (name or ""), body, ttl=60)
+            return body
+
         safe_name = quote(str(name or ""), safe="")
         if not safe_name:
             empty["reason"] = "This device has no name for Oxidized"
-            return empty
+            return remember(empty)
         base = (getattr(self.settings, "oxidized_url", "") or "http://oxidized:8888").rstrip("/")
         try:
             shown = self._send(client, "GET", "%s/node/show/%s.json" % (base, safe_name), upstream="oxidized")
         except UpstreamError:
             empty["reason"] = "Oxidized is not reachable"
-            return empty
+            return remember(empty)
         if shown.status_code == 404:
             empty["reason"] = "Oxidized has no backup for this device"
-            return empty
+            return remember(empty)
         if shown.status_code >= 400:
             empty["reason"] = "Oxidized returned HTTP %s" % shown.status_code
-            return empty
+            return remember(empty)
         status = ""
         at = ""
         try:
@@ -1787,7 +2463,7 @@ class FleetService:
                 config = redact_config(fetched.text or "")
         except UpstreamError:
             pass
-        return {"available": True, "reason": "", "status": status, "at": at, "config": config}
+        return remember({"available": True, "reason": "", "status": status, "at": at, "config": config})
 
     def _detail(self, client, row: dict, rows: list[dict]) -> dict:
         device = row["_device"]
@@ -1799,6 +2475,12 @@ class FleetService:
             except UpstreamError:
                 cached = {"degraded": True, "ports": [], "cpu": None, "mem": None, "temp": None, "fans": [], "psus": [], "rtt": None}
             self.cache.put("ports:" + device["name"], cached)
+        if cached.get("cpu") is None or cached.get("mem") is None:
+            extra = self._resource_facts(client, device)
+            if cached.get("cpu") is None and extra.get("cpu") is not None:
+                cached["cpu"] = extra["cpu"]
+            if cached.get("mem") is None and extra.get("mem") is not None:
+                cached["mem"] = extra["mem"]
         ports = cached["ports"]
         form = row["formFactor"]
         faceplate = _faceplate(
@@ -1827,6 +2509,7 @@ class FleetService:
         ap_row = self._find_ap(row["hostname"]) if profile == "ap" else None
         health_panel = build_health_panel(
             profile,
+            cpu=None if cached.get("cpu") is None else float(cached["cpu"]),
             memory_ratio=None if mem is None else float(mem) / 100.0,
             memory_detail="Used percent",
             fan_states=fan_clean,
@@ -1850,20 +2533,32 @@ class FleetService:
             except UpstreamError:
                 down_aps = None
         self._paint_ap_face(faceplate, row["hostname"])
-        return {
+        facts = self._system_facts(client, device)
+        part = (device.get("part_number") or "").strip() or (facts.get("part") or "")
+        firmware = (facts.get("firmware") or "").strip() or str(device.get("sw_version") or "").strip().rstrip("$") or (device.get("platform") or "")
+        serial = str(device.get("serial") or "").strip() or str(facts.get("serial") or "").strip()
+        uptime = row["uptime"]
+        if (not uptime or uptime == "—") and facts.get("uptime") is not None:
+            uptime, _seconds = format_uptime(facts["uptime"])
+        if part:
+            faceplate["partNumber"] = part
+        detail = {
             "id": row["id"],
             "hostname": row["hostname"],
             "role": row["role"],
+            "roleColor": device.get("role_color") or "",
+            "reachable": row.get("_probe") == 1,
             "site": row["site"],
             "siteId": row["siteId"],
             "mgmtIp": row["mgmtIp"] or "—",
-            "modelFamily": row["modelFamily"],
+            "modelFamily": part or row["modelFamily"],
+            "partNumber": part,
             "health": row["health"],
             "status": row.get("status") or "active",
-            "uptime": row["uptime"],
+            "uptime": uptime,
             "lastPoll": row["lastPoll"],
-            "firmware": device.get("platform") or "—",
-            "serialMasked": mask_serial(device.get("serial") or ""),
+            "firmware": firmware or "—",
+            "serialMasked": display_serial(serial),
             "faceplate": faceplate,
             "issues": [],
             "checks": checks,
@@ -1889,76 +2584,84 @@ class FleetService:
             },
             "_ap": ap_row,
         }
+        return detail
 
     def _load_ports(self, client, selector: str, hostname: str = "") -> dict:
-        oper = self._prom(client, "ifOperStatus_info%s or ifOperStatus%s" % (selector, selector))
-        admin = self._prom(client, "ifAdminStatus_info%s or ifAdminStatus%s" % (selector, selector))
-        speed = self._prom(client, "ifHighSpeed%s" % selector)
-        inbound = self._prom(client, "rate(ifHCInOctets%s[5m])" % selector)
-        outbound = self._prom(client, "rate(ifHCOutOctets%s[5m])" % selector)
-        errors = self._prom(client, "rate(ifInErrors%s[5m])" % selector)
-        discards_in = self._prom(client, "rate(ifInDiscards%s[5m])" % selector)
-        discards_out = self._prom(client, "rate(ifOutDiscards%s[5m])" % selector)
-        cpu = self._prom(
-            client,
-            "avg(cpmCPUTotal5minRev%s) or avg(fgSysCpuUsage%s)" % (selector, selector),
-        )
-        mem = self._prom(
-            client,
-            (
+        host_name = hostname or ""
+        safe_host = prom_escape(host_name)
+        queries = {
+            "oper": "ifOperStatus_info%s or ifOperStatus%s" % (selector, selector),
+            "admin": "ifAdminStatus_info%s or ifAdminStatus%s" % (selector, selector),
+            "speed": "ifHighSpeed%s" % selector,
+            "inbound": "rate(ifHCInOctets%s[5m])" % selector,
+            "outbound": "rate(ifHCOutOctets%s[5m])" % selector,
+            "errors": "rate(ifInErrors%s[5m])" % selector,
+            "discards_in": "rate(ifInDiscards%s[5m])" % selector,
+            "discards_out": "rate(ifOutDiscards%s[5m])" % selector,
+            "cpu": "avg(cpmCPUTotal5minRev%s) or avg(fgSysCpuUsage%s)" % (selector, selector),
+            "mem": (
                 "(sum(ciscoMemoryPoolUsed%(s)s) / clamp_min(sum(ciscoMemoryPoolUsed%(s)s) + sum(ciscoMemoryPoolFree%(s)s), 1)) * 100 "
                 "or avg(fgSysMemUsage%(s)s)"
             ) % {"s": selector},
-        )
-        temp = self._prom(client, "max(ciscoEnvMonTemperatureStatusValue%s)" % selector)
-        fans = self._prom(client, "ciscoEnvMonFanState_info%s or ciscoEnvMonFanState%s" % (selector, selector))
-        psus = self._prom(client, "ciscoEnvMonSupplyState_info%s or ciscoEnvMonSupplyState%s" % (selector, selector))
-        rtt = self._prom(client, "avg(probe_duration_seconds%s)" % selector)
-        ports = _join_ports(oper, admin, speed, inbound, outbound, errors, discards_in, discards_out)
+            "temp": "max(ciscoEnvMonTemperatureStatusValue%s)" % selector,
+            "fans": "ciscoEnvMonFanState_info%s or ciscoEnvMonFanState%s" % (selector, selector),
+            "psus": "ciscoEnvMonSupplyState_info%s or ciscoEnvMonSupplyState%s" % (selector, selector),
+            "rtt": "avg(probe_duration_seconds%s)" % selector,
+            "joined_aps": (
+                'max(cLApGlobalAPConnectCount%s) or count(ie_wlc_ap_admin_status{wlc="%s"}) or count(ie_wlc_ap_oper_status{wlc="%s"})'
+                % (selector, safe_host, safe_host)
+            ),
+            "wlc_clients": (
+                'max(bsnGlobalDot11SystemMobileStations%s) or sum(ie_wlc_ap_clients{wlc="%s"}) or sum(ie_wlc_radio_clients{wlc="%s"})'
+                % (selector, safe_host, safe_host)
+            ),
+            "aireos_psu": (
+                "agentSwitchInfoPowerSupply1Present%s or agentSwitchInfoPowerSupply1Operational%s or "
+                "agentSwitchInfoPowerSupply2Present%s or agentSwitchInfoPowerSupply2Operational%s"
+                % (selector, selector, selector, selector)
+            ),
+        }
+        for metric in (
+            "cdpCacheDeviceId", "cdpCacheDevicePort", "cdpCacheAddress", "cdpCachePlatform",
+            "lldpRemSysName", "lldpRemPortId", "lldpRemPortDesc", "lldpRemManAddrIfId", "lldpLocPortId",
+        ):
+            queries[metric] = "%s%s or %s_info%s" % (metric, selector, metric, selector)
+        fetched = self._prom_many(client, queries)
+        if fetched.get("oper") is None:
+            raise UpstreamError("prometheus", "Prometheus is not reachable")
+
+        def rows(key: str) -> list:
+            found = fetched.get(key)
+            return found if isinstance(found, list) else []
+
+        oper, admin, speed = rows("oper"), rows("admin"), rows("speed")
+        ports = _join_ports(oper, admin, speed, rows("inbound"), rows("outbound"), rows("errors"), rows("discards_in"), rows("discards_out"))
         suffixes = self._suffixes()
-
-        def named(metric: str) -> list[dict]:
-            return self._prom(client, "%s%s or %s_info%s" % (metric, selector, metric, selector))
-
         cdp = neighbors_from_cdp(
-            named("cdpCacheDeviceId"), named("cdpCacheDevicePort"),
-            named("cdpCacheAddress"), named("cdpCachePlatform"),
+            rows("cdpCacheDeviceId"), rows("cdpCacheDevicePort"),
+            rows("cdpCacheAddress"), rows("cdpCachePlatform"),
             ports, suffixes,
         )
         lldp = neighbors_from_lldp(
-            named("lldpRemSysName"), named("lldpRemPortId"), named("lldpRemPortDesc"),
-            named("lldpRemManAddrIfId"), named("lldpLocPortId"),
+            rows("lldpRemSysName"), rows("lldpRemPortId"), rows("lldpRemPortDesc"),
+            rows("lldpRemManAddrIfId"), rows("lldpLocPortId"),
             ports, suffixes,
         )
-        host_name = hostname or ""
         return {
             "degraded": False,
             "ports": ports,
             "neighbors": merge_neighbors(cdp, lldp),
             "snmp_at": _latest_stamp(oper or admin or speed),
             "has_if_mib": bool(oper or admin),
-            "cpu": _first_value(cpu),
-            "mem": _first_value(mem),
-            "temp": _first_value(temp),
-            "fans": fans,
-            "psus": psus,
-            "rtt": _first_value(rtt),
-            "joined_aps": _first_value(self._prom(
-                client,
-                'max(cLApGlobalAPConnectCount%s) or count(ie_wlc_ap_admin_status{wlc="%s"}) or count(ie_wlc_ap_oper_status{wlc="%s"})'
-                % (selector, prom_escape(host_name), prom_escape(host_name)),
-            )),
-            "wlc_clients": _first_value(self._prom(
-                client,
-                'max(bsnGlobalDot11SystemMobileStations%s) or sum(ie_wlc_ap_clients{wlc="%s"}) or sum(ie_wlc_radio_clients{wlc="%s"})'
-                % (selector, prom_escape(host_name), prom_escape(host_name)),
-            )),
-            "aireos_psu": self._prom(
-                client,
-                "agentSwitchInfoPowerSupply1Present%s or agentSwitchInfoPowerSupply1Operational%s or "
-                "agentSwitchInfoPowerSupply2Present%s or agentSwitchInfoPowerSupply2Operational%s"
-                % (selector, selector, selector, selector),
-            ),
+            "cpu": _first_value(rows("cpu")),
+            "mem": _first_value(rows("mem")),
+            "temp": _first_value(rows("temp")),
+            "fans": rows("fans"),
+            "psus": rows("psus"),
+            "rtt": _first_value(rows("rtt")),
+            "joined_aps": _first_value(rows("joined_aps")),
+            "wlc_clients": _first_value(rows("wlc_clients")),
+            "aireos_psu": rows("aireos_psu"),
         }
 
     def list_sites(self, *, page: int, page_size: int, q: str, health: str, region: str) -> dict:
@@ -3040,7 +3743,7 @@ def _join_ports(oper, admin, speed, inbound, outbound, errors, discards_in=None,
     for sample in errors:
         metric = sample.get("metric") or {}
         if _sample_keys(metric):
-            _put_joined(err_by, metric, (_sample_value(sample) or 0) * 60)
+            _put_joined(err_by, metric, (_sample_value(sample) or 0) * 300)
     drop_in = {}
     for sample in discards_in or []:
         metric = sample.get("metric") or {}
@@ -3193,6 +3896,9 @@ def _netbox_facts(device: dict) -> dict:
         "hostname": device.get("name") or device.get("hostname") or "",
         "serial": device.get("serial") or "",
         "platform": device.get("platform") or "",
+        "site": device.get("site_name") or device.get("site") or "",
+        "sw_version": device.get("sw_version") or "",
+        "part_number": device.get("part_number") or "",
     }
 
 
@@ -3216,7 +3922,16 @@ def _empty_netdisco(reason: str) -> dict:
 
 def _netdisco_device_row(row: tuple) -> dict:
     ip, dns, name, description, vendor, model, os_name, os_ver, serial = row[:9]
-    port_count = int(row[9]) if len(row) > 9 and row[9] is not None else 0
+    location = ""
+    port_count = 0
+    if len(row) >= 11:
+        location = str(row[9] or "")
+        try:
+            port_count = int(row[10] or 0)
+        except (TypeError, ValueError):
+            port_count = 0
+    elif len(row) == 10:
+        location = str(row[9] or "")
     return {
         "ip": str(ip or ""),
         "dns": str(dns or ""),
@@ -3227,6 +3942,7 @@ def _netdisco_device_row(row: tuple) -> dict:
         "os": str(os_name or ""),
         "os_ver": str(os_ver or ""),
         "serial": str(serial or ""),
+        "location": location,
         "port_count": port_count,
     }
 
@@ -3243,7 +3959,7 @@ def netdisco_index(database_url: str, suffixes: list[str] | None = None) -> dict
                 cur.execute(
                     "SELECT host(ip)::text, COALESCE(dns, ''), COALESCE(name, ''), "
                     "COALESCE(description, ''), COALESCE(vendor, ''), COALESCE(model, ''), "
-                    "COALESCE(os, ''), COALESCE(os_ver, ''), COALESCE(serial, '') FROM device"
+                    "COALESCE(os, ''), COALESCE(os_ver, ''), COALESCE(serial, ''), COALESCE(location, '') FROM device"
                 )
                 devices = cur.fetchall()
                 cur.execute("SELECT host(ip)::text, count(*) FROM device_port GROUP BY host(ip)::text")
@@ -3294,7 +4010,7 @@ def netdisco_snapshot(database_url: str, ip: str = "", name: str = "", suffixes:
                 cur.execute(
                     "SELECT host(ip)::text, COALESCE(dns, ''), COALESCE(name, ''), "
                     "COALESCE(description, ''), COALESCE(vendor, ''), COALESCE(model, ''), "
-                    "COALESCE(os, ''), COALESCE(os_ver, ''), COALESCE(serial, '') "
+                    "COALESCE(os, ''), COALESCE(os_ver, ''), COALESCE(serial, ''), COALESCE(location, '') "
                     "FROM device WHERE host(ip)::text = %s "
                     "OR lower(COALESCE(dns, '')) = ANY(%s) "
                     "OR lower(COALESCE(name, '')) = ANY(%s) "
@@ -3439,7 +4155,30 @@ def _overlay_port_state(ports: list[dict], prom_ports: list[dict]) -> list[dict]
             port["outBps"] = prom.get("outBps") or 0
         if prom.get("type") in ("SFP", "SFP+", "QSFP", "MGMT", "CONSOLE", "USB"):
             port["type"] = prom["type"]
+        fields = _interface_fields(port, prom)
+        if fields["names"]:
+            port["names"] = fields["names"]
+        if fields["description"]:
+            port["description"] = fields["description"]
     return ports
+
+
+def _annotate_interfaces(interfaces: list[dict], prom_ports: list[dict]) -> None:
+    """Add the short/long interface name and the live description to each row."""
+    by_name = _index_by_port(prom_ports)
+    for row in interfaces or []:
+        if not isinstance(row, dict):
+            continue
+        prom = None
+        for key in iface_match_keys(str(row.get("name") or "")):
+            prom = by_name.get(key)
+            if prom:
+                break
+        fields = _interface_fields(row, prom)
+        if fields["names"]:
+            row["names"] = fields["names"]
+        if fields["description"]:
+            row["description"] = fields["description"]
 
 
 def _overlay_neighbours(ports: list[dict], nd_ports: list[dict], rows: list[dict], snmp_neighbors: list[dict] | None = None, suffixes: list[str] | None = None) -> list[dict]:
@@ -3481,6 +4220,8 @@ def _overlay_neighbours(ports: list[dict], nd_ports: list[dict], rows: list[dict
             "device": remote or remote_ip,
             "port": remote_port,
             "deviceId": match["id"] if match else "",
+            "role": str((match or {}).get("role") or ""),
+            "formFactor": str((match or {}).get("formFactor") or ""),
         }
         if source:
             neighbour["source"] = source
@@ -3515,7 +4256,7 @@ def _detail_from_netdisco(snap: dict, now: datetime) -> dict:
         "uptime": "—",
         "lastPoll": "—",
         "firmware": firmware or "—",
-        "serialMasked": mask_serial(device.get("serial") or ""),
+        "serialMasked": display_serial(device.get("serial") or ""),
         "faceplate": face,
         "issues": [],
         "checks": [{
@@ -3695,7 +4436,8 @@ def _checks_and_hardware(row: dict, bundle: dict, now: datetime):
         "detail": firmware or "No platform or firmware recorded in NetBox",
     })
     hardware = []
-    psus = [_env_state(sample, "ciscoEnvMonSupplyState") for sample in bundle.get("psus") or []]
+    show_env = not _basic_switch(row)
+    psus = [_env_state(sample, "ciscoEnvMonSupplyState") for sample in bundle.get("psus") or []] if show_env else []
     psus = [state for state in psus if state and state != "notPresent"]
     if psus:
         bad = [state for state in psus if state in ("critical", "shutdown", "notFunctioning")]
@@ -3712,7 +4454,7 @@ def _checks_and_hardware(row: dict, bundle: dict, now: datetime):
             "result": "fail" if bad else "warn" if warn else "pass",
             "detail": "%d supply samples, %d failed" % (len(psus), len(bad)),
         })
-    fans = [_env_state(sample, "ciscoEnvMonFanState") for sample in bundle.get("fans") or []]
+    fans = [_env_state(sample, "ciscoEnvMonFanState") for sample in bundle.get("fans") or []] if show_env else []
     fans = [state for state in fans if state and state != "notPresent"]
     if fans:
         bad = [state for state in fans if state in ("critical", "shutdown", "notFunctioning")]
@@ -3730,9 +4472,9 @@ def _checks_and_hardware(row: dict, bundle: dict, now: datetime):
     if bundle.get("mem") is not None:
         hardware.append({"id": "h5", "name": "Memory", "kind": "memory", "status": mem_status, "value": mem_value, "detail": "Used percent"})
     temp_status, temp_value = _hw_status("temp", bundle.get("temp"))
-    if bundle.get("temp") is not None:
+    if show_env and bundle.get("temp") is not None:
         hardware.append({"id": "h3", "name": "Temperature", "kind": "temp", "status": temp_status, "value": temp_value, "detail": "Highest sensor"})
-    if fans or bundle.get("temp") is not None:
+    if show_env and (fans or bundle.get("temp") is not None):
         fan_result = "pass"
         if any(item["status"] == "fail" for item in hardware if item["kind"] in ("fan", "temp")):
             fan_result = "fail"
@@ -3959,6 +4701,21 @@ def mount_fleet(app, user_of) -> None:
     def device_one(device_id: str, request: Request):
         reader(request)
         return fleet().get_device(device_id)
+
+    @app.post("/api/v1/devices/{device_id}/netbox-sync")
+    def netbox_sync(device_id: str, request: Request):
+        user = reader(request)
+        from .auth import can_operate
+        if not can_operate(user.role):
+            raise ApiError(403, "forbidden", "your role cannot change devices, alerts, or NetBridge")
+        try:
+            result = fleet().sync_netbox_inventory(device_id)
+        except ApiError as exc:
+            _record_netbox_sync(request, user, "failed", exc.code)
+            raise
+        written = ",".join(result.get("updated") or []) or "unchanged"
+        _record_netbox_sync(request, user, "ok", "%s %s" % (result.get("hostname") or device_id, written))
+        return result
 
     @app.get("/api/v1/devices/{device_id}/metrics/throughput")
     def throughput(device_id: str, request: Request):

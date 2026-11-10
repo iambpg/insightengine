@@ -18,7 +18,8 @@ export default function HealthChecks({ checks, runAt, running }: { checks: Healt
       title="Automatic health check"
       titleId="hc-title"
       subtitle={runAt ? `Last run ${runAt} UTC` : 'Running…'}
-      className="h-full overflow-hidden rounded-lg border border-border bg-background shadow-card"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-card"
+      bodyClassName="scroll-thin min-h-0 flex-1 overflow-y-auto"
       meta={
         checks ? (
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular ${pass === total ? 'bg-success/10 text-success' : 'bg-warning/15 text-foreground'}`}>

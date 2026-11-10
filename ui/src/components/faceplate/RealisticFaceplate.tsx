@@ -3,8 +3,10 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import type { FaceplateDevice, PortInfo } from '@/lib/types';
 import { STATE_COLOR, STATE_GLYPH, STATE_LABEL } from './palette';
-import { namesMatch } from './library/ifname';
+import { assignByOpening, hasNamedFaceplateMatch } from './library/assign';
+import { canonicalIface, faceplatePosition, namesMatch } from './library/ifname';
 import type { FaceplateModel, FaceplatePortBox } from './library/catalog';
+import { FACEPLATE_HEIGHT } from './size';
 
 interface Props {
   device: FaceplateDevice;
@@ -33,7 +35,15 @@ function fallbackPort(box: FaceplatePortBox): PortInfo {
 }
 
 function portForBox(box: FaceplatePortBox, ports: PortInfo[]): PortInfo {
-  return ports.find((port) => namesMatch(port.name, box.name)) ?? fallbackPort(box);
+  const exact = ports.find((port) => namesMatch(port.name, box.name));
+  if (exact) return exact;
+  const opening = faceplatePosition(box.name);
+  // Only ignore the chassis or stack number when the library name actually has one.
+  if (opening && opening !== canonicalIface(box.name)) {
+    const sameOpening = ports.find((port) => faceplatePosition(port.name) === opening);
+    if (sameOpening) return sameOpening;
+  }
+  return fallbackPort(box);
 }
 
 function Hotspot({
@@ -55,7 +65,7 @@ function Hotspot({
 }) {
   const color = STATE_COLOR[port.state];
   const disabled = port.state === 'disabled';
-  const label = `${port.name}, ${STATE_LABEL[port.state]}`;
+  const label = `${port.name}${port.names?.length ? ` (${port.names.join(', ')})` : ''}${port.description ? `, ${port.description}` : ''}, ${STATE_LABEL[port.state]}`;
   const x = box.x * width;
   const y = box.y * height;
   const w = Math.max(box.w * width, 1);
@@ -99,10 +109,11 @@ function Hotspot({
       />
       <text
         x={x + w / 2}
-        y={y + h + Math.max(6, height * 0.04)}
+        y={y + h / 2}
         textAnchor="middle"
-        fontSize={Math.max(7, height * 0.045)}
-        fill={color.fill}
+        dominantBaseline="middle"
+        fontSize={Math.max(8, Math.min(w, h) * 0.55)}
+        fill="var(--background)"
         fontFamily="var(--font-mono)"
         aria-hidden="true"
         style={{ pointerEvents: 'none' }}
@@ -133,8 +144,12 @@ function hotspots({
   onHover: Props['onHover'];
   onSelect: Props['onSelect'];
 }) {
+  const named = hasNamedFaceplateMatch(model.ports, ports);
+  const byOpening = named ? null : assignByOpening(model.ports, ports);
   return model.ports.map((box) => {
-    const port = portForBox(box, ports);
+    const placed = byOpening?.get(box.name);
+    if (byOpening && !placed) return null;
+    const port = placed ?? portForBox(box, ports);
     return (
       <Hotspot
         key={box.name}
@@ -153,16 +168,16 @@ function hotspots({
 export default function RealisticFaceplate({ device, model, selectedPortId = null, onHover, onSelect }: Props) {
   const ports = livePorts(device);
   const frameRef = useRef<HTMLDivElement>(null);
+  // Port fractions were measured against the library frame. The picture is
+  // stretched onto that same frame so a hotspot stays on its opening.
   const [box, setBox] = useState({ w: model.width || 1000, h: model.height || 180 });
   const [scale, setScale] = useState(1);
-  const width = box.w;
-  const height = box.h;
+  const width = model.width || box.w;
+  const height = model.height || box.h;
 
   function rememberNatural(event: React.SyntheticEvent<HTMLImageElement>) {
     const img = event.currentTarget;
-    // naturalWidth is the bitmap's pixel width. It is not multiplied by
-    // devicePixelRatio: both the image and the overlay live in CSS pixels,
-    // and the browser paints the bitmap onto the device grid.
+    if (model.width && model.height) return;
     if (img.naturalWidth > 0 && img.naturalHeight > 0) {
       setBox({ w: img.naturalWidth, h: img.naturalHeight });
     }
@@ -172,11 +187,9 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
     const node = frameRef.current;
     if (!node || typeof ResizeObserver === 'undefined') return undefined;
     const measure = () => {
-      const available = node.clientWidth;
-      if (!available || !width) return;
-      const fit = available / width;
-      // Photos are not scaled above their natural pixel width. Vectors may grow.
-      setScale(model.raster ? Math.min(1, fit) : fit);
+      if (!height) return;
+      // Every picture is shown at the same chassis height. Width follows and can scroll.
+      setScale(FACEPLATE_HEIGHT / height);
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -184,20 +197,11 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
     return () => observer.disconnect();
   }, [width, model.raster]);
 
-  const caption = model.source === 'visio'
-    ? ' · Visio stencil'
-    : model.source === 'photo'
-      ? ' · device-type photo'
-      : model.source === 'vendor'
-        ? ' · vendor image'
-        : ' · drawn from the port list';
+  const title = device.modelName || device.model || device.hostname || model.model;
 
   return (
     <div>
-      <p className="mb-2 text-xs text-muted-foreground">
-        {model.model}
-        {caption}
-      </p>
+      <p className="mb-2 text-xs text-muted-foreground">{title}</p>
       {model.front ? (
         <div
           ref={frameRef}
@@ -229,7 +233,7 @@ export default function RealisticFaceplate({ device, model, selectedPortId = nul
                 display: 'block',
                 width,
                 height,
-                objectFit: 'none',
+                objectFit: 'fill',
                 objectPosition: 'left top',
                 pointerEvents: 'none',
                 padding: 0,

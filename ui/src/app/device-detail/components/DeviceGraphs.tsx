@@ -14,7 +14,7 @@ const TopPortsPanel = dynamic(() => import('./TopPortsPanel'), {
 
 type Rec = Record<string, number | string | null>[];
 
-export default function DeviceGraphs({ deviceId }: { deviceId: string }) {
+export default function DeviceGraphs({ deviceId, profile }: { deviceId: string; profile?: string }) {
   const throughputId = (seed: number) => (isMockMode() ? seed : deviceId);
   const resourceId = isMockMode() ? 5 : deviceId;
   return (
@@ -45,15 +45,20 @@ export default function DeviceGraphs({ deviceId }: { deviceId: string }) {
       <TopPortsPanel deviceId={deviceId} />
       <GraphPanel
         id="resources"
-        title="CPU, memory and temperature"
-        subtitle="Control plane load and chassis temperature"
+        title={profile === 'ios-basic' ? 'CPU and memory' : 'CPU, memory and temperature'}
+        subtitle={profile === 'ios-basic' ? 'Control plane load and RAM' : 'Control plane load and chassis temperature'}
         unit=""
         kind="line"
-        series={[
-          { key: 'cpu', label: 'CPU %', color: 'var(--primary)' },
-          { key: 'mem', label: 'Memory %', color: 'var(--info)' },
-          { key: 'temp', label: 'Temp °C', color: 'var(--warning)' },
-        ]}
+        series={profile === 'ios-basic'
+          ? [
+              { key: 'cpu', label: 'CPU %', color: 'var(--primary)' },
+              { key: 'mem', label: 'Memory %', color: 'var(--info)' },
+            ]
+          : [
+              { key: 'cpu', label: 'CPU %', color: 'var(--primary)' },
+              { key: 'mem', label: 'Memory %', color: 'var(--info)' },
+              { key: 'temp', label: 'Temp °C', color: 'var(--warning)' },
+            ]}
         yMax={100}
         deps={deviceId}
         fetcher={async (r) => (await api.getResources(r, resourceId)) as unknown as Rec}

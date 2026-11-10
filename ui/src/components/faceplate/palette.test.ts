@@ -29,7 +29,7 @@ describe('port state palette', () => {
 
   it('summarises up, down, disabled, unknown and the SNMP time', () => {
     const line = faceplateSummaryLine({ up: 20, down: 2, disabled: 1, unknown: 3, fault: 1 }, '2026-11-01 21:20:00');
-    expect(line).toBe('20 up · 2 down · 1 disabled · 3 unknown · 1 fault · SNMP 2026-11-01 21:20:00');
+    expect(line).toBe('20 up · 2 down · 1 disabled · 3 unknown · 1 critical · SNMP 2026-11-01 21:20:00');
     expect(SNMP_MISSING_HINT).toBe('no SNMP interface data from Prometheus for this device');
   });
 });

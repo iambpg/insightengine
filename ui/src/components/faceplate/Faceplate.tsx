@@ -5,13 +5,15 @@ import type { FaceplateDevice, PortInfo, RadioInfo } from '@/lib/types';
 import FaceplateDefs from './FaceplateDefs';
 import PortTooltip from './PortTooltip';
 import RadioTooltip from './RadioTooltip';
-import SwitchLayout, { SW_H, switchWidth } from './layouts/SwitchLayout';
+import FortiGateLayout from './layouts/FortiGateLayout';
+import SwitchLayout, { SW_H, cablePorts, switchWidth } from './layouts/SwitchLayout';
+import { FACEPLATE_HEIGHT } from './size';
+
+export { FACEPLATE_HEIGHT };
+import { isFortiGateModel, placeFortiGatePorts } from './library/fortigate';
 import { STATE_GLYPH, STATE_LABEL } from './palette';
 import { countPorts, faceplateSummaryLine, SNMP_MISSING_HINT } from './summary';
 import ApLayout, { AP_H, AP_W } from './layouts/ApLayout';
-import { ControllerLayout, FirewallLayout, RouterLayout, APPL_H, APPL_W } from './layouts/AppliancesLayout';
-import ModularLayout, { CH_W, chassisHeight } from './layouts/ModularLayout';
-import FirewallModelLayout, { FW_MODELS, fwModelHeight, fwModelWidth } from './layouts/FirewallModels';
 import RealisticFaceplate from './RealisticFaceplate';
 import { useFaceplateModel } from './library/catalog';
 
@@ -68,19 +70,42 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
 
   const { vbW, vbH, body } = useMemo(() => {
     const pad = 24;
+    if (device.form_factor === 'ceiling-ap') {
+      return {
+        vbW: AP_W + pad,
+        vbH: AP_H + pad,
+        body: (
+          <g transform={`translate(${pad / 2} ${pad / 2})`}>
+            <ApLayout ports={device.ports ?? []} radios={device.radios ?? []} apState={device.apState ?? 'up'} selectedRadioId={selectedRadioId} onRadioHover={onRadioHover} onRadioSelect={onRadioSelect} {...common} />
+          </g>
+        ),
+      };
+    }
+    if (art && isFortiGateModel(art) && art.ports.length > 0) {
+      const ports = device.modules?.length ? device.modules.flatMap((module) => module.ports) : (device.ports ?? []);
+      const canvas = placeFortiGatePorts(art);
+      return {
+        vbW: canvas.width + pad,
+        vbH: canvas.height + pad,
+        body: (
+          <g transform={`translate(${pad / 2} ${pad / 2})`}>
+            <FortiGateLayout model={art} ports={ports} {...common} />
+          </g>
+        ),
+      };
+    }
     switch (device.form_factor) {
-      case 'access-switch-24': case'access-switch-48': case'generic': {
-        const ports = device.ports ?? [];
-        const copperCount = ports.filter((p) => p.type === 'RJ45').length;
-        const w = switchWidth(copperCount);
+      case 'access-switch-24': case 'access-switch-48': case 'generic':
+      case 'firewall': case 'branch-router': case 'wireless-controller': case 'modular-chassis': {
+        const ports = device.modules?.length ? device.modules.flatMap((module) => module.ports) : (device.ports ?? []);
+        const w = switchWidth(cablePorts(ports).length);
         return { vbW: w + pad * 2, vbH: SW_H + pad * 2, body: <SwitchLayout ports={ports} originX={pad} originY={pad} {...common} /> };
       }
       case 'switch-stack': {
         const members = device.members ?? [];
         const current = members.find((m) => m.number === activeMember) ?? members[0];
         if (!current) return { vbW: 400, vbH: 120, body: null };
-        const copperCount = current.ports.filter((p) => p.type === 'RJ45').length;
-        const w = switchWidth(copperCount);
+        const w = switchWidth(cablePorts(current.ports).length);
         return {
           vbW: w + pad * 2,
           vbH: SW_H + pad * 2,
@@ -99,35 +124,11 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
           ),
         };
       }
-      case 'ceiling-ap':
-        return {
-          vbW: AP_W + pad,
-          vbH: AP_H + pad,
-          body: (
-            <g transform={`translate(${pad / 2} ${pad / 2})`}>
-              <ApLayout ports={device.ports ?? []} radios={device.radios ?? []} apState={device.apState ?? 'up'} selectedRadioId={selectedRadioId} onRadioHover={onRadioHover} onRadioSelect={onRadioSelect} {...common} />
-            </g>
-          ),
-        };
-      case 'wireless-controller':
-        return { vbW: APPL_W + pad * 2, vbH: APPL_H + 10 + pad * 2, body: (<g transform={`translate(${pad} ${pad})`}><ControllerLayout ports={device.ports ?? []} {...common} /></g>) };
-      case 'firewall':
-        if (device.model && FW_MODELS[device.model]) {
-          const fwW = fwModelWidth(device.model);
-          return { vbW: fwW + pad * 2, vbH: fwModelHeight(device.model) + pad * 2, body: (<g transform={`translate(${pad} ${pad})`}><FirewallModelLayout ports={device.ports ?? []} model={device.model} {...common} /></g>) };
-        }
-        return { vbW: APPL_W + pad * 2, vbH: APPL_H + 6 + pad * 2, body: (<g transform={`translate(${pad} ${pad})`}><FirewallLayout ports={device.ports ?? []} {...common} /></g>) };
-      case 'branch-router':
-        return { vbW: APPL_W + pad * 2, vbH: APPL_H + 22 + pad * 2, body: (<g transform={`translate(${pad} ${pad})`}><RouterLayout ports={device.ports ?? []} filled={device.moduleSlotFilled} {...common} /></g>) };
-      case 'modular-chassis': {
-        const mods = device.modules ?? [];
-        return { vbW: CH_W + pad * 2 + 12, vbH: chassisHeight(mods) + pad * 2, body: (<g transform={`translate(${pad + 6} ${pad})`}><ModularLayout modules={mods} {...common} /></g>) };
-      }
       default:
         return { vbW: 400, vbH: 120, body: null };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [device, selectedPortId, activeMember, selectedRadioId]);
+  }, [device, art, selectedPortId, activeMember, selectedRadioId]);
 
   const ports = allPorts(device);
   const counts = countPorts(ports);
@@ -141,17 +142,64 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
     acc[p.state] = (acc[p.state] ?? 0) + 1;
     return acc;
   }, {});
-  const memberSummary = (['up', 'down', 'warning', 'fault', 'disabled', 'unknown'] as const)
+  const memberSummary = (['up', 'down', 'not-connected', 'warning', 'fault', 'disabled', 'unknown'] as const)
     .filter((s) => memberCounts[s])
     .map((s) => `${memberCounts[s]} ${STATE_LABEL[s].toLowerCase()}`)
     .join(' · ');
 
+  const stackSwitcher = stackMembers.length > 0 ? (
+    <div className="flex shrink-0 flex-col items-center justify-center gap-1.5" aria-label="Stack members">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Stack</span>
+      <div className="grid grid-cols-4 gap-1.5" role="tablist" aria-label="Stack members">
+        {stackMembers.map((m, i) => {
+          const active = shownMember?.number === m.number;
+          const color = m.health === 'healthy' ? 'var(--success)' : m.health === 'warning' ? 'var(--warning)' : 'var(--destructive)';
+          return (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-label={`Stack member ${m.number}${i === 0 ? ' (master)' : ''}, ${m.health}`}
+              title={`Member ${m.number}${i === 0 ? ' (master)' : ''} · ${m.note}`}
+              onClick={() => {
+                setActiveMember(m.number);
+                onSelectPort?.(null);
+              }}
+              className={`flex h-7 w-7 items-center justify-center rounded border text-xs font-bold font-mono-data transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                active ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground hover:bg-muted'
+              }`}
+              style={{ borderColor: color }}
+            >
+              {m.number}
+            </button>
+          );
+        })}
+      </div>
+      {shownMember && (
+        <p className="mt-1 max-w-[150px] text-center text-[10px] leading-snug text-muted-foreground">
+          Member {shownMember.number} · {shownMember.ports.length} ports
+          {memberSummary ? <><br />{memberSummary}</> : null}
+        </p>
+      )}
+    </div>
+  ) : null;
+
   // A photo or stencil is shown only when its port map sat on the cages in the
   // picture. Anything else, including a failed alignment, uses the drawn faceplate.
-  if (art && art.front && art.source !== 'drawn' && !compact && device.form_factor !== 'switch-stack') {
+  // A stack uses the same faceplate for the member that is selected.
+  const pictured = shownMember
+    ? { ...device, members: undefined, modules: undefined, ports: shownMember.ports }
+    : device;
+  if (art && art.front && art.source !== 'drawn' && !compact && !isFortiGateModel(art) && device.form_factor !== 'ceiling-ap') {
     return (
       <div ref={wrapRef} className={`relative ${className}`}>
-        <RealisticFaceplate device={device} model={art} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} />
+        <div className={stackSwitcher ? 'flex items-stretch gap-3' : ''}>
+          <div className="min-w-0 flex-1">
+            <RealisticFaceplate device={pictured} model={art} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} />
+          </div>
+          {stackSwitcher}
+        </div>
         {hover && <PortTooltip port={hover.port} left={hover.left} top={hover.top} />}
         {radioHover && <RadioTooltip radio={radioHover.radio} left={radioHover.left} top={radioHover.top} />}
       </div>
@@ -165,49 +213,15 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
           viewBox={`0 0 ${vbW} ${vbH}`}
           role="group"
           aria-label={`${device.role} faceplate, ${ports.length} ports: ${summary}${snmpHint ? `. ${snmpHint}` : ''}. Use Tab to move between ports and Enter to open the port graph.`}
-          className={`block h-auto ${stackMembers.length > 0 ? 'min-w-0 flex-1' : 'w-full'} ${compact ? 'max-h-24' : ''}`}
+          width={compact || device.form_factor === 'ceiling-ap' ? undefined : Math.round(FACEPLATE_HEIGHT * (vbW / vbH))}
+          height={compact || device.form_factor === 'ceiling-ap' ? undefined : FACEPLATE_HEIGHT}
+          className={`block max-w-none ${compact ? 'h-auto w-full max-h-24' : device.form_factor === 'ceiling-ap' ? 'h-auto w-full' : ''}`}
           preserveAspectRatio="xMidYMid meet"
         >
           <FaceplateDefs uid={uid} />
           {body}
         </svg>
-        {stackMembers.length > 0 && (
-          <div className="flex shrink-0 flex-col items-center justify-center gap-1.5" aria-label="Stack members">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Stack</span>
-            <div className="grid grid-cols-4 gap-1.5" role="tablist" aria-label="Stack members">
-              {stackMembers.map((m, i) => {
-                const active = shownMember?.number === m.number;
-                const color = m.health === 'healthy' ? 'var(--success)' : m.health === 'warning' ? 'var(--warning)' : 'var(--destructive)';
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    aria-label={`Stack member ${m.number}${i === 0 ? ' (master)' : ''}, ${m.health}`}
-                    title={`Member ${m.number}${i === 0 ? ' (master)' : ''} · ${m.note}`}
-                    onClick={() => {
-                      setActiveMember(m.number);
-                      onSelectPort?.(null);
-                    }}
-                    className={`flex h-7 w-7 items-center justify-center rounded border text-xs font-bold font-mono-data transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                      active ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground hover:bg-muted'
-                    }`}
-                    style={{ borderColor: color }}
-                  >
-                    {m.number}
-                  </button>
-                );
-              })}
-            </div>
-            {shownMember && (
-              <p className="mt-1 max-w-[150px] text-center text-[10px] leading-snug text-muted-foreground">
-                Member {shownMember.number} · {shownMember.ports.length} ports
-                {memberSummary ? <><br />{memberSummary}</> : null}
-              </p>
-            )}
-          </div>
-        )}
+        {stackSwitcher}
       </div>
       {hover && <PortTooltip port={hover.port} left={hover.left} top={hover.top} />}
       {radioHover && <RadioTooltip radio={radioHover.radio} left={radioHover.left} top={radioHover.top} />}
@@ -261,6 +275,7 @@ export function FaceplateLegend() {
           ['down', 'var(--down)'],
           ['warning', 'var(--warning)'],
           ['fault', 'var(--destructive)'],
+          ['not-connected', 'var(--down)'],
           ['disabled', 'var(--disabled)'],
           ['unknown', 'var(--unknown)'],
         ] as const

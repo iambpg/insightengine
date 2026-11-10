@@ -6,36 +6,39 @@
 # by_role_platform is checked first (wireless-controller/ios-xe is a 9800,
 # wireless-controller/aireos is AireOS). Then platform, manufacturer, role.
 # Access points set skip_snmp: Prometheus drops them. Telegraf polls the WLC.
-default_module: if_mib
+default_module: [if_mib, uptime]
 default_auth: ntt_snmpv3_auth
 by_role_platform:
   wireless-controller/aireos:
-    modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro]
+    modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro, uptime]
     auth: ie_wlc_v2
   wireless-controller/ios-xe:
-    modules: [if_mib, cisco_wlc_iosxe, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_env, cisco_mem]
+    modules: [if_mib, cisco_wlc_iosxe, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_env, cisco_mem, uptime]
     auth: ie_wlc_v2
   wireless-controller/iosxe:
-    modules: [if_mib, cisco_wlc_iosxe, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_env, cisco_mem]
+    modules: [if_mib, cisco_wlc_iosxe, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_env, cisco_mem, uptime]
     auth: ie_wlc_v2
   cedge/ios-xe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
   cedge/iosxe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
   sdwan-edge/ios-xe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
   wan-edge/ios-xe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
 by_role:
   access-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
     auth: ntt_snmpv3_auth
   core-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
+    auth: ntt_snmpv3_auth
+  core-switches:
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
     auth: ntt_snmpv3_auth
   distribution-switch:
     modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, system, cisco_cdp, lldp]
@@ -50,17 +53,17 @@ by_role:
     modules: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortigate_est_bandwidth, fortinet_health]
     auth: ntt_snmpv3_auth
   wireless-controller:
-    modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro]
+    modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro, uptime]
     auth: ie_wlc_v2
   # Cisco IOS-XE SD-WAN edge. Not the FortiGate role `sdwan`.
   cedge:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
   sdwan-edge:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
   wan-edge:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
   access-point:
     skip_snmp: true
@@ -73,41 +76,41 @@ by_manufacturer:
     modules: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortinet_health]
     auth: ntt_snmpv3_auth
   palo-alto:
-    modules: [if_mib, paloalto_health]
+    modules: [if_mib, paloalto_health, uptime]
     auth: ntt_snmpv3_auth
   paloalto:
-    modules: [if_mib, paloalto_health]
+    modules: [if_mib, paloalto_health, uptime]
     auth: ntt_snmpv3_auth
 by_platform:
   ios:
-    modules: [if_mib, cisco_env, cisco_mem, cisco_pro, cisco_cdp, lldp, cisco_rttmon]
+    modules: [if_mib, cisco_env, cisco_mem, cisco_pro, cisco_cdp, lldp, cisco_rttmon, uptime]
     auth: ntt_snmpv3_auth
   ios-xe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, uptime]
     auth: ntt_snmpv3_auth
   iosxe:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, uptime]
     auth: ntt_snmpv3_auth
   ios-xe-sdwan:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
     auth: ntt_snmpv3_auth
   nx-os:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_cdp, lldp, cisco_mem]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_cdp, lldp, cisco_mem, uptime]
     auth: ntt_snmpv3_auth
   nxos:
-    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_cdp, lldp, cisco_mem]
+    modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_cdp, lldp, cisco_mem, uptime]
     auth: ntt_snmpv3_auth
   aireos:
-    modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro]
+    modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro, uptime]
     auth: ie_wlc_v2
   asa:
-    modules: [if_mib, cisco_env, cisco_mem, cisco_cdp, lldp]
+    modules: [if_mib, cisco_env, cisco_mem, cisco_cdp, lldp, uptime]
     auth: ntt_snmpv3_auth
   pan-os:
-    modules: [if_mib, paloalto_health]
+    modules: [if_mib, paloalto_health, uptime]
     auth: ntt_snmpv3_auth
   panos:
-    modules: [if_mib, paloalto_health]
+    modules: [if_mib, paloalto_health, uptime]
     auth: ntt_snmpv3_auth
   fortigate:
     modules: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortinet_health]
