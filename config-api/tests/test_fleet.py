@@ -11,7 +11,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ie_config.app import create_app
-from ie_config.fleet import FleetService, classify_device, classify_health, form_factor_for, is_form_key, mask_serial
+from ie_config.fleet import (
+    FleetService, classify_device, classify_health, form_factor_for, inventory_patch, is_form_key,
+    live_inventory, mask_serial,
+)
 from ie_config.settings import Settings
 
 NOW = datetime(2026, 10, 27, 14, 30, tzinfo=timezone.utc).timestamp()
@@ -341,7 +344,7 @@ def test_classify_and_form_helpers():
     assert classify_health(None, None, None, 0, 0, 0) == "unreachable"
     assert classify_health(0, 1, 10, 0, 0, 4) == "unreachable"
     assert classify_health(1, 1, 10, 2, 0, 4) == "critical"
-    assert classify_health(1, 1, 10, 0, 1, 4) == "warning"
+    assert classify_health(1, 1, 10, 0, 1, 4) == "healthy"
     assert classify_health(1, 0, 10, 0, 0, 4) == "warning"
     assert classify_health(1, 1, 10, 0, 0, 4) == "healthy"
     assert classify_health(1, 1, 4000, 0, 0, 4) == "unreachable"
@@ -407,9 +410,10 @@ def test_classify_and_form_helpers():
         },
     )
     assert mislabelled["form"] == "access-switch-48"
-    assert mislabelled["faceplate_source"] == "netdisco"
+    assert mislabelled["faceplate_source"] == "netbox"
+    assert len(mislabelled["ports"]) == 1
     assert mislabelled["comparison"]["differ"] is True
-    assert mislabelled["comparison"]["faceplateSource"] == "netdisco"
+    assert mislabelled["comparison"]["faceplateSource"] == "netbox"
 
 
 def test_requires_session(stack):
@@ -432,6 +436,8 @@ def test_requires_session(stack):
         assert response.json()["error"]["code"] == "unauthorized"
     denied = client.post("/api/v1/alerts/acknowledge", json={"ids": ["fp1"]})
     assert denied.status_code == 401
+    denied_sync = client.post("/api/v1/devices/10/netbox-sync")
+    assert denied_sync.status_code == 401
 
 
 def test_empty_install_is_not_an_error(stack):
@@ -549,7 +555,7 @@ def test_populated_shapes_filters_and_paging(stack):
     device = detail.json()
     assert DETAIL_KEYS <= set(device)
     assert device["hostname"] == "core-1"
-    assert device["serialMasked"] == "ABC••••••456"
+    assert device["serialMasked"] == "ABCDEF123456"
     assert device["firmware"] == "IOS-XE 17.9"
     assert device["faceplate"]["form_factor"] == "modular-chassis"
     ports = device["faceplate"]["modules"][0]["ports"]
@@ -564,7 +570,7 @@ def test_populated_shapes_filters_and_paging(stack):
     causes = device["healthItems"]
     assert any(item["source"] == "alertmanager" and item["severity"] == "critical" for item in causes)
     assert any(item["title"] == "Power supply degraded" and item["severity"] == "critical" for item in causes)
-    assert any(item["title"] == "Interface down" for item in causes)
+    assert any(item["title"] == "Interface input errors" and item["severity"] == "critical" for item in causes)
     assert device["health"] == "critical"
     assert device["backup"]["available"] is False
     assert {row["name"] for row in device["sources"]} >= {"netbox", "prometheus", "alertmanager", "oxidized", "netdisco"}
@@ -853,6 +859,107 @@ def test_missing_token_is_a_clear_error(stack):
     assert TOKEN not in failed.text
     health = stack["client"].get("/api/v1/health").json()
     assert health["upstreams"]["netbox"]["status"] == "unconfigured"
+
+
+def test_access_points_are_not_cable_ports():
+    from ie_config.fleet import _ethernet_ports
+
+    ports = _ethernet_ports([
+        {"name": "GigabitEthernet1/0/1", "type": "1000base-t"},
+        {"name": "Dot11Radio0", "type": "other"},
+        {"name": "ap07", "type": "virtual"},
+        {"name": "CAPWAP", "type": "virtual"},
+        {"name": "AppGigabitEthernet1/0/1", "type": "1000base-t"},
+    ])
+    assert [port["name"] for port in ports] == ["GigabitEthernet1/0/1", "AppGigabitEthernet1/0/1"]
+
+
+def test_live_inventory_prefers_the_device_report():
+    live = live_inventory(
+        {"part": "C9300-48P", "serial": "FOC26425BF2", "firmware": "17.12.05"},
+        {"model": "C9300-24P", "serial": "OLD", "os": "IOS", "os_ver": "16.12.4"},
+        {"model": "C9120", "serial": "APSERIAL", "ios": "17.9.1"},
+    )
+    assert live == {"model": "C9300-48P", "serial": "FOC26425BF2", "firmware": "17.12.05"}
+    fallback = live_inventory({}, {"model": "FG-60F", "serial": "FGT60F", "firmware": "7.2.8"})
+    assert fallback == {"model": "FG-60F", "serial": "FGT60F", "firmware": "7.2.8"}
+    assert live_inventory({"part": "FGT_60F"}, {})["model"] == "FG-60F"
+    long_serial = "F" * 40 + ", " + "G" * 40
+    assert live_inventory({"serial": long_serial}, {})["serial"] == "F" * 40
+    same, updated = inventory_patch(
+        {
+            "serial": "FOC26425BF2",
+            "custom_fields": {"ie_sw_version": "17.12.05"},
+            "device_type": {"id": 8, "model": "C9300-48P"},
+        },
+        live,
+        {"id": 8, "model": "C9300-48P"},
+    )
+    assert same == {}
+    assert updated == []
+    body, changed = inventory_patch(
+        {"serial": "", "custom_fields": {}, "device_type": {"id": 4, "model": "C9300-24P"}},
+        live,
+        {"id": 8, "model": "C9300-48P", "part_number": "C9300-48P"},
+    )
+    assert changed == ["model", "serial", "firmware"]
+    assert body["device_type"] == 8
+    assert body["serial"] == "FOC26425BF2"
+    assert body["custom_fields"]["ie_sw_version"] == "17.12.05"
+    blank, untouched = inventory_patch(
+        {"serial": "KEEP", "custom_fields": {"ie_sw_version": "17.9"}, "device_type": {"id": 4}},
+        {"model": "", "serial": "", "firmware": ""},
+        None,
+    )
+    assert blank == {}
+    assert untouched == []
+
+
+def test_netbox_sync_writes_model_serial_and_firmware(stack, monkeypatch):
+    csrf = _auth(stack)
+    stack["fleet"].cache.put("system:10.1.0.2", {"part": "C9300-48P", "serial": "FOC26425BF2", "firmware": "17.12.05"})
+    calls = []
+
+    def req(self, method, path, body=None):
+        calls.append((method, path, body))
+        if method == "GET":
+            return {
+                "id": 11,
+                "serial": "",
+                "custom_fields": {},
+                "device_type": {
+                    "id": 4,
+                    "model": "C9300-24P",
+                    "part_number": "C9300-24P",
+                    "manufacturer": {"id": 1, "name": "Cisco"},
+                },
+            }
+        return {"id": 11}
+
+    def find(self, manufacturer_id, model, aliases=None):
+        assert manufacturer_id == 1
+        assert model == "C9300-48P"
+        return {"id": 8, "model": "C9300-48P", "part_number": "C9300-48P"}
+
+    def ensure(self, name, label):
+        calls.append(("field", name, label))
+
+    monkeypatch.setattr("ie_config.fleet.NetBoxWriter._req", req)
+    monkeypatch.setattr("ie_config.fleet.NetBoxWriter.find_device_type", find)
+    monkeypatch.setattr("ie_config.fleet.NetBoxWriter._ensure_text_field", ensure)
+    response = stack["client"].post("/api/v1/devices/11/netbox-sync", headers={"X-CSRF-Token": csrf})
+    assert response.status_code == 200, response.text
+    assert response.json()["updated"] == ["model", "serial", "firmware"]
+    patch = [item[2] for item in calls if item[0] == "PATCH"]
+    assert patch == [{
+        "device_type": 8,
+        "serial": "FOC26425BF2",
+        "custom_fields": {"ie_sw_version": "17.12.05"},
+    }]
+    assert ("field", "ie_sw_version", "Software version") in calls
+    audit = stack["client"].get("/api/v1/settings/audit?app=netbox")
+    assert audit.status_code == 200, audit.text
+    assert any(row["action"] == "netbox-sync" and row["result"] == "ok" for row in audit.json()["entries"])
 
 
 def test_access_point_page_and_netbox_approve(stack, monkeypatch):

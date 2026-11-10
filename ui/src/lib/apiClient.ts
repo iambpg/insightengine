@@ -92,6 +92,11 @@ export const api = {
     return (await backend()).getDevice(form);
   },
 
+  // BACKEND: POST /api/v1/devices/{id}/netbox-sync
+  async syncNetbox(deviceId: string) {
+    return (await backend()).syncNetbox(deviceId);
+  },
+
   // BACKEND: GET /api/v1/access-points?wlc=&page=&page_size=&q=
   async listAccessPoints(query: { wlc?: string; site?: string; q?: string; status?: string; page?: number; pageSize?: number }) {
     return (await backend()).listAccessPoints(query);
@@ -145,6 +150,11 @@ export const api = {
   // BACKEND: POST /api/v1/discovery/roles  { ids, role }
   async setDeviceRoles(ids: string[], role: string) {
     return (await backend()).setDeviceRoles(ids, role);
+  },
+
+  // BACKEND: POST /api/v1/discovery/sites  { ids, site }
+  async setDeviceSites(ids: string[], site: string) {
+    return (await backend()).setDeviceSites(ids, site);
   },
 
   // BACKEND: GET /api/v1/netbridge/...

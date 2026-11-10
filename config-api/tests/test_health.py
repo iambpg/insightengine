@@ -29,7 +29,11 @@ def _sd():
 
 
 def test_profiles_cover_the_supported_device_types():
-    assert classify_profile("access-switch", "ios", "Cisco", "WS-C2960X-48FPS-L") == "ios"
+    assert classify_profile("access-switch", "ios", "Cisco", "WS-C2960X-48FPS-L") == "ios-basic"
+    assert classify_profile("core-switch", "ios", "Cisco", "WS-C3560CG-8TC-S") == "ios-basic"
+    assert classify_profile("access-switch", "ios", "Cisco", "C1000-24P-4G-L") == "ios-basic"
+    assert classify_profile("access-switch", "", "Cisco", "SG350-28") == "ios-basic"
+    assert classify_profile("access-switch", "", "Cisco", "SG500-52") == "ios-basic"
     assert classify_profile("access-switch", "ios-xe", "Cisco", "C9300-48P") == "iosxe"
     assert classify_profile("core-switch", "nx-os", "Cisco", "N9K-C93180") == "nxos"
     assert classify_profile("wireless-controller", "aireos", "Cisco", "AIR-CT8540") == "aireos"
@@ -45,6 +49,25 @@ def test_access_point_panel_says_not_supported():
     assert panel["interfacesSupported"] is False
     assert panel["accessPoint"]["status"] == "up"
     assert "Telegraf" in panel["accessPoint"]["note"]
+
+
+def test_compact_cisco_switches_omit_environment_groups():
+    panel = build_health_panel(
+        "ios-basic",
+        memory_ratio=0.91,
+        fan_states=["critical"],
+        psu_states=["critical"],
+        temp_c=80,
+        ports=[{"name": "Gi0/1", "utilisation": 10, "dropsRate": 0, "errors": 0}],
+    )
+    assert [group["id"] for group in panel["groups"]] == ["cpu", "memory"]
+    assert panel["groups"][0]["value"] == "No sample"
+    assert panel["groups"][1]["value"] == "91%"
+    panel = build_health_panel("ios-basic", cpu=8, memory_ratio=0.4)
+    assert [group["value"] for group in panel["groups"]] == ["8%", "40%"]
+    assert all(group["id"] not in ("fan", "psu", "temperature") for group in panel["groups"])
+    assert panel["interfacesSupported"] is True
+    assert panel["interfaces"][0]["name"] == "Gi0/1"
 
 
 def test_2960_temperature_can_be_status_only():
@@ -103,7 +126,7 @@ def test_explain_health_matches_the_badge_and_lists_every_cause():
     })
     assert rich["health"] == "critical"
     titles = [item["title"] for item in rich["items"]]
-    assert "Interface down" in titles
+    assert "Interface down" not in titles
     assert "Interface input errors" in titles
     assert "Critical-path utilization high" in titles
     assert "CPU high" in titles
@@ -117,8 +140,29 @@ def test_explain_health_matches_the_badge_and_lists_every_cause():
     info = next(item for item in rich["items"] if item["title"] == "Firmware notice")
     assert info["severity"] == "info"
     assert info["source"] == "alertmanager"
-    down = next(item for item in rich["items"] if item["title"] == "Interface down")
-    assert down["value"] == "down" and down["threshold"] == "up" and down["since"] == "12s ago"
+    errors = next(item for item in rich["items"] if item["title"] == "Interface input errors")
+    assert errors["severity"] == "critical" and errors["value"] == "120/5m" and errors["since"] == "12s ago"
+    assert errors["effect"] == "critical"
+    quiet = explain_health({
+        "probe": 1,
+        "snmpUp": 1,
+        "lastAgeS": 10,
+        "ports": [
+            {"name": "Gi1/0/8", "state": "not-connected", "errors": 0},
+            {"name": "Gi1/0/9", "state": "disabled", "errors": 0},
+            {"name": "Gi1/0/10", "state": "warning", "errors": 20},
+        ],
+    })
+    assert quiet["health"] == "healthy"
+    assert [item["severity"] for item in quiet["items"]] == ["warning"]
+    assert quiet["items"][0]["effect"] == "healthy"
+    loud = explain_health({
+        "probe": 1,
+        "snmpUp": 1,
+        "lastAgeS": 10,
+        "ports": [{"name": "Gi1/0/11", "state": "fault", "errors": 50}],
+    })
+    assert loud["health"] == "critical"
     only_info = explain_health({"alerts": [{"id": "i", "severity": "info", "title": "Note", "status": "open", "detail": "", "since": "1d"}]})
     assert only_info["health"] == "healthy"
     assert only_info["items"][0]["title"] == "Note"
@@ -191,7 +235,7 @@ def test_module_map_picks_wlc_platform_and_skips_aps():
     assert access.split(",")[:6] == ["if_mib", "cisco_environ", "cisco_mem", "cisco_pro", "cisco_cdp", "lldp"]
     assert access_auth == "ntt_snmpv3_auth"
     palo, _ = choose("core-firewall", "palo-alto", "pan-os", "", "", mapping)
-    assert palo == "if_mib,paloalto_health"
+    assert palo == "if_mib,paloalto_health,uptime"
     forti, _ = choose("sdwan", "fortinet", "fortigate", "", "", mapping)
     assert "fortinet_health" in forti.split(",")
     assert "if_mib_fortigate" in forti.split(",")

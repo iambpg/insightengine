@@ -81,6 +81,15 @@ export function ifaceKeys(name: string): Set<string> {
   return keys;
 }
 
+/**
+ * Port position on a faceplate, ignoring the chassis or stack member.
+ * Gi2/0/48 and GigabitEthernet1/0/48 are the same opening on a member faceplate.
+ */
+export function faceplatePosition(name: string): string {
+  const canonical = canonicalIface(name);
+  return canonical.replace(/^([a-z]+)\d+(?=\/)/, '$1');
+}
+
 export function namesMatch(left: string, right: string): boolean {
   const a = ifaceKeys(left);
   const b = ifaceKeys(right);

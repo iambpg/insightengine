@@ -974,6 +974,26 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         _audit(sf, user, "discovery-role", client_ip(request), "ok", "netdisco", "", "", str(len(result.get("updated") or [])))
         return result
 
+    @app.post("/api/v1/discovery/sites")
+    async def discovery_sites(request: Request):
+        user, _csrf = user_of(request)
+        require_operator(user)
+        try:
+            body = await request.json()
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        ids = body.get("ids")
+        if not isinstance(ids, list) or not ids or len(ids) > 500:
+            raise ApiError(400, "bad_body", "ids must be a list of candidates")
+        try:
+            result = discovery.set_sites(ids, body.get("site") or "")
+        except ValueError as exc:
+            raise ApiError(400, "bad_body", str(exc))
+        _audit(sf, user, "discovery-site", client_ip(request), "ok", "netdisco", "", "", str(len(result.get("updated") or [])))
+        return result
+
     @app.post("/api/v1/discovery/{cid}/approve")
     async def approve(cid: int, request: Request):
         user, _csrf = user_of(request)
@@ -1020,6 +1040,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                 discovery.hostname_suffixes(),
             )
         except Exception as exc:
+            log.warning("netbox approve failed: %s", exc)
             _audit(sf, user, "discovery-approve", client_ip(request), "failed", "netdisco", "", "", exc.__class__.__name__)
             raise ApiError(502, "netbox_error", "NetBox did not accept the device")
         discovery.set_status(cid, "approved", str(created.get("device_id") or ""), json.dumps(created))

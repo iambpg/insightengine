@@ -27,6 +27,7 @@ vi.mock('@/lib/apiMode', () => ({
 vi.mock('@/lib/apiClient', () => ({
   api: {
     getDevice: vi.fn(),
+    syncNetbox: vi.fn(),
     discoverDevice: vi.fn(),
     getDeviceDiscovery: vi.fn(),
     getTelemetryConfig: vi.fn(),
@@ -79,6 +80,7 @@ describe('DeviceDetailView client navigation', () => {
     queryState.value = '';
     window.history.pushState({}, '', '/');
     vi.mocked(api.getDevice).mockReset();
+    vi.mocked(api.syncNetbox).mockReset();
     vi.mocked(api.discoverDevice).mockReset();
     vi.mocked(api.getDeviceDiscovery).mockReset();
   });
@@ -110,7 +112,9 @@ describe('DeviceDetailView client navigation', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'edge-42' })).toBeInTheDocument();
     expect(api.getDevice).toHaveBeenCalledTimes(1);
     expect(api.getDevice).toHaveBeenCalledWith('42');
-    expect(screen.getByRole('button', { name: /Controller config/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Topology/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /IP SLA config/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Controller config/ })).toBeNull();
     expect(screen.queryByText(/unknown device/i)).toBeNull();
   });
 
@@ -195,6 +199,17 @@ describe('DeviceDetailView client navigation', () => {
     expect(api.getDevice).not.toHaveBeenCalledWith('switch-stack');
   });
 
+  it('writes the model, serial number and firmware when Netbox Sync is clicked', async () => {
+    queryState.value = 'id=42';
+    vi.mocked(api.getDevice).mockResolvedValue(device('42', 'edge-42'));
+    vi.mocked(api.syncNetbox).mockResolvedValue({ ok: true, updated: ['model', 'serial', 'firmware'], note: '' });
+    const user = userEvent.setup();
+    render(<DeviceDetailView />);
+    await user.click(await screen.findByRole('button', { name: 'Netbox Sync' }));
+    await waitFor(() => expect(api.syncNetbox).toHaveBeenCalledWith('42'));
+    await waitFor(() => expect(api.getDevice).toHaveBeenCalledTimes(2));
+  });
+
   it('rediscovers the management address and shows the Netdisco error', async () => {
     queryState.value = 'id=42';
     vi.mocked(api.getDevice).mockResolvedValue(device('42', 'edge-42'));
@@ -237,7 +252,7 @@ describe('DeviceDetailView client navigation', () => {
     ];
     vi.mocked(api.getDevice).mockResolvedValue({ ...device('42', 'edge-42'), health: 'critical', healthItems: causes });
     render(<DeviceDetailView />);
-    expect(await screen.findByRole('heading', { name: 'Health' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'What is wrong' })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('PSU failed')).toBeNull());
     expect(screen.getByText('CPU high')).toBeInTheDocument();
     expect(screen.getByText('83%')).toBeInTheDocument();

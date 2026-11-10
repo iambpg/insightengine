@@ -43,6 +43,19 @@ export function approveUnapproved(id: string, body: ApproveBody): { id: string; 
   return { id, ok: true };
 }
 
+export function setSites(ids: string[], site: string): { ok: boolean; site: string; updated: string[] } {
+  const chosen = site.trim();
+  if (!chosen) throw new ApiError(400, 'bad_body', 'site is required');
+  const updated: string[] = [];
+  for (const id of ids) {
+    const device = devices.find((item) => item.id === id);
+    if (!device) continue;
+    device.suggested = { ...device.suggested, site: chosen };
+    updated.push(id);
+  }
+  return { ok: true, site: chosen, updated };
+}
+
 export function setRoles(ids: string[], role: string): { ok: boolean; role: string; updated: string[] } {
   const chosen = role.trim();
   if (!chosen) throw new ApiError(400, 'bad_body', 'role is required');

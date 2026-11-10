@@ -28,6 +28,7 @@ export default function DeviceListView() {
     sortDir: 'asc',
   });
   const [rows, setRows] = useState<DeviceRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [signedOut, setSignedOut] = useState(false);
@@ -44,7 +45,7 @@ export default function DeviceListView() {
 
   useEffect(() => {
     let cancelled = false;
-    setRows(null);
+    setLoading(true);
     setError(null);
     setSignedOut(false);
     api
@@ -61,6 +62,9 @@ export default function DeviceListView() {
         redirectIfSignedOut(failure);
         setSignedOut(failure.signedOut);
         setError(failure.text);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -114,7 +118,7 @@ export default function DeviceListView() {
 
       <HealthStrip activeHealth={query.health} onPick={healthFilter} />
 
-      <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Device table">
+      <section className={`rounded-none border-x-0 border-y border-border bg-card shadow-card ${loading && rows ? 'opacity-70' : ''}`} aria-label="Device table" aria-busy={loading}>
         <div className="flex flex-col gap-3 border-b border-border p-4">
           <div className="flex flex-wrap items-center gap-2">
             <DeviceFilters query={query} onChange={patch} roles={roles} />

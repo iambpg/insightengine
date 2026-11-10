@@ -47,6 +47,19 @@ class NetBoxHandler(BaseHTTPRequestHandler):
         if fail and method == fail[0] and parsed.path.startswith(fail[1]):
             self._json(fail[2], {"detail": "no"})
             return
+        if method == "GET" and parsed.path.startswith("/api/dcim/device-roles/") and getattr(self.server, "roles", None) is not None:
+            query = parse_qs(parsed.query)
+            slug = (query.get("slug") or [""])[0]
+            name = (query.get("name__ie") or query.get("name") or [""])[0]
+            roles = self.server.roles
+            if slug:
+                hits = [row for row in roles if row.get("slug") == slug]
+            elif name:
+                hits = [row for row in roles if str(row.get("name") or "").lower() == name.lower()]
+            else:
+                hits = []
+            self._json(200, {"results": hits})
+            return
         if method == "GET" and parsed.path.startswith("/api/dcim/device-types/") and getattr(self.server, "mode", "") == "alias":
             query = parse_qs(parsed.query)
             model = (query.get("model") or [""])[0]
@@ -224,6 +237,99 @@ def test_pending_removed_when_prefix_goes_away_or_ip_is_in_netbox(tmp_path, monk
         server.shutdown()
 
 
+def test_deleted_netbox_device_can_be_approved_again(tmp_path, monkeypatch):
+    server = _server()
+    try:
+        settings = _settings(tmp_path, "http://127.0.0.1:%s" % server.server_address[1])
+        factory, _engine = make_session_factory(settings.database_url)
+        discovery = Discovery(settings, factory, settings.config_root)
+        with factory() as db:
+            db.add(DiscoveryCandidate(
+                ip="10.1.1.9", name="sw1", status="approved", role_slug="Access switch",
+                site_slug="Test Site", netbox_device_id="55",
+            ))
+            db.commit()
+        (tmp_path / "nd").mkdir()
+        (tmp_path / "nd" / "scan-prefixes.txt").write_text("10.1.1.0/24\n", encoding="utf-8")
+        monkeypatch.setattr(discovery, "fetch_netbox_ips", lambda: set())
+        monkeypatch.setattr(discovery, "fetch_netbox_ids", lambda: set())
+        monkeypatch.setattr(discovery, "fetch_netdisco_devices", lambda: [
+            {"ip": "10.1.1.9", "name": "sw1", "sysdescr": "", "vendor": "Cisco", "model": "C9300", "sysobjectid": ""},
+        ])
+        discovery.refresh_unapproved()
+        rows = discovery.list_unapproved()
+        assert [row["ip"] for row in rows] == ["10.1.1.9"]
+        assert rows[0]["status"] == "pending"
+        assert rows[0]["netboxDeviceId"] is None
+    finally:
+        server.shutdown()
+
+
+def test_discovery_stores_the_hostname_without_the_domain(tmp_path, monkeypatch):
+    server = _server()
+    try:
+        settings = _settings(tmp_path, "http://127.0.0.1:%s" % server.server_address[1])
+        factory, _engine = make_session_factory(settings.database_url)
+        discovery = Discovery(settings, factory, settings.config_root)
+        (tmp_path / "nd").mkdir()
+        (tmp_path / "nd" / "scan-prefixes.txt").write_text("10.1.1.0/24\n", encoding="utf-8")
+        monkeypatch.setattr(discovery, "hostname_suffixes", lambda: [".pnp.co.za", ".verginactive.co.za"])
+        monkeypatch.setattr(discovery, "fetch_netbox_ips", lambda: set())
+        monkeypatch.setattr(discovery, "fetch_netbox_ids", lambda: set())
+        monkeypatch.setattr(discovery, "fetch_netdisco_devices", lambda: [
+            {"ip": "10.1.1.9", "name": "wc00-kenilworth-asw01.pnp.co.za", "sysdescr": "", "vendor": "Cisco", "model": "C9200", "sysobjectid": ""},
+            {"ip": "10.1.1.10", "name": "gym-sw01.verginactive.co.za", "sysdescr": "", "vendor": "Cisco", "model": "C9200", "sysobjectid": ""},
+        ])
+        discovery.refresh_unapproved()
+        by_ip = {row["ip"]: row["name"] for row in discovery.list_unapproved()}
+        assert by_ip["10.1.1.9"] == "wc00-kenilworth-asw01"
+        assert by_ip["10.1.1.10"] == "gym-sw01"
+    finally:
+        server.shutdown()
+
+
+def test_chassis_part_number_is_shown_as_the_model(tmp_path, monkeypatch):
+    server = _server()
+    try:
+        settings = _settings(tmp_path, "http://127.0.0.1:%s" % server.server_address[1])
+        factory, _engine = make_session_factory(settings.database_url)
+        discovery = Discovery(settings, factory, settings.config_root)
+        (tmp_path / "nd").mkdir()
+        (tmp_path / "nd" / "scan-prefixes.txt").write_text("10.1.1.0/24\n", encoding="utf-8")
+        monkeypatch.setattr(discovery, "fetch_netbox_ips", lambda: set())
+        monkeypatch.setattr(discovery, "fetch_netbox_ids", lambda: set())
+        monkeypatch.setattr(discovery, "fetch_netdisco_devices", lambda: [
+            {"ip": "10.1.1.9", "name": "fg", "sysdescr": "", "vendor": "fortinet", "model": "60F", "part": "FGT_60F", "sysobjectid": ""},
+            {"ip": "10.1.1.10", "name": "sw", "sysdescr": "", "vendor": "cisco", "model": "296024PC", "part": "WS-C2960-24PC-L", "sysobjectid": ""},
+        ])
+        discovery.refresh_unapproved()
+        by_ip = {row["ip"]: row["model"] for row in discovery.list_unapproved()}
+        assert by_ip["10.1.1.9"] == "FG-60F"
+        assert by_ip["10.1.1.10"] == "WS-C2960-24PC-L"
+    finally:
+        server.shutdown()
+
+
+def test_approve_looks_up_the_device_type_by_part_number(tmp_path):
+    server = _server()
+    try:
+        base = "http://127.0.0.1:%s" % server.server_address[1]
+        writer = NetBoxWriter(base, {"Authorization": "Bearer nbt_citoken12345.secret"})
+        writer.approve_device(
+            {"ip": "10.1.1.9", "name": "fg", "vendor": "fortinet", "model": "FGT_60F", "site": "Test Site"},
+            {"role": "firewall"},
+            {},
+        )
+        looked = [
+            call[2].get("part_number", [""])[0]
+            for call in server.calls
+            if call[0] == "GET" and call[1].startswith("/api/dcim/device-types")
+        ]
+        assert looked[0] == "FG-60F"
+    finally:
+        server.shutdown()
+
+
 def test_approve_creates_interface_then_ip_then_primary_and_rolls_back(tmp_path):
     server = _server()
     try:
@@ -277,6 +383,39 @@ def test_rendered_deployment_writes_domain_suffix_from_the_environment(tmp_path,
     assert "- '.pnp.co.za'" in text
     assert "- '.example.net'" in text
     assert text.index("domain_suffix:") < text.index("snmptimeout:")
+
+
+def test_approve_reuses_a_role_whose_slug_is_not_the_display_name(tmp_path):
+    server = _server()
+    server.roles = [{"id": 5, "name": "Core Switch", "slug": "core-switches"}]
+    try:
+        base = "http://127.0.0.1:%s" % server.server_address[1]
+        writer = NetBoxWriter(base, {"Authorization": "Bearer nbt_citoken12345.secret"})
+        created = writer.approve_device(
+            {
+                "ip": "10.129.32.1",
+                "name": "wc18.cc30-claremont-1rsw01",
+                "vendor": "Cisco",
+                "model": "WS-C3560CG-8TC-S",
+                "site": "wc18",
+            },
+            {"role": "Core Switch"},
+            {},
+        )
+        assert created["device_id"] == 10
+        role_posts = [
+            call for call in server.calls
+            if call[0] == "POST" and call[1].startswith("/api/dcim/device-roles")
+        ]
+        assert role_posts == []
+        device = json.loads(next(
+            call[3] for call in server.calls
+            if call[0] == "POST" and call[1].startswith("/api/dcim/devices")
+        ))
+        assert device["name"] == "wc18.cc30-claremont-1rsw01"
+        assert device["role"] == 5
+    finally:
+        server.shutdown()
 
 
 def test_approve_strips_the_domain_suffix_from_the_netbox_name(tmp_path, monkeypatch):

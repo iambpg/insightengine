@@ -49,7 +49,7 @@ export default function CollapsiblePanel({
 
   return (
     <section className={className} aria-labelledby={headingId}>
-      <div className={`flex flex-wrap items-center gap-2 border-b border-border ${headerClassName}`}>
+      <div className={`flex shrink-0 flex-wrap items-center gap-2 border-b border-border ${headerClassName}`}>
         <Heading id={headingId} className={`min-w-0 flex-1 text-base font-semibold ${headingLevel === 'h3' ? 'text-sm' : ''}`}>
           <button
             type="button"

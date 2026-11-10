@@ -21,28 +21,46 @@ interface SwitchProps extends LayoutCommon {
   stackPorts?: boolean;
 }
 
-// Lays out N copper ports in paired rows (top/bottom), plus up to 4 uplink cages at the right.
-// Works for any count: 24, 48 or arbitrary.
+// Cable ports sit in two rows, odd above even, the way a switch face is built.
 export const SW_H = 96;
 
-// Uplink cages are 22px x1.15 = 25.3px wide; a 34px pitch leaves a clean ~9px gap.
-const UP_PITCH = 34;
+const CABLE_TYPES = new Set(['RJ45', 'SFP', 'SFP+', 'QSFP', 'MGMT']);
 
-export function switchWidth(copperCount: number) {
-  const cols = Math.ceil(copperCount / 2);
+function portNumbers(name: string): number[] {
+  const found = name.match(/\d+/g);
+  return found ? found.map((part) => Number(part)) : [];
+}
+
+export function cablePorts(ports: PortInfo[]): PortInfo[] {
+  const copper = ports.filter((port) => port.type === 'RJ45' || port.type === 'MGMT');
+  const fiber = ports.filter((port) => port.type === 'SFP' || port.type === 'SFP+' || port.type === 'QSFP');
+  const rest = ports.filter((port) => !CABLE_TYPES.has(port.type) && port.type !== 'CONSOLE' && port.type !== 'USB');
+  const ordered = [...copper, ...fiber, ...rest];
+  return ordered.sort((left, right) => {
+    const a = portNumbers(left.name);
+    const b = portNumbers(right.name);
+    const length = Math.max(a.length, b.length);
+    for (let index = 0; index < length; index += 1) {
+      const delta = (a[index] ?? -1) - (b[index] ?? -1);
+      if (delta) return delta;
+    }
+    return left.name.localeCompare(right.name);
+  });
+}
+
+export function switchWidth(portCount: number) {
+  const cols = Math.max(1, Math.ceil(portCount / 2));
   const groups = Math.ceil(cols / 4);
-  return 150 + cols * 24 + (groups - 1) * 6 + 158;
+  return 150 + cols * 24 + Math.max(0, groups - 1) * 6 + 48;
 }
 
 export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect, originX = 0, originY = 0, memberNumber, memberHealthColor, stackPorts }: SwitchProps) {
-  const copper = ports.filter((p) => p.type === 'RJ45');
-  const uplinks = ports.filter((p) => p.type !== 'RJ45');
-  const cols = Math.ceil(copper.length / 2);
-  const W = switchWidth(copper.length);
+  const laid = cablePorts(ports);
+  const cols = Math.max(1, Math.ceil(laid.length / 2));
+  const W = switchWidth(laid.length);
   const startX = 74;
 
   const colX = (c: number) => startX + c * 24 + Math.floor(c / 4) * 6;
-  const upStart = startX + cols * 24 + Math.floor(cols / 4) * 6 + 20;
 
   const anyFault = ports.some((p) => p.state === 'fault');
   const anyWarn = ports.some((p) => p.state === 'warning');
@@ -70,15 +88,15 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
             { label: 'SYS', color: anyFault ? 'var(--destructive)' : anyWarn ? 'var(--warning)' : 'var(--success)', blink: anyWarn && !anyFault },
             { label: 'PWR', color: 'var(--success)' },
             { label: 'STK', color: stackPorts ? 'var(--teal)' : 'var(--down)' },
-            { label: 'POE', color: copper.some((p) => p.poe) ? 'var(--success)' : 'var(--down)' },
+            { label: 'POE', color: laid.some((p) => p.poe) ? 'var(--success)' : 'var(--down)' },
           ]}
         />
         <EngravedText x={34} y={SW_H - 8} size={4.8}>{memberNumber ? `MEMBER ${memberNumber}` : 'ACCESS SWITCH'}</EngravedText>
 
-        {/* copper rows: odd numbers on top, even on bottom (as on real devices) */}
+        {/* Two rows: port 1 above port 2, then the next pair, including fiber on the same baselines. */}
         {Array.from({ length: cols }, (_, c) => {
-          const top = copper[c * 2];
-          const bottom = copper[c * 2 + 1];
+          const top = laid[c * 2];
+          const bottom = laid[c * 2 + 1];
           return (
             <React.Fragment key={`${uid}-col-${c + 1}`}>
               {top && (
@@ -91,32 +109,11 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
                 {c * 2 + 1}
               </text>
               <text x={colX(c) + 9.5} y={SW_H - 8} textAnchor="middle" fontSize={5} fill="var(--down)" fontFamily="var(--font-mono)" aria-hidden="true">
-                {c * 2 + 2}
+                {bottom ? c * 2 + 2 : ''}
               </text>
             </React.Fragment>
           );
         })}
-
-        {/* uplinks */}
-        {uplinks.length > 0 && (
-          <>
-            <line x1={upStart - 10} y1={14} x2={upStart - 10} y2={SW_H - 14} stroke="var(--metal-hi)" strokeOpacity={0.5} />
-            <EngravedText x={upStart} y={14} size={5}>UPLINK</EngravedText>
-            {uplinks.map((p, i) => (
-              <PortGlyph
-                key={p.id}
-                port={p}
-                x={upStart + (i % 2) * UP_PITCH}
-                y={22 + Math.floor(i / 2) * 32}
-                size={22}
-                uid={uid}
-                selected={selectedId === p.id}
-                onHover={onHover}
-                onSelect={onSelect}
-              />
-            ))}
-          </>
-        )}
 
         {/* stack ports: two cages on the right edge (STACK 1 top, STACK 2 bottom) */}
         {stackPorts && (

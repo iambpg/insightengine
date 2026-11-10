@@ -30,13 +30,20 @@ function rate(value: number | null): string {
   return value.toFixed(2);
 }
 
+function healthSubtitle(panel: DeviceHealthPanel): string {
+  const sensors = panel.groups.map((group) => group.label.toLowerCase());
+  if (sensors.length === 0) return `${panel.profileLabel}. Busiest interfaces.`;
+  return `${panel.profileLabel}. ${sensors.join(', ')} and the busiest interfaces.`;
+}
+
 export default function HealthPanel({ panel }: { panel: DeviceHealthPanel }) {
   return (
     <CollapsiblePanel
       title="Health"
       titleId="health-panel-title"
-      subtitle={`${panel.profileLabel}. Memory, fans, power, temperature and the busiest interfaces.`}
+      subtitle={healthSubtitle(panel)}
     >
+      {panel.groups.length > 0 ? (
       <ul className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
         {panel.groups.map((group) => (
           <li key={group.id} className="bg-card px-4 py-3">
@@ -46,6 +53,7 @@ export default function HealthPanel({ panel }: { panel: DeviceHealthPanel }) {
           </li>
         ))}
       </ul>
+      ) : null}
       {panel.wlc ? (
         <div className="border-t border-border px-4 py-3 text-sm">
           <p className="font-medium">Controller summary</p>

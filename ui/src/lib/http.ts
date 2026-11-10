@@ -7,8 +7,16 @@ interface RequestInitJson {
   form?: FormData;
 }
 
+const GET_CACHE_MS = 15000;
+const getCache = new Map<string, { at: number; data: unknown }>();
+
 export async function request<T>(path: string, init?: RequestInitJson): Promise<T> {
   const method = init?.method ?? 'GET';
+  if (method !== 'GET' && method !== 'HEAD') getCache.clear();
+  if (method === 'GET') {
+    const hit = getCache.get(path);
+    if (hit && Date.now() - hit.at < GET_CACHE_MS) return hit.data as T;
+  }
   const headers: Record<string, string> = { Accept: 'application/json' };
   const writing = method !== 'GET' && method !== 'HEAD';
   if (writing) {
@@ -51,6 +59,7 @@ export async function request<T>(path: string, init?: RequestInitJson): Promise<
   if (!response.ok) {
     throw errorFrom(response.status, data, response.statusText);
   }
+  if (method === 'GET') getCache.set(path, { at: Date.now(), data });
   return data as T;
 }
 

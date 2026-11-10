@@ -17,6 +17,7 @@ vi.mock('@/lib/apiClient', () => ({
     getDeviceDiscovery: vi.fn(),
     startScan: vi.fn(),
     setDeviceRoles: vi.fn(),
+    setDeviceSites: vi.fn(),
   },
 }));
 
@@ -55,6 +56,8 @@ describe('NotInNetBoxView device discover', () => {
     vi.mocked(api.startScan).mockReset();
     vi.mocked(api.setDeviceRoles).mockReset();
     vi.mocked(api.setDeviceRoles).mockResolvedValue({ ok: true, role: 'Core switch', updated: ['disc-1'] });
+    vi.mocked(api.setDeviceSites).mockReset();
+    vi.mocked(api.setDeviceSites).mockResolvedValue({ ok: true, site: 'Lab', updated: ['disc-1'] });
     vi.mocked(api.discoveryCatalog).mockResolvedValue({ roles: [], sites: [], platforms: [] });
     vi.mocked(api.listScans).mockResolvedValue([]);
     vi.mocked(api.listDiscovered).mockResolvedValue([]);
@@ -131,7 +134,11 @@ describe('NotInNetBoxView device discover', () => {
         { name: 'Access switch', slug: 'access-switch' },
         { name: 'Core switch', slug: 'core-switch' },
       ],
-      sites: ['Lab'],
+      sites: ['Lab', 'DC'],
+      siteChoices: [
+        { name: 'Lab', slug: 'lab' },
+        { name: 'DC', slug: 'dc' },
+      ],
       platforms: [],
     });
     vi.mocked(api.listDiscovered).mockResolvedValue([foundDevice()]);
@@ -145,5 +152,12 @@ describe('NotInNetBoxView device discover', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Role for selected devices' }), 'Access switch');
     await user.click(screen.getByRole('button', { name: 'Set role for selected' }));
     expect(api.setDeviceRoles).toHaveBeenCalledWith(['disc-1'], 'Access switch');
+    const site = screen.getByRole('combobox', { name: 'Suggested site for sw-new' });
+    expect(site).toHaveValue('Lab');
+    await user.selectOptions(site, 'DC');
+    expect(api.setDeviceSites).toHaveBeenCalledWith(['disc-1'], 'DC');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Site for selected devices' }), 'Lab');
+    await user.click(screen.getByRole('button', { name: 'Set site for selected' }));
+    expect(api.setDeviceSites).toHaveBeenCalledWith(['disc-1'], 'Lab');
   });
 });

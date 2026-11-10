@@ -16,11 +16,13 @@ describe('HealthCauses', () => {
     const user = userEvent.setup();
     const onFilter = vi.fn();
     const { rerender } = render(<HealthCauses items={items} health="critical" filter="critical" onFilter={onFilter} />);
-    expect(screen.getByRole('heading', { name: 'Health' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What is wrong' })).toBeInTheDocument();
     expect(screen.getByText('Probe failed')).toBeInTheDocument();
     expect(screen.queryByText('CPU high')).toBeNull();
     expect(screen.getByText('0')).toBeInTheDocument();
-    expect(screen.getByText('prometheus')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Probe failed/ }));
+    expect(screen.getByText(/The ICMP probe is not succeeding/)).toBeInTheDocument();
+    expect(screen.getByText(/This comes from Prometheus/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Warning/ }));
     expect(onFilter).toHaveBeenCalledWith('warning');
     rerender(<HealthCauses items={items} health="critical" filter="warning" onFilter={onFilter} />);

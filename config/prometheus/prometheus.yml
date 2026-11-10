@@ -184,7 +184,7 @@ scrape_configs:
     sample_limit: 20000
     metrics_path: /snmp
     params:
-      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
@@ -233,7 +233,7 @@ scrape_configs:
     sample_limit: 50000
     metrics_path: /snmp
     params:
-      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp]
+      module: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd
@@ -302,7 +302,7 @@ scrape_configs:
     params:
       # System stats only. Per-AP tables are Telegraf. __meta_netbox_snmp_module
       # replaces this list: aireos vs ios-xe (Catalyst 9800) from the module map.
-      module: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro]
+      module: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro, uptime]
       auth: [ie_wlc_v2]
     http_sd_configs:
       - <<: *netbox_sd
@@ -315,7 +315,7 @@ scrape_configs:
     scrape_timeout: 60s
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [if_mib, uptime]
       auth: [ntt_snmpv3_auth]
     http_sd_configs:
       - <<: *netbox_sd

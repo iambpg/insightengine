@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { StackMember } from '@/lib/types';
-import SwitchLayout, { SW_H, switchWidth, type LayoutCommon } from './SwitchLayout';
+import SwitchLayout, { SW_H, cablePorts, switchWidth, type LayoutCommon } from './SwitchLayout';
 
 interface StackProps extends LayoutCommon {
   members: StackMember[];
@@ -17,7 +17,7 @@ const HEALTH_COLOR = {
 };
 
 export function stackSize(members: StackMember[]) {
-  const w = switchWidth(members[0]?.ports.filter((p) => p.type === 'RJ45').length ?? 24);
+  const w = switchWidth(cablePorts(members[0]?.ports ?? []).length || 24);
   return { w: w + 36, h: members.length * SW_H + (members.length - 1) * GAP + 6 };
 }
 
@@ -39,8 +39,7 @@ function Cable({ d, x1, y1, x2, y2, id }: { d: string; x1: number; y1: number; x
 }
 
 export default function StackLayout({ members, uid, selectedId, onHover, onSelect }: StackProps) {
-  const copperLen = members[0]?.ports.filter((p) => p.type === 'RJ45').length ?? 24;
-  const w = switchWidth(copperLen);
+  const w = switchWidth(cablePorts(members[0]?.ports ?? []).length || 24);
   const rowY = (i: number) => i * (SW_H + GAP);
   // stack-port centres on the right edge of each member
   const topY = (i: number) => rowY(i) + 22 + 11;

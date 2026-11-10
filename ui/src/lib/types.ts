@@ -1,4 +1,4 @@
-export type PortState = 'up' | 'down' | 'warning' | 'fault' | 'disabled' | 'unknown';
+export type PortState = 'up' | 'down' | 'warning' | 'fault' | 'disabled' | 'unknown' | 'not-connected';
 export type PortType = 'RJ45' | 'SFP' | 'SFP+' | 'QSFP' | 'MGMT' | 'CONSOLE' | 'USB';
 export type DeviceHealth = 'healthy' | 'warning' | 'critical' | 'unreachable';
 
@@ -9,6 +9,8 @@ export interface PortNeighbour {
   device: string;
   port: string;
   deviceId?: string;
+  role?: string;
+  formFactor?: string;
   source?: string;
 }
 
@@ -25,6 +27,8 @@ export interface PortInfo {
   neighbour?: PortNeighbour;
   poe?: boolean;
   label?: string;
+  names?: string[];
+  description?: string;
 }
 
 export interface RadioInfo {
@@ -151,6 +155,7 @@ export interface HealthCause {
   source: string;
   since: string;
   target: string;
+  effect?: 'critical' | 'warning' | 'healthy' | 'unreachable';
 }
 
 export interface HealthCheck {
@@ -291,6 +296,7 @@ export interface DeviceInterfaceRow {
   enabled: boolean;
   mac: string;
   description: string;
+  names?: string[];
 }
 
 export interface DeviceAddressRow {
@@ -328,19 +334,33 @@ export interface InventorySide {
   serial: string;
   os: string;
   portCount: number;
+  site?: string;
+  firmware?: string;
+  partNumber?: string;
 }
 
 export interface SourceComparison {
   netbox: InventorySide;
   netdisco: InventorySide;
+  observed?: Pick<InventorySide, 'model' | 'serial' | 'firmware'>;
   faceplateSource: 'netbox' | 'netdisco' | 'prometheus' | 'none' | string;
   differ: boolean;
+}
+
+export interface NetboxSyncResult {
+  ok: boolean;
+  updated: string[];
+  note?: string;
+  hostname?: string;
 }
 
 export interface DeviceDetailData {
   id: string;
   hostname: string;
   role: string;
+  roleColor?: string;
+  reachable?: boolean;
+  partNumber?: string;
   site: string;
   siteId?: string;
   mgmtIp: string;

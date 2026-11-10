@@ -19,6 +19,12 @@ const KIND_ICON: Record<HardwareItem['kind'], string> = {
   storage: 'ServerIcon',
 };
 
+function hardwareSubtitle(items: HardwareItem[] | null): string {
+  if (!items) return 'CPU, memory, power and cooling';
+  const environment = items.some((item) => item.kind === 'power' || item.kind === 'fan' || item.kind === 'temp');
+  return environment ? 'CPU, memory, power and cooling' : 'CPU and memory';
+}
+
 export default function HardwareHealth({ items }: { items: HardwareItem[] | null }) {
   const ok = items?.filter((i) => i.status === 'ok').length ?? 0;
   const total = items?.length ?? 0;
@@ -26,8 +32,9 @@ export default function HardwareHealth({ items }: { items: HardwareItem[] | null
     <CollapsiblePanel
       title="Hardware health"
       titleId="hw-title"
-      subtitle="Power, cooling, temperature and resources"
-      className="h-full overflow-hidden rounded-lg border border-border bg-background shadow-card"
+      subtitle={hardwareSubtitle(items)}
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-card"
+      bodyClassName="scroll-thin min-h-0 flex-1 overflow-y-auto"
       meta={
         items ? (
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular ${ok === total ? 'bg-success/10 text-success' : 'bg-warning/15 text-foreground'}`}>

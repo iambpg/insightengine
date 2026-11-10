@@ -1,19 +1,22 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import { PortStateBadge } from '@/components/ui/Badge';
 import GraphPanel from '@/components/charts/GraphPanel';
 import { api } from '@/lib/apiClient';
-import { isMockMode } from '@/lib/apiMode';
-import type { PortInfo } from '@/lib/types';
+import { devicePath, isMockMode } from '@/lib/apiMode';
+import type { PortInfo, PortNeighbour } from '@/lib/types';
+import { portNameLine } from '@/components/faceplate/portText';
 
 const STATE_TEXT: Record<string, string> = {
   up: 'Link up, passing traffic',
   down: 'Link down, no carrier detected',
-  warning: 'Link up with warnings, check utilisation or errors',
-  fault: 'Port fault, link unstable or failed',
-  disabled: 'Administratively disabled',
+  warning: 'At least 20 input errors in 5 minutes, or utilisation is high',
+  fault: 'At least 50 input errors in 5 minutes',
+  disabled: 'Administratively disabled. Nothing is faulty.',
+  'not-connected': 'Admin state is enabled and nothing is connected.',
   unknown: 'No SNMP oper state for this port yet',
 };
 
@@ -42,14 +45,22 @@ function mediaFor(type: string): string {
   return type;
 }
 
-function neighbourKind(name: string): { label: string; icon: string } {
-  const n = name.toLowerCase();
-  if (n.includes('ap')) return { label: 'Access point', icon: 'WifiIcon' };
-  if (n.includes('fw') || n.includes('firewall')) return { label: 'Firewall', icon: 'ShieldCheckIcon' };
-  if (n.includes('rtr') || n.includes('router') || n.includes('br')) return { label: 'Router', icon: 'ArrowsRightLeftIcon' };
-  if (n.includes('wlc') || n.includes('ctrl')) return { label: 'Wireless controller', icon: 'SignalIcon' };
-  if (n.includes('core') || n.includes('dist') || n.includes('sw') || n.includes('chassis')) return { label: 'Switch', icon: 'ServerIcon' };
-  return { label: 'Network device', icon: 'CubeIcon' };
+function neighbourKind(name: string, role?: string): { label: string; icon: string } {
+  const n = `${role || ''} ${name}`.toLowerCase();
+  if (n.includes('access point') || /\bap\b/.test(n) || n.includes('-ap')) return { label: 'Access point', icon: 'WifiIcon' };
+  if (n.includes('sdwan') || n.includes('sd-wan')) return { label: 'SD-WAN', icon: 'ArrowsRightLeftIcon' };
+  if (n.includes('firewall') || n.includes('fortigate') || n.includes('palo')) return { label: 'Firewall', icon: 'ShieldCheckIcon' };
+  if (n.includes('router')) return { label: 'Router', icon: 'ArrowsRightLeftIcon' };
+  if (n.includes('wireless') || n.includes('wlc')) return { label: 'Wireless controller', icon: 'SignalIcon' };
+  if (n.includes('switch') || n.includes('chassis')) return { label: 'Switch', icon: 'ServerIcon' };
+  return { label: role || 'Network device', icon: 'CubeIcon' };
+}
+
+/** A neighbour opens its device page only when that device is one we monitor. */
+function neighbourHref(neighbour: PortNeighbour): string {
+  const id = (neighbour.deviceId || '').trim();
+  if (!id) return '';
+  return devicePath(id, neighbour.formFactor || 'generic');
 }
 
 export default function PortSidePanel({ port, onClose }: { port: PortInfo; onClose: () => void }) {
@@ -64,15 +75,19 @@ export default function PortSidePanel({ port, onClose }: { port: PortInfo; onClo
   const lastChange = isLive ? `${1 + (seed % 40)} d ${seed % 24} h ago` : `${1 + (seed % 55)} min ago`;
   const vlan = port.state === 'disabled' ? 'n/a' : 10 + (seed % 5) * 10;
   const nb = port.neighbour;
-  const kind = nb ? neighbourKind(nb.device) : null;
-  const errTone = port.errors > 100 ? 'bad' : port.errors > 0 ? 'warn' : undefined;
+  const kind = nb ? neighbourKind(nb.device, nb.role) : null;
+  const neighbourLink = nb ? neighbourHref(nb) : '';
+  const errTone = port.errors >= 50 ? 'bad' : port.errors >= 20 ? 'warn' : undefined;
 
   return (
     <aside className="h-full space-y-4 p-4" aria-label={`Port ${port.name} details`}>
       <header className="flex items-start justify-between gap-3">
         <div>
           <p className="label-caps text-muted-foreground">Selected port</p>
-          <h3 className="font-mono-data text-xl font-semibold">{port.name}</h3>
+          <h3 className="font-mono-data text-xl font-semibold break-all">{portNameLine(port)}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Description <span className="font-mono-data text-foreground">{port.description || '—'}</span>
+          </p>
           <div className="mt-1.5 flex items-center gap-2">
             <PortStateBadge state={port.state} />
             <span className="font-mono-data text-xs text-muted-foreground">{port.type} · {port.speed}</span>
@@ -96,7 +111,13 @@ export default function PortSidePanel({ port, onClose }: { port: PortInfo; onClo
               <Icon name={kind.icon as any} size={18} />
             </span>
             <div className="min-w-0">
-              <p className="truncate font-mono-data text-sm font-semibold" title={nb.device}>{nb.device}</p>
+              {neighbourLink ? (
+                <Link href={neighbourLink} className="block truncate font-mono-data text-sm font-semibold text-primary hover:underline" title={`Open ${nb.device}`}>
+                  {nb.device}
+                </Link>
+              ) : (
+                <p className="truncate font-mono-data text-sm font-semibold" title={nb.device}>{nb.device}</p>
+              )}
               <p className="text-xs text-muted-foreground">{kind.label} · remote port <span className="font-mono-data text-foreground">{nb.port}</span></p>
               <p className="mt-1 text-xs text-muted-foreground">Discovered via LLDP</p>
             </div>
@@ -104,7 +125,11 @@ export default function PortSidePanel({ port, onClose }: { port: PortInfo; onClo
         ) : (
           <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
             <Icon name="MinusCircleIcon" size={16} />
-            {port.state === 'disabled' ? 'Port is disabled, nothing is connected.' : 'No neighbour seen on this port.'}
+            {port.state === 'disabled'
+              ? 'Administratively disabled. Nothing is faulty.'
+              : port.state === 'not-connected'
+                ? 'Nothing is connected to this port.'
+                : 'No neighbour seen on this port.'}
           </p>
         )}
       </section>

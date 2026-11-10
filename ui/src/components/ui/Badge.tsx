@@ -71,9 +71,10 @@ export const PORT_STATE_META: Record<PortState, { tone: Tone; icon: string; labe
   up: { tone: 'success', icon: 'CheckCircleIcon', label: 'Up', glyph: '●' },
   down: { tone: 'neutral', icon: 'MinusCircleIcon', label: 'Down', glyph: '○' },
   warning: { tone: 'warning', icon: 'ExclamationTriangleIcon', label: 'Warning', glyph: '▲' },
-  fault: { tone: 'destructive', icon: 'XCircleIcon', label: 'Fault', glyph: '✕' },
+  fault: { tone: 'destructive', icon: 'XCircleIcon', label: 'Critical', glyph: '✕' },
   disabled: { tone: 'info', icon: 'NoSymbolIcon', label: 'Disabled', glyph: '▬' },
   unknown: { tone: 'neutral', icon: 'QuestionMarkCircleIcon', label: 'Unknown', glyph: '?' },
+  'not-connected': { tone: 'neutral', icon: 'MinusCircleIcon', label: 'Not connected', glyph: '○' },
 };
 
 export function PortStateBadge({ state }: { state: PortState }) {
