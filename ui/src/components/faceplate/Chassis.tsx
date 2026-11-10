@@ -14,7 +14,7 @@ interface ChassisProps {
 // Rack-mount body: brushed dark metal, bevel highlight, rack ears and soft shadow.
 export default function ChassisBody({ x, y, w, h, uid, rx = 5, ears = true, children }: ChassisProps) {
   return (
-    <g transform={`translate(${x} ${y})`}>
+    <g data-chassis="" transform={`translate(${x} ${y})`}>
       <g filter={`url(#${uid}-shadow)`}>
         <rect width={w} height={h} rx={rx} fill={`url(#${uid}-metal)`} />
       </g>

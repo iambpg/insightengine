@@ -352,7 +352,35 @@ def test_classify_and_form_helpers():
     assert form_factor_for("access-switch", "Access Switch", "C9300-48P") == ("Access switch", "access-switch-48")
     assert form_factor_for("core-switch", "Core", "C9500")[1] == "modular-chassis"
     assert form_factor_for("sdwan", "SD-WAN", "FG-60F") == ("Firewall", "firewall")
-    assert form_factor_for("distribution-switch", "Distribution", "stack")[1] == "switch-stack"
+    assert form_factor_for("distribution-switch", "Distribution", "C9300-48P")[1] == "access-switch-48"
+    single = classify_device(
+        {
+            "role_slug": "distribution-switch",
+            "role_name": "Distribution",
+            "model": "C9300-48P",
+            "interfaces": [
+                {"name": "GigabitEthernet1/0/1", "type": "1000base-t", "enabled": True},
+                {"name": "GigabitEthernet1/0/48", "type": "1000base-t", "enabled": True},
+                {"name": "StackPort1", "type": "1000base-t", "enabled": True},
+            ],
+        },
+        None,
+    )
+    assert single["form"] == "access-switch-48"
+    real_stack = classify_device(
+        {
+            "role_slug": "access-switch",
+            "role_name": "Access Switch",
+            "model": "C9300-48P",
+            "interfaces": [
+                {"name": "GigabitEthernet1/0/1", "type": "1000base-t", "enabled": True},
+                {"name": "GigabitEthernet2/0/1", "type": "1000base-t", "enabled": True},
+                {"name": "StackPort1", "type": "1000base-t", "enabled": True},
+            ],
+        },
+        None,
+    )
+    assert real_stack["form"] == "switch-stack"
     assert is_form_key("firewall") is True
     assert is_form_key("access-switch-48") is True
     assert is_form_key("fg-edge") is False

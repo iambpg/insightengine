@@ -7,7 +7,7 @@ interface RequestInitJson {
   form?: FormData;
 }
 
-const GET_CACHE_MS = 15000;
+const GET_CACHE_MS = 60000;
 const getCache = new Map<string, { at: number; data: unknown }>();
 
 export async function request<T>(path: string, init?: RequestInitJson): Promise<T> {
