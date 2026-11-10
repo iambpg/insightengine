@@ -269,7 +269,6 @@ export default function DeviceDetailView() {
                 <Meta label="Last poll" value={device.lastPoll} mono />
                 <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
-              <ParentBlock device={device} />
             </div>
             <div className="grid shrink-0 grid-cols-2 gap-2">
               <button
@@ -415,17 +414,20 @@ export default function DeviceDetailView() {
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_auto]">
           <div className="min-w-0 p-4">
-            <div className="scroll-thin overflow-x-auto rounded-lg bg-gradient-to-b from-secondary to-background p-3">
-              {device ? (
-                <div
-                  className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex w-max min-w-full items-center'}
-                  style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
-                >
-                  <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} />
-                </div>
-              ) : (
-                <Skeleton className="h-[168px] w-full" />
-              )}
+            <div className="flex items-center gap-4 rounded-lg bg-gradient-to-b from-secondary to-background p-3">
+              <div className="scroll-thin min-w-0 flex-1 overflow-x-auto">
+                {device ? (
+                  <div
+                    className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex w-max min-w-full items-center'}
+                    style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
+                  >
+                    <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} />
+                  </div>
+                ) : (
+                  <Skeleton className="h-[168px] w-full" />
+                )}
+              </div>
+              {device ? <ParentBlock device={device} /> : null}
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <FaceplateLegend />
@@ -542,7 +544,7 @@ function ParentBlock({ device }: { device: DeviceDetailData }) {
   const children = device.children ?? [];
   if (!parent && !device.unparented && !device.parentDown && !device.wlc && children.length === 0) return null;
   return (
-    <div className="mt-3 space-y-1.5 text-sm">
+    <div className="max-w-sm shrink-0 space-y-1.5 self-center text-sm">
       {device.parentDown ? (
         <p role="status" className="font-medium text-destructive">Unreachable due to parent</p>
       ) : null}
