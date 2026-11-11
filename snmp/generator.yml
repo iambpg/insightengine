@@ -58,12 +58,13 @@ modules:
   cisco_wlc_universal:
     walk: [bsnAPTable, bsnApIfTable]
   # Fortinet. FORTINET-FORTIGATE-MIB / FORTINET-CORE-MIB must be in snmp/mibs.
+  # FortiOS leaves ifDescr empty. The interface name (wan1, internal1, dmz) is ifName.
   if_mib_fortigate:
-    walk: [sysUpTime, ifTable, ifXTable]
+    walk: [sysUpTime, ifTable, ifXTable, ifName, ifHighSpeed]
   fortigate:
     walk: [fgSystemInfo, fgHwSensors]
   fortigate_bandwidth:
-    walk: [fgIntfVlanTable]
+    walk: [fgIntfVlanTable, ifName]
   fortigate_est_bandwidth:
     walk: [fgVpnTunTable]
   # Palo Alto. PAN-COMMON-MIB must be uploaded before this module will generate.

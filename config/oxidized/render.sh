@@ -27,6 +27,15 @@ DEVICE_PASSWORD="$(read_secret device_password)"
 NETBOX_TOKEN="$(read_secret netbox_token)"
 export INTERVAL="${OXIDIZED_INTERVAL:-14400}" THREADS="${OXIDIZED_THREADS:-60}"
 export NETBOX_FILTER="${OXIDIZED_NETBOX_FILTER:-status=active&tag=oxidized}"
+if [ -f /run/secrets/source_token ]; then
+  SOURCE_TOKEN="$(tr -d '\r\n' < /run/secrets/source_token)"
+elif [ -f "$OUT/source.token" ]; then
+  SOURCE_TOKEN="$(tr -d '\r\n' < "$OUT/source.token")"
+else
+  echo "oxidized source token missing" >&2
+  exit 1
+fi
+export SOURCE_TOKEN
 subst "$OUT/config" @@INTERVAL@@ INTERVAL
 subst "$OUT/config" @@THREADS@@ THREADS
 subst "$OUT/config" @@CLIENT_SLUG@@ CLIENT_SLUG
@@ -34,6 +43,7 @@ subst "$OUT/config" @@NETBOX_FILTER@@ NETBOX_FILTER
 subst "$OUT/config" @@DEVICE_USERNAME@@ DEVICE_USERNAME yes
 subst "$OUT/config" @@DEVICE_PASSWORD@@ DEVICE_PASSWORD yes
 subst "$OUT/config" @@NETBOX_TOKEN@@ NETBOX_TOKEN yes
+subst "$OUT/config" @@SOURCE_TOKEN@@ SOURCE_TOKEN yes
 
 cp "$T/hooks/notify-change.sh.tmpl" "$OUT/hooks/notify-change.sh"
 export ALERTMANAGER_URL=http://alertmanager:9093
