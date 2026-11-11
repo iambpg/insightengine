@@ -14,6 +14,7 @@ import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/De
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
 import { devicePath, isMockMode } from '@/lib/apiMode';
+import { request } from '@/lib/http';
 import { deviceHealthPath } from '@/lib/deviceHealthPath';
 import AddApDialog from '@/components/AddApDialog';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
@@ -591,16 +592,85 @@ function Inventory({ device }: { device: DeviceDetailData }) {
   );
 }
 
+function configFileName(hostname: string): string {
+  const clean = (hostname || 'device').replace(/[^A-Za-z0-9._-]+/g, '_');
+  return `${clean}-config.txt`;
+}
+
+function downloadConfig(hostname: string, text: string) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = configFileName(hostname);
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function ConfigBackup({ device }: { device: DeviceDetailData }) {
+  const [config, setConfig] = useState(device.backup?.config || '');
+  const [status, setStatus] = useState(device.backup?.status || '');
+  const [at, setAt] = useState(device.backup?.at || '');
+  const [reason, setReason] = useState(device.backup?.reason || '');
+  const [available, setAvailable] = useState(Boolean(device.backup?.available));
+  const [bytes, setBytes] = useState(0);
+  const [loading, setLoading] = useState(!isMockMode());
+
+  useEffect(() => {
+    if (isMockMode()) return undefined;
+    let cancel = false;
+    setLoading(true);
+    request<{ available?: boolean; reason?: string; status?: string; at?: string; config?: string; bytes?: number; hostname?: string }>(
+      `/api/v1/devices/${encodeURIComponent(device.id)}/config`,
+    )
+      .then((body) => {
+        if (cancel) return;
+        setAvailable(Boolean(body.available));
+        setConfig(body.config || '');
+        setStatus(body.status || '');
+        setAt(body.at || '');
+        setReason(body.reason || '');
+        setBytes(body.bytes || (body.config ? new Blob([body.config]).size : 0));
+      })
+      .catch((error) => {
+        if (cancel) return;
+        setAvailable(false);
+        setConfig('');
+        setReason(isApiError(error) ? error.message : 'The config could not be loaded.');
+      })
+      .finally(() => {
+        if (!cancel) setLoading(false);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [device.id]);
+
   return (
     <div className="p-4">
-      <h2 className="text-sm font-semibold">Last config backup</h2>
-      {device.backup?.at ? <p className="mt-1 text-xs text-muted-foreground">{device.backup.at}{device.backup.status ? ` · ${device.backup.status}` : ''}</p> : null}
-      {device.backup?.available ? (
-        <pre className="mt-2 whitespace-pre-wrap rounded-md bg-muted p-3 font-mono-data text-xs">{device.backup.config || device.backup.status || 'Backup recorded'}</pre>
-      ) : (
-        <p className="mt-1 text-sm text-muted-foreground">{device.backup?.reason || 'Oxidized has no backup for this device.'}</p>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Last config backup</h2>
+        <button
+          type="button"
+          disabled={!config}
+          onClick={() => downloadConfig(device.hostname, config)}
+          className="rounded-md bg-navy px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+        >
+          Download .txt
+        </button>
+      </div>
+      {at || status || bytes ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {[at, status, bytes ? `${bytes.toLocaleString()} bytes` : ''].filter(Boolean).join(' · ')}
+        </p>
+      ) : null}
+      {loading ? <p className="mt-3 text-sm text-muted-foreground">Loading the full config…</p> : null}
+      {!loading && config ? (
+        <pre className="mt-2 max-h-[70vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono-data text-xs">{config}</pre>
+      ) : null}
+      {!loading && !config ? (
+        <p className="mt-1 text-sm text-muted-foreground">{reason || (available ? 'Oxidized has no config text for this device.' : 'Oxidized has no backup for this device.')}</p>
+      ) : null}
     </div>
   );
 }

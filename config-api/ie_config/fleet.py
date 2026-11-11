@@ -29,6 +29,7 @@ from urllib.parse import quote, unquote
 
 import httpx
 from fastapi import Request
+from fastapi.responses import JSONResponse
 
 from .errors import ApiError
 from .discovery import NetBoxWriter, _norm_model, catalog_part
@@ -1404,6 +1405,44 @@ def _coalesce_ap_rows(rows: dict) -> None:
             primary["snrAvg"] = round(sum(snr_vals) / len(snr_vals), 1)
 
 
+def _ipv4(ip: str) -> bool:
+    parts = (ip or "").split(".")
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not part.isdigit() or int(part) > 255:
+            return False
+    return True
+
+
+def _loki_device_queries(name: str, ip: str) -> list[str]:
+    """Hostname match and sender-address match. This Loki rejects or between them."""
+    queries = []
+    if _ipv4(ip):
+        queries.append('{sender="%s"}' % ip)
+    if name:
+        queries.append(_loki_hostname_query(name))
+    return queries
+
+
+def _loki_hostname_query(name: str) -> str:
+    """Match this hostname, or the same name with a domain after it.
+
+    LogQL rejects unknown backslash escapes, so a hyphen must stay a hyphen
+    and a regex dot is written as a doubled backslash.
+    """
+    literal = re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", name).replace("\\", "\\\\")
+    return '{hostname=~"(?i)%s(\\\\..*)?"}' % literal
+
+
+def _syslog_text(raw: str) -> str:
+    """Telegraf writes the syslog line as logfmt: message=\"...\"."""
+    match = re.match(r'^message="(.*)"\s*$', raw, re.DOTALL)
+    if not match:
+        return raw
+    return match.group(1).replace(r'\"', '"').replace(r'\\', '\\')
+
+
 class FleetService:
     def __init__(self, settings, client: httpx.Client | None = None, now=None):
         self.settings = settings
@@ -1483,9 +1522,15 @@ class FleetService:
         self.cache.put("nb-sites", rows, ttl=60)
         return rows
 
-    def _catalog(self, client) -> dict:
-        """Role colours and device-type part numbers. Missing either stays blank."""
-        cached = self.cache.get("nb-catalog")
+    def _catalog(self, client, type_ids: set[str] | None = None) -> dict:
+        """Role colours and part numbers for the device types on this page.
+
+        The full device-type list is more than a thousand rows and is not
+        needed to show the ten devices that are actually monitored.
+        """
+        wanted = {str(item) for item in (type_ids or set()) if str(item)}
+        key = "nb-catalog" if type_ids is None else "nb-catalog:" + ",".join(sorted(wanted))
+        cached = self.cache.get(key)
         if cached is not None:
             return cached
         colors = {}
@@ -1496,13 +1541,48 @@ class FleetService:
         except UpstreamError:
             log.warning("NetBox device role colours could not be read")
         try:
-            for raw in self._walk(client, "/api/dcim/device-types/?limit=1000"):
-                parts[str(raw.get("id") or "")] = str(raw.get("part_number") or "").strip()
+            if type_ids is None:
+                for raw in self._walk(client, "/api/dcim/device-types/?limit=1000"):
+                    parts[str(raw.get("id") or "")] = str(raw.get("part_number") or "").strip()
+            else:
+                parts = self._part_numbers(client, wanted)
         except UpstreamError:
             log.warning("NetBox part numbers could not be read")
         payload = {"colors": colors, "parts": parts}
-        self.cache.put("nb-catalog", payload, ttl=120)
+        self.cache.put(key, payload, ttl=120)
         return payload
+
+    def _part_numbers(self, client, type_ids: set[str]) -> dict:
+        """Part number for each device type the fleet uses, not the whole library."""
+        ids = [item for item in type_ids if item]
+        if not ids:
+            return {}
+
+        def one(type_id: str) -> tuple[str, str]:
+            try:
+                response = self._send(
+                    client, "GET",
+                    self.settings.netbox_url + "/api/dcim/device-types/%s/" % quote(type_id, safe=""),
+                    headers=self._headers(),
+                    upstream="netbox",
+                )
+            except UpstreamError:
+                return type_id, ""
+            if response.status_code != 200:
+                return type_id, ""
+            try:
+                body = response.json()
+            except ValueError:
+                return type_id, ""
+            if not isinstance(body, dict):
+                return type_id, ""
+            return type_id, str(body.get("part_number") or "").strip()
+
+        if len(ids) == 1:
+            found_id, part = one(ids[0])
+            return {found_id: part}
+        with ThreadPoolExecutor(max_workers=min(8, len(ids))) as pool:
+            return dict(pool.map(one, ids))
 
     def _snmp_auth(self, ip: str, role_slug: str) -> str:
         path = getattr(self.settings, "snmp_auth_map", "") or "/opt/insightengine/data/snmp/auth-by-ip.yml"
@@ -1591,9 +1671,15 @@ class FleetService:
         if cached is not None:
             return cached
         sites = {row["id"]: row for row in self._sites_raw(client)}
-        catalog = self._catalog(client)
+        raws = list(self._walk(client, "/api/dcim/devices/?limit=1000&exclude=config_context"))
+        type_ids = set()
+        for raw in raws:
+            dtype = raw.get("device_type") if isinstance(raw.get("device_type"), dict) else {}
+            if dtype.get("id"):
+                type_ids.add(str(dtype.get("id")))
+        catalog = self._catalog(client, type_ids)
         rows = []
-        for raw in self._walk(client, "/api/dcim/devices/?limit=1000"):
+        for raw in raws:
             site = raw.get("site") if isinstance(raw.get("site"), dict) else {}
             site_id = str(site.get("id") or "")
             known = sites.get(site_id) or {}
@@ -2084,7 +2170,27 @@ class FleetService:
             return None
         low = text.lower()
         wanted_mac = canon_mac(text)
-        for row in self._ap_rows():
+        cached = self.cache.get("ap-snapshot")
+        rows = list((cached or {}).get("rows") or []) if isinstance(cached, dict) else []
+        if not rows:
+            one = self.cache.get("ap-one:" + low)
+            if isinstance(one, dict):
+                return one
+            try:
+                with self._session() as client:
+                    snap = self._ap_snapshot(client, only=text)
+            except Exception:
+                log.warning("access point lookup failed for %s", text)
+                return None
+            rows = list((snap or {}).get("rows") or [])
+            for row in rows:
+                values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
+                same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
+                if low in values or same_mac:
+                    self.cache.put("ap-one:" + low, row, ttl=60)
+                    return row
+            return None
+        for row in rows:
             values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
             same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
             if low in values or same_mac:
@@ -2546,74 +2652,213 @@ class FleetService:
             last = body.get("last") if isinstance(body.get("last"), dict) else {}
             status = str(last.get("status") or "")
             at = str(last.get("end") or last.get("start") or "")
+        return remember({"available": True, "reason": "", "status": status, "at": at, "config": ""})
+
+    def device_config(self, device_id: str) -> dict:
+        """Complete backup text. The device page only carries the status."""
+        key = unquote(device_id or "").strip()
+        if not key:
+            raise ApiError(404, "not_found", "unknown device")
+        cached = self.cache.get("oxidized-config:" + key)
+        if isinstance(cached, dict):
+            return cached
+        try:
+            with self._session() as client:
+                rows, _meta, _degraded = self._decorated(client)
+                found = self._find_device(rows, key)
+                if found is None:
+                    raise ApiError(404, "not_found", "unknown device")
+                body = self._oxidized_config(client, found.get("hostname") or "")
+        except UpstreamError as exc:
+            raise _as_upstream(exc)
+        self.cache.put("oxidized-config:" + key, body, ttl=60)
+        return body
+
+    def _oxidized_config(self, client, name: str) -> dict:
+        empty = {"available": False, "reason": "", "status": "", "at": "", "hostname": name, "config": "", "bytes": 0}
+        safe_name = quote(str(name or ""), safe="")
+        if not safe_name:
+            empty["reason"] = "This device has no name for Oxidized"
+            return empty
+        base = (getattr(self.settings, "oxidized_url", "") or "http://oxidized:8888").rstrip("/")
+        try:
+            shown = self._send(client, "GET", "%s/node/show/%s.json" % (base, safe_name), upstream="oxidized")
+        except UpstreamError:
+            empty["reason"] = "Oxidized is not reachable"
+            return empty
+        if shown.status_code == 404:
+            empty["reason"] = "Oxidized has no backup for this device"
+            return empty
+        if shown.status_code >= 400:
+            empty["reason"] = "Oxidized returned HTTP %s" % shown.status_code
+            return empty
+        status = ""
+        at = ""
+        try:
+            meta = shown.json()
+        except ValueError:
+            meta = {}
+        if isinstance(meta, dict):
+            last = meta.get("last") if isinstance(meta.get("last"), dict) else {}
+            status = str(last.get("status") or "")
+            at = str(last.get("end") or last.get("start") or "")
         config = ""
         try:
             fetched = self._send(client, "GET", "%s/node/fetch/%s" % (base, safe_name), upstream="oxidized")
-            if fetched.status_code < 400:
-                config = redact_config(fetched.text or "")
         except UpstreamError:
-            pass
-        return remember({"available": True, "reason": "", "status": status, "at": at, "config": config})
+            fetched = None
+        if fetched is not None and fetched.status_code < 400:
+            config = fetched.text or ""
+        if config.startswith("\ufeff"):
+            config = config[1:]
+        return {
+            "available": True,
+            "reason": "" if config else "Oxidized recorded this device but has no config text yet",
+            "status": status,
+            "at": at,
+            "hostname": name,
+            "config": config,
+            "bytes": len(config.encode("utf-8")),
+        }
 
-    def device_logs(self, hostname: str) -> dict:
+    def oxidized_source(self, token: str) -> dict:
+        """NetBox devices for Oxidized, with a per-device login when one is saved."""
+        from .device_logins import credential_for, load_store, schedule_probe, source_token_matches
+        if not source_token_matches(self.settings, token):
+            raise ApiError(401, "unauthorized", "unauthorized")
+        stored = load_store(self.settings)
+        accounts = [row for row in (stored.get("accounts") or []) if isinstance(row, dict)]
+        worked = stored.get("worked") if isinstance(stored.get("worked"), dict) else {}
+        with self._session() as client:
+            raws = list(self._walk(
+                client,
+                "/api/dcim/devices/?status=active&tag=oxidized&limit=1000&exclude=config_context",
+            ))
+        results = []
+        pending = []
+        for raw in raws:
+            if not isinstance(raw, dict):
+                continue
+            row = dict(raw)
+            name = str(row.get("name") or "")
+            primary = row.get("primary_ip4") if isinstance(row.get("primary_ip4"), dict) else {}
+            ip = str(primary.get("address") or "").split("/")[0]
+            cred = credential_for(accounts, name, worked)
+            if cred:
+                row["username"] = cred[0]
+                row["password"] = cred[1]
+            elif ip:
+                pending.append({"name": name, "ip": ip})
+            results.append(row)
+        schedule_probe(self.settings, pending)
+        return {"count": len(results), "next": None, "results": results}
+
+    def refresh_device_logins(self) -> None:
+        """Try saved logins against backup devices. Does not wait for SSH."""
+        from .device_logins import schedule_probe
+        try:
+            with self._session() as client:
+                raws = list(self._walk(
+                    client,
+                    "/api/dcim/devices/?status=active&tag=oxidized&limit=1000&exclude=config_context",
+                ))
+        except Exception:
+            log.warning("device login check could not read the backup device list")
+            return
+        pending = []
+        for raw in raws:
+            if not isinstance(raw, dict):
+                continue
+            primary = raw.get("primary_ip4") if isinstance(raw.get("primary_ip4"), dict) else {}
+            ip = str(primary.get("address") or "").split("/")[0]
+            name = str(raw.get("name") or "")
+            if name and ip:
+                pending.append({"name": name, "ip": ip})
+        schedule_probe(self.settings, pending)
+
+    def _device_ip(self, device_id: str) -> str:
+        wanted = str(device_id or "").strip()
+        if not wanted:
+            return ""
+        try:
+            with self._session() as client:
+                rows = self._devices_raw(client)
+        except Exception:
+            return ""
+        for row in rows:
+            if str(row.get("id") or "") == wanted:
+                return str(row.get("ip") or "")
+        return ""
+
+    def device_logs(self, device_id: str, hostname: str) -> dict:
         name = re.sub(r"[^A-Za-z0-9._-]+", "", (hostname or "").strip())[:120]
-        if not name:
+        ip = self._device_ip(device_id)
+        if not name and not _ipv4(ip):
             return {"hostname": "", "lines": [], "reason": "This device has no hostname."}
-        key = "logs:" + name.lower()
+        key = "logs:%s:%s" % (name.lower(), ip)
         cached = self.cache.get(key)
         if isinstance(cached, dict):
             return cached
         base = (os.environ.get("LOKI_URL") or "http://loki:3100").rstrip("/")
         now = time.time()
-        query = '{hostname=~"(?i)%s(\\..*)?"}' % re.escape(name)
+        queries = _loki_device_queries(name, ip)
         empty = {"hostname": name, "lines": [], "reason": ""}
 
         def remember(body: dict) -> dict:
             self.cache.put(key, body, ttl=30)
             return body
 
+        lines = []
         try:
             with self._session() as client:
-                response = client.get(
-                    base + "/loki/api/v1/query_range",
-                    params={
-                        "query": query,
-                        "limit": "200",
-                        "direction": "backward",
-                        "start": str(int((now - 86400) * 1e9)),
-                        "end": str(int(now * 1e9)),
-                    },
-                    timeout=httpx.Timeout(4.0, connect=2.0),
-                )
+                for query in queries:
+                    response = client.get(
+                        base + "/loki/api/v1/query_range",
+                        params={
+                            "query": query,
+                            "limit": "200",
+                            "direction": "backward",
+                            "start": str(int((now - 86400) * 1e9)),
+                            "end": str(int(now * 1e9)),
+                        },
+                        timeout=httpx.Timeout(4.0, connect=2.0),
+                    )
+                    if response.status_code != 200:
+                        empty["reason"] = "Syslog store returned HTTP %s." % response.status_code
+                        return remember(empty)
+                    try:
+                        payload = response.json()
+                    except ValueError:
+                        empty["reason"] = "Syslog store returned a response that was not JSON."
+                        return remember(empty)
+                    for stream in ((payload.get("data") or {}).get("result") or []):
+                        if not isinstance(stream, dict):
+                            continue
+                        severity = str((stream.get("stream") or {}).get("severity") or "")
+                        for pair in stream.get("values") or []:
+                            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                                continue
+                            try:
+                                at = datetime.fromtimestamp(int(pair[0]) / 1e9, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                            except (TypeError, ValueError, OSError):
+                                at = ""
+                            lines.append({"at": at, "severity": severity, "message": _syslog_text(str(pair[1]))})
         except httpx.HTTPError:
             empty["reason"] = "Syslog store is not reachable."
             return remember(empty)
-        if response.status_code != 200:
-            empty["reason"] = "Syslog store returned HTTP %s." % response.status_code
-            return remember(empty)
-        try:
-            payload = response.json()
-        except ValueError:
-            empty["reason"] = "Syslog store returned a response that was not JSON."
-            return remember(empty)
-        lines = []
-        for stream in ((payload.get("data") or {}).get("result") or []):
-            if not isinstance(stream, dict):
-                continue
-            severity = str((stream.get("stream") or {}).get("severity") or "")
-            for pair in stream.get("values") or []:
-                if not isinstance(pair, (list, tuple)) or len(pair) < 2:
-                    continue
-                try:
-                    at = datetime.fromtimestamp(int(pair[0]) / 1e9, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                except (TypeError, ValueError, OSError):
-                    at = ""
-                lines.append({"at": at, "severity": severity, "message": str(pair[1])})
         lines.sort(key=lambda row: row["at"], reverse=True)
-        if not lines:
+        seen = set()
+        unique = []
+        for row in lines:
+            mark = (row["at"], row["message"])
+            if mark in seen:
+                continue
+            seen.add(mark)
+            unique.append(row)
+        if not unique:
             empty["reason"] = "No syslog lines for this device in the last day."
             return remember(empty)
-        return remember({"hostname": name, "lines": lines[:200], "reason": ""})
+        return remember({"hostname": name, "lines": unique[:200], "reason": ""})
 
     def _detail(self, client, row: dict, rows: list[dict]) -> dict:
         device = row["_device"]
@@ -3326,9 +3571,26 @@ class FleetService:
             body["degraded"] = degraded
         return body
 
-    def _ap_snapshot(self, client) -> dict:
+    def _ap_snapshot(self, client, only: str = "") -> dict:
+        wanted = (only or "").strip()
+        safe = prom_escape(wanted) if wanted else ""
+
+        def scoped(expr: str) -> str:
+            if not safe:
+                return expr
+            pieces = []
+            for part in expr.split(" or "):
+                part = part.strip()
+                if not part:
+                    continue
+                # Both labels are used. Keep them as separate series so the
+                # row is built the same way as the full access-point list.
+                pieces.append('%s{ap="%s"}' % (part, safe))
+                pieces.append('%s{ap_name="%s"}' % (part, safe))
+            return " or ".join(pieces)
+
         queries = {
-            key: _wlc_recent(expr) for key, expr in {
+            key: _wlc_recent(scoped(expr)) for key, expr in {
                 "status": "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status or ie_wlc_ap_oper_up",
                 "radio_oper": "ie_wlc_radio_oper_up or ie_wlc_radio_oper_status",
                 "clients": "ie_wlc_ap_clients or ie_wlc_client_radio_clients",
@@ -3657,7 +3919,7 @@ class FleetService:
                 links = []
                 if "prometheus" not in degraded:
                     degraded.append("prometheus")
-        aps = self._ap_rows()
+            aps = self._monitored_ap_rows(client, {str(row.get("hostname") or "") for row in rows})
         by_host = {str(device.get("hostname") or "").lower(): device for device in devices}
         for ap in aps:
             device = by_host.get(str(ap.get("name") or "").lower())
@@ -3683,6 +3945,65 @@ class FleetService:
             log.warning("topology file_sd could not be written")
         self.cache.put("hierarchy-report", report, ttl=90)
         return report
+
+    def _monitored_ap_rows(self, client, hostnames: set[str]) -> list[dict]:
+        """Uplink and controller for monitored access points only.
+
+        The full radio snapshot is thousands of series and is what the access
+        point page needs. A switch page only needs the access points that are
+        already in NetBox, so their parent link stays the same.
+        """
+        wanted = {name.strip().lower() for name in hostnames if str(name).strip()}
+        if not wanted:
+            return []
+        snap = self.cache.get("ap-snapshot")
+        if isinstance(snap, dict):
+            return [
+                row for row in (snap.get("rows") or [])
+                if str(row.get("name") or "").lower() in wanted
+            ]
+        cached = self.cache.get("monitored-ap-rows")
+        if isinstance(cached, list):
+            return cached
+        try:
+            fetched = self._prom_many(client, {
+                "info": _wlc_recent("ie_wlc_ap_info or ie_wlc_ap_info_info"),
+                "neighbors": _wlc_recent("ie_wlc_neighbor_info"),
+            })
+        except Exception:
+            log.warning("monitored access-point uplinks could not be read")
+            return []
+        if all(value is None for value in fetched.values()):
+            return []
+        by_name: dict[str, dict] = {}
+
+        def touch(metric: dict) -> dict | None:
+            name, _mac, wlc, _site = _ap_identity(metric)
+            key = name.lower()
+            if not key or key not in wanted:
+                return None
+            row = by_name.get(key)
+            if row is None:
+                row = {"name": name, "wlc": wlc or "", "neighborSwitch": "", "neighborPort": ""}
+                by_name[key] = row
+            elif wlc and not row.get("wlc"):
+                row["wlc"] = wlc
+            return row
+
+        for sample in fetched.get("info") or []:
+            touch((sample.get("metric") or {}))
+        for sample in fetched.get("neighbors") or []:
+            metric = sample.get("metric") or {}
+            row = touch(metric)
+            if row is None:
+                continue
+            if metric.get("switch"):
+                row["neighborSwitch"] = str(metric.get("switch"))
+            if metric.get("port"):
+                row["neighborPort"] = str(metric.get("port"))
+        rows = list(by_name.values())
+        self.cache.put("monitored-ap-rows", rows, ttl=90)
+        return rows
 
     def _neighbour_links(self, client) -> list[dict]:
         cached = self.cache.get("neighbour-links")
@@ -4989,10 +5310,22 @@ def mount_fleet(app, user_of) -> None:
         reader(request)
         return fleet().get_device(device_id)
 
+    @app.get("/api/v1/devices/{device_id}/config")
+    def device_config(device_id: str, request: Request):
+        reader(request)
+        response = JSONResponse(fleet().device_config(device_id))
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        return response
+
+    @app.get("/internal/oxidized/nodes")
+    def oxidized_nodes(request: Request):
+        return fleet().oxidized_source(request.headers.get("x-oxidized-token") or "")
+
     @app.get("/api/v1/devices/{device_id}/logs")
     def device_logs(device_id: str, request: Request):
         reader(request)
-        return fleet().device_logs((request.query_params.get("hostname") or "")[:200])
+        return fleet().device_logs(device_id, (request.query_params.get("hostname") or "")[:200])
 
     @app.post("/api/v1/devices/{device_id}/netbox-sync")
     def netbox_sync(device_id: str, request: Request):

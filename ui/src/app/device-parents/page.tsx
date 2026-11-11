@@ -1,15 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import React, { Suspense } from 'react';
-import AppLayout from '@/components/AppLayout';
-import DeviceParentsView from '@/app/device-parents/components/DeviceParentsView';
-
+/** Device parents now live on NetBridge. This route stays so old links still land. */
 export default function DeviceParentsPage() {
-  return (
-    <AppLayout>
-      <Suspense fallback={<div role="status" className="px-4 py-6 text-sm text-muted-foreground">Loading device parents</div>}>
-        <DeviceParentsView />
-      </Suspense>
-    </AppLayout>
-  );
+  redirect('/netbridge?tab=parents');
 }

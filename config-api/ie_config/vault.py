@@ -6,8 +6,10 @@ one key after the administrator re-enters their password. Values are not logged.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -25,18 +27,56 @@ _SECRET = re.compile(
     r"CREDENTIAL|BEARER|JWT|ENCRYPTION|KEY)(?:_|$)",
     re.I,
 )
+log = logging.getLogger("ie-config.vault")
+
+
+def _start_login_check(app) -> None:
+    """Try the saved logins against backup devices without holding the request."""
+    def run() -> None:
+        try:
+            service = getattr(app.state, "fleet", None)
+            if service is None:
+                from .fleet import FleetService
+                service = FleetService(app.state.settings)
+                app.state.fleet = service
+            service.refresh_device_logins()
+        except Exception:
+            log.warning("device login check did not start")
+    threading.Thread(target=run, name="device-login-refresh", daemon=True).start()
+
+
+def _reload_oxidized(settings) -> bool:
+    """Ask Oxidized to read the node list again. A failure does not undo the save."""
+    import httpx
+    base = (getattr(settings, "oxidized_url", "") or "http://oxidized:8888").rstrip("/")
+    try:
+        response = httpx.get(base + "/reload", timeout=5.0)
+    except httpx.HTTPError:
+        log.warning("Oxidized node list was not reloaded")
+        return False
+    return response.status_code < 400
+
 _MAX_BYTES = 1024 * 1024
 _FAIL_LIMIT = 8
 _FAIL_WINDOW = 60.0
 
-# Saved from Settings → Vault. Never returned in the clear, including reveal.
+# Saved from Settings → Vault. Cisco values are never returned.
+# ISE and FortiManager URLs and the ISE username are shown so an administrator
+# can check and edit them. The password and token stay hidden until reveal.
 WITHHELD_KEYS = (
     "CISCO_API_CLIENT_ID",
     "CISCO_API_CLIENT_SECRET",
     "FORTIMANAGER_URL",
     "FORTIMANAGER_TOKEN",
+    "ISE_URL",
+    "ISE_USERNAME",
+    "ISE_PASSWORD",
+    "INFOBLOX_URL",
+    "INFOBLOX_USERNAME",
+    "INFOBLOX_PASSWORD",
 )
 _WITHHELD = set(WITHHELD_KEYS)
+_ACCOUNT_REVEAL = {"ISE_PASSWORD", "FORTIMANAGER_TOKEN", "INFOBLOX_PASSWORD"}
 
 REVEAL_SECONDS = 300
 
@@ -297,14 +337,32 @@ def secret_value(settings, key: str) -> str:
 
 
 def integration_status(settings) -> dict:
+    ise_url = secret_value(settings, "ISE_URL")
+    ise_user = secret_value(settings, "ISE_USERNAME")
+    fmg_url = secret_value(settings, "FORTIMANAGER_URL")
     return {
         "cisco": {
             "idSet": bool(secret_value(settings, "CISCO_API_CLIENT_ID")),
             "secretSet": bool(secret_value(settings, "CISCO_API_CLIENT_SECRET")),
         },
         "fortimanager": {
-            "urlSet": bool(secret_value(settings, "FORTIMANAGER_URL")),
+            "url": fmg_url,
+            "urlSet": bool(fmg_url),
             "tokenSet": bool(secret_value(settings, "FORTIMANAGER_TOKEN")),
+        },
+        "ise": {
+            "url": ise_url,
+            "username": ise_user,
+            "urlSet": bool(ise_url),
+            "usernameSet": bool(ise_user),
+            "passwordSet": bool(secret_value(settings, "ISE_PASSWORD")),
+        },
+        "infoblox": {
+            "url": secret_value(settings, "INFOBLOX_URL"),
+            "username": secret_value(settings, "INFOBLOX_USERNAME"),
+            "urlSet": bool(secret_value(settings, "INFOBLOX_URL")),
+            "usernameSet": bool(secret_value(settings, "INFOBLOX_USERNAME")),
+            "passwordSet": bool(secret_value(settings, "INFOBLOX_PASSWORD")),
         },
     }
 
@@ -332,10 +390,10 @@ def save_integrations(settings, updates: dict[str, str]) -> dict:
             continue
         if len(value) > 512:
             raise ApiError(400, "bad_value", "value is too long")
-        if key == "FORTIMANAGER_URL":
+        if key in ("FORTIMANAGER_URL", "ISE_URL", "INFOBLOX_URL"):
             lowered = value.strip().lower()
             if not (lowered.startswith("https://") or lowered.startswith("http://")):
-                raise ApiError(400, "bad_value", "FortiManager URL must start with http:// or https://")
+                raise ApiError(400, "bad_value", "URL must start with http:// or https://")
         current[key] = value.strip()
     path = integrations_path(settings)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -485,6 +543,20 @@ def mount_vault(app, user_of, audit) -> None:
             raise ApiError(400, "bad_action", "action must be reveal or copy")
         if not isinstance(key, str):
             raise ApiError(400, "bad_key", "key is not valid")
+        if key in _ACCOUNT_REVEAL:
+            if not session_open(app.state.vault_sessions, session_token(request)):
+                raise ApiError(
+                    403, "reauth_required",
+                    "enter the current administrator password to reveal a value",
+                )
+            value = secret_value(app.state.settings, key)
+            if not value:
+                raise ApiError(404, "not_found", "unknown key")
+            audit(
+                app.state.sf, user, "vault-" + action, _client_ip(request), "ok",
+                "vault", key, "", "",
+            )
+            return {"key": key, "value": value, "action": action}
         pairs = read_env(app.state.settings)
         value = lookup_value(pairs, key)
         if is_secret_key(key) and not session_open(app.state.vault_sessions, session_token(request)):
@@ -513,12 +585,53 @@ def mount_vault(app, user_of, audit) -> None:
             "CISCO_API_CLIENT_SECRET": body.get("ciscoClientSecret", body.get("CISCO_API_CLIENT_SECRET")),
             "FORTIMANAGER_URL": body.get("fortimanagerUrl", body.get("FORTIMANAGER_URL")),
             "FORTIMANAGER_TOKEN": body.get("fortimanagerToken", body.get("FORTIMANAGER_TOKEN")),
+            "ISE_URL": body.get("iseUrl", body.get("ISE_URL")),
+            "ISE_USERNAME": body.get("iseUsername", body.get("ISE_USERNAME")),
+            "ISE_PASSWORD": body.get("isePassword", body.get("ISE_PASSWORD")),
+            "INFOBLOX_URL": body.get("infobloxUrl", body.get("INFOBLOX_URL")),
+            "INFOBLOX_USERNAME": body.get("infobloxUsername", body.get("INFOBLOX_USERNAME")),
+            "INFOBLOX_PASSWORD": body.get("infobloxPassword", body.get("INFOBLOX_PASSWORD")),
         }
         # Drop keys the client omitted so a partial form does not clear them.
         updates = {key: value for key, value in mapping.items() if value is not None}
         saved = save_integrations(app.state.settings, updates)
         audit(app.state.sf, user, "vault-integrations", _client_ip(request), "ok", "vault", "", "", "")
         return {"ok": True, "integrations": saved}
+
+    @app.get("/api/v1/settings/vault/device-logins")
+    def vault_device_logins(request: Request):
+        user, _csrf = user_of(request)
+        require_admin(user)
+        from .device_logins import public_accounts
+        return {"accounts": public_accounts(app.state.settings)}
+
+    @app.post("/api/v1/settings/vault/device-logins")
+    async def vault_save_device_login(request: Request):
+        user, _csrf = user_of(request)
+        require_admin(user)
+        try:
+            body = _json_object(await request.json())
+        except ApiError:
+            raise
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        from .device_logins import save_account
+        saved = save_account(app.state.settings, body)
+        audit(app.state.sf, user, "vault-device-login", _client_ip(request), "ok", "vault", saved["id"], "", "")
+        _start_login_check(app)
+        from .device_logins import public_accounts
+        return {"ok": True, "account": saved, "accounts": public_accounts(app.state.settings)}
+
+    @app.delete("/api/v1/settings/vault/device-logins/{account_id}")
+    def vault_delete_device_login(account_id: str, request: Request):
+        user, _csrf = user_of(request)
+        require_admin(user)
+        from .device_logins import delete_account
+        delete_account(app.state.settings, account_id)
+        audit(app.state.sf, user, "vault-device-login-delete", _client_ip(request), "ok", "vault", account_id[:80], "", "")
+        _start_login_check(app)
+        from .device_logins import public_accounts
+        return {"ok": True, "accounts": public_accounts(app.state.settings)}
 
     @app.post("/api/v1/settings/vault/integrations/test")
     async def vault_test_integrations(request: Request):
@@ -553,8 +666,34 @@ def mount_vault(app, user_of, audit) -> None:
                 result = {"ok": True, "message": "Connected. %d managed devices." % count}
             else:
                 result = {"ok": False, "message": listed.get("message") or "FortiManager did not answer"}
+        elif target == "ise":
+            from .netbridge.ise import pull as ise_pull
+            listed = ise_pull(
+                secret_value(app.state.settings, "ISE_URL"),
+                secret_value(app.state.settings, "ISE_USERNAME"),
+                secret_value(app.state.settings, "ISE_PASSWORD"),
+                http=getattr(app.state, "ise_http", None),
+            )
+            if listed.get("ok"):
+                count = listed.get("activeSessions")
+                version = listed.get("version") or "ISE"
+                result = {"ok": True, "message": "Connected. %s, %s active sessions." % (version, count if count is not None else "unknown")}
+            else:
+                result = {"ok": False, "message": listed.get("message") or "ISE did not answer"}
+        elif target == "infoblox":
+            from .netbridge.infoblox import probe as infoblox_probe
+            listed = infoblox_probe(
+                secret_value(app.state.settings, "INFOBLOX_URL"),
+                secret_value(app.state.settings, "INFOBLOX_USERNAME"),
+                secret_value(app.state.settings, "INFOBLOX_PASSWORD"),
+                http=getattr(app.state, "infoblox_http", None),
+            )
+            if listed.get("ok"):
+                result = {"ok": True, "message": listed.get("message") or "Connected."}
+            else:
+                result = {"ok": False, "message": listed.get("message") or "Infoblox did not answer"}
         else:
-            raise ApiError(400, "bad_body", "target must be cisco or fortimanager")
+            raise ApiError(400, "bad_body", "target must be cisco, fortimanager, ise, or infoblox")
         audit(
             app.state.sf, user, "vault-integration-test", _client_ip(request),
             "ok" if result.get("ok") else "failed", "vault", "", "", str(target),

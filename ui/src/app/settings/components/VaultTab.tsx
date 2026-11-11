@@ -37,11 +37,13 @@ type VaultList = {
   groups: VaultGroup[];
   integrations?: {
     cisco?: { idSet?: boolean; secretSet?: boolean };
-    fortimanager?: { urlSet?: boolean; tokenSet?: boolean };
+    fortimanager?: { url?: string; urlSet?: boolean; tokenSet?: boolean };
+    ise?: { url?: string; username?: string; urlSet?: boolean; usernameSet?: boolean; passwordSet?: boolean };
+    infoblox?: { url?: string; username?: string; urlSet?: boolean; usernameSet?: boolean; passwordSet?: boolean };
   };
 };
 
-type Job = { key: string; action: 'reveal' | 'copy' };
+type Job = { key: string; action: 'reveal' | 'copy'; integration?: boolean };
 
 const MASK = '••••••••';
 
@@ -155,43 +157,139 @@ function endpointLabel(endpoint: Endpoint): string {
 
 function IntegrationSecrets({
   integrations,
+  shown,
+  onReveal,
+  onHide,
 }: {
   integrations?: VaultList['integrations'];
+  shown: Record<string, string>;
+  onReveal: (key: string) => void;
+  onHide: (key: string) => void;
 }) {
   const [ciscoId, setCiscoId] = useState('');
   const [ciscoSecret, setCiscoSecret] = useState('');
   const [fmgUrl, setFmgUrl] = useState('');
   const [fmgToken, setFmgToken] = useState('');
+  const [showFmgToken, setShowFmgToken] = useState(false);
+  const [iseUrl, setIseUrl] = useState('');
+  const [iseUser, setIseUser] = useState('');
+  const [isePassword, setIsePassword] = useState('');
+  const [showIsePassword, setShowIsePassword] = useState(false);
+  const [ibloxUrl, setIbloxUrl] = useState('');
+  const [ibloxUser, setIbloxUser] = useState('');
+  const [ibloxPassword, setIbloxPassword] = useState('');
+  const [showIbloxPassword, setShowIbloxPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [flags, setFlags] = useState(integrations);
-  useEffect(() => setFlags(integrations), [integrations]);
+  useEffect(() => {
+    setFlags(integrations);
+    if (integrations?.ise?.url) setIseUrl(integrations.ise.url);
+    if (integrations?.ise?.username) setIseUser(integrations.ise.username);
+    if (integrations?.infoblox?.url) setIbloxUrl(integrations.infoblox.url);
+    if (integrations?.infoblox?.username) setIbloxUser(integrations.infoblox.username);
+    if (integrations?.fortimanager?.url) setFmgUrl(integrations.fortimanager.url);
+  }, [integrations]);
+  useEffect(() => {
+    if (shown.ISE_PASSWORD) {
+      setIsePassword(shown.ISE_PASSWORD);
+      setShowIsePassword(true);
+      return;
+    }
+    setShowIsePassword(false);
+    setIsePassword('');
+  }, [shown.ISE_PASSWORD]);
+  useEffect(() => {
+    if (shown.INFOBLOX_PASSWORD) {
+      setIbloxPassword(shown.INFOBLOX_PASSWORD);
+      setShowIbloxPassword(true);
+      return;
+    }
+    setShowIbloxPassword(false);
+    setIbloxPassword('');
+  }, [shown.INFOBLOX_PASSWORD]);
+  useEffect(() => {
+    if (shown.FORTIMANAGER_TOKEN) {
+      setFmgToken(shown.FORTIMANAGER_TOKEN);
+      setShowFmgToken(true);
+      return;
+    }
+    setShowFmgToken(false);
+    setFmgToken('');
+  }, [shown.FORTIMANAGER_TOKEN]);
 
-  const save = async () => {
+  const save = async (section: 'cisco' | 'ise' | 'fortimanager' | 'infoblox') => {
     setBusy(true);
     try {
       if (isMockMode()) {
-        setCiscoId('');
-        setCiscoSecret('');
-        setFmgUrl('');
-        setFmgToken('');
-        toast.success('Saved. The values stay masked.');
+        if (section === 'cisco') {
+          setCiscoId('');
+          setCiscoSecret('');
+        }
+        if (section === 'ise') {
+          setIsePassword('');
+          setShowIsePassword(false);
+        }
+        if (section === 'infoblox') {
+          setIbloxPassword('');
+          setShowIbloxPassword(false);
+        }
+        if (section === 'fortimanager') {
+          setFmgToken('');
+          setShowFmgToken(false);
+        }
+        toast.success('Saved.');
         return;
       }
       const body: Record<string, string> = {};
-      if (ciscoId) body.ciscoClientId = ciscoId;
-      if (ciscoSecret) body.ciscoClientSecret = ciscoSecret;
-      if (fmgUrl) body.fortimanagerUrl = fmgUrl;
-      if (fmgToken) body.fortimanagerToken = fmgToken;
+      if (section === 'cisco') {
+        if (ciscoId) body.ciscoClientId = ciscoId;
+        if (ciscoSecret) body.ciscoClientSecret = ciscoSecret;
+      }
+      if (section === 'fortimanager') {
+        if (fmgUrl) body.fortimanagerUrl = fmgUrl;
+        if (fmgToken) body.fortimanagerToken = fmgToken;
+      }
+      if (section === 'ise') {
+        if (iseUrl) body.iseUrl = iseUrl;
+        if (iseUser) body.iseUsername = iseUser;
+        if (isePassword) body.isePassword = isePassword;
+      }
+      if (section === 'infoblox') {
+        if (ibloxUrl) body.infobloxUrl = ibloxUrl;
+        if (ibloxUser) body.infobloxUsername = ibloxUser;
+        if (ibloxPassword) body.infobloxPassword = ibloxPassword;
+      }
       const saved = await request<{ integrations?: VaultList['integrations'] }>('/api/v1/settings/vault/integrations', {
         method: 'POST',
         body,
       });
       setFlags(saved.integrations);
-      setCiscoId('');
-      setCiscoSecret('');
-      setFmgUrl('');
-      setFmgToken('');
-      toast.success('Saved. The values are not shown again.');
+      const next = saved.integrations;
+      if (section === 'cisco') {
+        setCiscoId('');
+        setCiscoSecret('');
+      }
+      if (section === 'ise') {
+        if (next?.ise?.url) setIseUrl(next.ise.url);
+        if (next?.ise?.username) setIseUser(next.ise.username);
+        setIsePassword('');
+        setShowIsePassword(false);
+        onHide('ISE_PASSWORD');
+      }
+      if (section === 'infoblox') {
+        if (next?.infoblox?.url) setIbloxUrl(next.infoblox.url);
+        if (next?.infoblox?.username) setIbloxUser(next.infoblox.username);
+        setIbloxPassword('');
+        setShowIbloxPassword(false);
+        onHide('INFOBLOX_PASSWORD');
+      }
+      if (section === 'fortimanager') {
+        if (next?.fortimanager?.url) setFmgUrl(next.fortimanager.url);
+        setFmgToken('');
+        setShowFmgToken(false);
+        onHide('FORTIMANAGER_TOKEN');
+      }
+      toast.success('Saved.');
     } catch (cause) {
       toast.error(isApiError(cause) ? cause.message : 'The credentials were not saved.');
     } finally {
@@ -199,11 +297,11 @@ function IntegrationSecrets({
     }
   };
 
-  const test = async (target: 'cisco' | 'fortimanager') => {
+  const test = async (target: 'cisco' | 'fortimanager' | 'ise' | 'infoblox') => {
     setBusy(true);
     try {
       if (isMockMode()) {
-        toast.success(target === 'cisco' ? 'Demo: Cisco token and EoX lookup succeeded.' : 'Demo: FortiManager answered.');
+        toast.success(target === 'cisco' ? 'Demo: Cisco token and EoX lookup succeeded.' : target === 'ise' ? 'Demo: ISE answered.' : target === 'infoblox' ? 'Demo: Infoblox answered.' : 'Demo: FortiManager answered.');
         return;
       }
       const result = await request<{ ok?: boolean; message?: string }>('/api/v1/settings/vault/integrations/test', {
@@ -255,7 +353,7 @@ function IntegrationSecrets({
           </label>
         </div>
         <div className="mt-3 flex gap-2">
-          <button type="button" disabled={busy} onClick={save} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+          <button type="button" disabled={busy} onClick={() => save('cisco')} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
             Save Cisco credentials
           </button>
           <button type="button" disabled={busy} onClick={() => test('cisco')} className="rounded-md border border-border px-3 py-1.5 text-sm">
@@ -263,39 +361,197 @@ function IntegrationSecrets({
           </button>
         </div>
       </section>
+      <section aria-label="ISE" className="rounded-md border border-border bg-card p-4">
+        <h3 className="text-base font-semibold">ISE</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          The URL and username stay visible so you can check and change them. Show the password with the administrator password. A blank password keeps the saved one. Saving all three shows ISE under Inventory.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm sm:col-span-2">
+            URL
+            <input
+              type="text"
+              autoComplete="off"
+              aria-label="ISE URL"
+              placeholder={mask(flags?.ise?.urlSet)}
+              value={iseUrl}
+              onChange={(event) => setIseUrl(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
+            />
+          </label>
+          <label className="text-sm">
+            Username
+            <input
+              type="text"
+              autoComplete="off"
+              aria-label="ISE username"
+              placeholder={mask(flags?.ise?.usernameSet)}
+              value={iseUser}
+              onChange={(event) => setIseUser(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
+            />
+          </label>
+          <label className="text-sm">
+            Password
+            <span className="mt-1 flex gap-2">
+              <input
+                type={showIsePassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-label="ISE password"
+                placeholder={mask(flags?.ise?.passwordSet)}
+                value={isePassword}
+                onChange={(event) => setIsePassword(event.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
+              />
+              <button
+                type="button"
+                aria-label={showIsePassword ? 'Hide ISE password' : 'Show ISE password'}
+                onClick={() => {
+                  if (showIsePassword) {
+                    setShowIsePassword(false);
+                    setIsePassword('');
+                    onHide('ISE_PASSWORD');
+                    return;
+                  }
+                  onReveal('ISE_PASSWORD');
+                }}
+                className="h-9 shrink-0 rounded-md border border-border px-2 text-xs"
+              >
+                {showIsePassword ? 'Hide' : 'Show'}
+              </button>
+            </span>
+          </label>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" disabled={busy} onClick={() => save('ise')} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+            Save ISE credentials
+          </button>
+          <button type="button" disabled={busy} onClick={() => test('ise')} className="rounded-md border border-border px-3 py-1.5 text-sm">
+            Test ISE connection
+          </button>
+        </div>
+      </section>
+      <section aria-label="Infoblox" className="rounded-md border border-border bg-card p-4">
+        <h3 className="text-base font-semibold">Infoblox</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          The Grid Master URL and username stay visible so you can check and change them. Show the password with the administrator password. A blank password keeps the saved one. Inventory → Infoblox stays in the menu; saving all three lets that page read the grid. The page uses the WAPI and the SNMP community already configured for this stack.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm sm:col-span-2">
+            URL
+            <input
+              type="text"
+              autoComplete="off"
+              aria-label="Infoblox URL"
+              placeholder={mask(flags?.infoblox?.urlSet)}
+              value={ibloxUrl}
+              onChange={(event) => setIbloxUrl(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
+            />
+          </label>
+          <label className="text-sm">
+            Username
+            <input
+              type="text"
+              autoComplete="off"
+              aria-label="Infoblox username"
+              placeholder={mask(flags?.infoblox?.usernameSet)}
+              value={ibloxUser}
+              onChange={(event) => setIbloxUser(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
+            />
+          </label>
+          <label className="text-sm">
+            Password
+            <span className="mt-1 flex gap-2">
+              <input
+                type={showIbloxPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-label="Infoblox password"
+                placeholder={mask(flags?.infoblox?.passwordSet)}
+                value={ibloxPassword}
+                onChange={(event) => setIbloxPassword(event.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
+              />
+              <button
+                type="button"
+                aria-label={showIbloxPassword ? 'Hide Infoblox password' : 'Show Infoblox password'}
+                onClick={() => {
+                  if (showIbloxPassword) {
+                    setShowIbloxPassword(false);
+                    setIbloxPassword('');
+                    onHide('INFOBLOX_PASSWORD');
+                    return;
+                  }
+                  onReveal('INFOBLOX_PASSWORD');
+                }}
+                className="h-9 shrink-0 rounded-md border border-border px-2 text-xs"
+              >
+                {showIbloxPassword ? 'Hide' : 'Show'}
+              </button>
+            </span>
+          </label>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" disabled={busy} onClick={() => save('infoblox')} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+            Save Infoblox credentials
+          </button>
+          <button type="button" disabled={busy} onClick={() => test('infoblox')} className="rounded-md border border-border px-3 py-1.5 text-sm">
+            Test Infoblox connection
+          </button>
+        </div>
+      </section>
       <section aria-label="FortiManager" className="rounded-md border border-border bg-card p-4">
         <h3 className="text-base font-semibold">FortiManager</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          URL and API token. A blank field keeps the saved value. Neither is shown again or written to the log.
+          The URL stays visible so you can check and change it. Show the API token with the administrator password. A blank token keeps the saved one.
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             URL
             <input
-              type="password"
+              type="text"
               autoComplete="off"
               aria-label="FortiManager URL"
               placeholder={mask(flags?.fortimanager?.urlSet)}
               value={fmgUrl}
               onChange={(event) => setFmgUrl(event.target.value)}
-              className="mt-1 h-9 w-full rounded-md border border-input px-2"
+              className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
             />
           </label>
           <label className="text-sm">
             API token
-            <input
-              type="password"
-              autoComplete="new-password"
-              aria-label="FortiManager API token"
-              placeholder={mask(flags?.fortimanager?.tokenSet)}
-              value={fmgToken}
-              onChange={(event) => setFmgToken(event.target.value)}
-              className="mt-1 h-9 w-full rounded-md border border-input px-2"
-            />
+            <span className="mt-1 flex gap-2">
+              <input
+                type={showFmgToken ? 'text' : 'password'}
+                autoComplete="new-password"
+                aria-label="FortiManager API token"
+                placeholder={mask(flags?.fortimanager?.tokenSet)}
+                value={fmgToken}
+                onChange={(event) => setFmgToken(event.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-card px-2 text-foreground"
+              />
+              <button
+                type="button"
+                aria-label={showFmgToken ? 'Hide FortiManager API token' : 'Show FortiManager API token'}
+                onClick={() => {
+                  if (showFmgToken) {
+                    setShowFmgToken(false);
+                    setFmgToken('');
+                    onHide('FORTIMANAGER_TOKEN');
+                    return;
+                  }
+                  onReveal('FORTIMANAGER_TOKEN');
+                }}
+                className="h-9 shrink-0 rounded-md border border-border px-2 text-xs"
+              >
+                {showFmgToken ? 'Hide' : 'Show'}
+              </button>
+            </span>
           </label>
         </div>
         <div className="mt-3 flex gap-2">
-          <button type="button" disabled={busy} onClick={save} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+          <button type="button" disabled={busy} onClick={() => save('fortimanager')} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
             Save FortiManager credentials
           </button>
           <button type="button" disabled={busy} onClick={() => test('fortimanager')} className="rounded-md border border-border px-3 py-1.5 text-sm">
@@ -304,6 +560,170 @@ function IntegrationSecrets({
         </div>
       </section>
     </div>
+  );
+}
+
+type DeviceLogin = {
+  id: string;
+  label: string;
+  username: string;
+  passwordSet?: boolean;
+  workedOn?: string[];
+};
+
+function DeviceLogins() {
+  const [accounts, setAccounts] = useState<DeviceLogin[]>(isMockMode() ? [] : []);
+  const [label, setLabel] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [editing, setEditing] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => {
+    if (isMockMode()) return;
+    request<{ accounts?: DeviceLogin[] }>('/api/v1/settings/vault/device-logins')
+      .then((body) => setAccounts(body.accounts || []))
+      .catch((cause) => {
+        toast.error(isApiError(cause) ? cause.message : 'Device logins could not be loaded');
+      });
+  };
+
+  useEffect(load, []);
+
+  const reset = () => {
+    setEditing('');
+    setLabel('');
+    setUsername('');
+    setPassword('');
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      if (isMockMode()) {
+        toast.success('Saved. The password stays masked.');
+        reset();
+        return;
+      }
+      const saved = await request<{ accounts?: DeviceLogin[] }>('/api/v1/settings/vault/device-logins', {
+        method: 'POST',
+        body: { id: editing || undefined, label, username, password },
+      });
+      setAccounts(saved.accounts || []);
+      reset();
+      toast.success('Saved. The next config pull tries this login and keeps the one that works.');
+    } catch (cause) {
+      toast.error(isApiError(cause) ? cause.message : 'The device login was not saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (account: DeviceLogin) => {
+    setBusy(true);
+    try {
+      if (isMockMode()) {
+        setAccounts((prev) => prev.filter((row) => row.id !== account.id));
+        return;
+      }
+      const saved = await request<{ accounts?: DeviceLogin[] }>(
+        `/api/v1/settings/vault/device-logins/${encodeURIComponent(account.id)}`,
+        { method: 'DELETE' },
+      );
+      setAccounts(saved.accounts || []);
+      if (editing === account.id) reset();
+      toast.success('Removed. Devices that used it will try the remaining logins on the next pull.');
+    } catch (cause) {
+      toast.error(isApiError(cause) ? cause.message : 'The device login was not removed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const edit = (account: DeviceLogin) => {
+    setEditing(account.id);
+    setLabel(account.label);
+    setUsername(account.username);
+    setPassword('');
+  };
+
+  return (
+    <section aria-label="Device logins" className="rounded-md border border-border bg-card p-4">
+      <h3 className="text-base font-semibold">Device logins</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Add every login the devices might use. You do not choose a device. Each config pull tries these logins
+        on a device until one signs in, then uses that same login the next time. Passwords are not shown again.
+      </p>
+      {accounts.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">No device logins yet.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {accounts.map((account) => (
+            <li key={account.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+              <div>
+                <p className="text-sm font-medium">{account.label}</p>
+                <p className="font-mono-data text-xs text-muted-foreground">
+                  {account.username}
+                  {' · '}
+                  {account.workedOn && account.workedOn.length ? `worked on ${account.workedOn.join(', ')}` : 'not matched yet'}
+                </p>
+              </div>
+              <span className="flex gap-2">
+                <button type="button" onClick={() => edit(account)} className="rounded-md border border-border px-2 py-1 text-xs">
+                  Edit
+                </button>
+                <button type="button" onClick={() => remove(account)} disabled={busy} className="rounded-md border border-border px-2 py-1 text-xs">
+                  Remove
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">
+          Account name
+          <input
+            aria-label="Device login name"
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            className="mt-1 h-9 w-full rounded-md border border-input px-2"
+          />
+        </label>
+        <label className="text-sm">
+          Username
+          <input
+            aria-label="Device login username"
+            autoComplete="off"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            className="mt-1 h-9 w-full rounded-md border border-input px-2"
+          />
+        </label>
+        <label className="text-sm sm:col-span-2">
+          Password
+          <input
+            type="password"
+            aria-label="Device login password"
+            autoComplete="new-password"
+            placeholder={editing ? 'Blank keeps the saved password' : ''}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="mt-1 h-9 w-full rounded-md border border-input px-2"
+          />
+        </label>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button type="button" disabled={busy} onClick={save} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+          {editing ? 'Update device login' : 'Add device login'}
+        </button>
+        {editing ? (
+          <button type="button" onClick={reset} className="rounded-md border border-border px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -407,6 +827,18 @@ export default function VaultTab() {
   const sessionOpen = () => Date.now() < unlockedUntil;
 
   const run = async (job: Job) => {
+    if (job.integration) {
+      if (isMockMode()) {
+        setRevealed((prev) => ({ ...prev, [job.key]: '(mock)' }));
+        return;
+      }
+      const result = await request<{ key: string; value: string }>(
+        '/api/v1/settings/vault/reveal',
+        { method: 'POST', body: { key: job.key, action: job.action } }
+      );
+      setRevealed((prev) => ({ ...prev, [job.key]: result.value }));
+      return;
+    }
     const entry = findEntry(job.key);
     if (!entry) return;
     if (isMockMode()) {
@@ -432,11 +864,20 @@ export default function VaultTab() {
   };
 
   const start = async (job: Job) => {
-    const entry = findEntry(job.key);
-    if (entry?.secret && !sessionOpen()) {
-      setPassword('');
-      setPending(job);
-      return;
+    if (job.integration) {
+      if (!sessionOpen()) {
+        setPassword('');
+        setPending(job);
+        return;
+      }
+    } else {
+      const entry = findEntry(job.key);
+      if (!entry) return;
+      if (entry.secret && !sessionOpen()) {
+        setPassword('');
+        setPending(job);
+        return;
+      }
     }
     try {
       await run(job);
@@ -531,7 +972,22 @@ export default function VaultTab() {
         </label>
       </div>
 
-      <IntegrationSecrets integrations={data?.integrations} />
+      <IntegrationSecrets
+        integrations={data?.integrations}
+        shown={revealed}
+        onReveal={(key) => {
+          void start({ key, action: 'reveal', integration: true });
+        }}
+        onHide={(key) =>
+          setRevealed((prev) => {
+            if (!(key in prev)) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          })
+        }
+      />
+      <DeviceLogins />
 
       {!data && !error ? <p className="text-sm text-muted-foreground">Loading vault…</p> : null}
 

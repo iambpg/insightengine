@@ -39,6 +39,43 @@ def test_allowlist_rejects_config_mode_and_pipes():
     assert unknown.value.code == "unsupported_platform"
 
 
+def test_config_fetch_returns_the_whole_file():
+    text = "hostname sw\n" + ("interface Gi1/0/1\n description uplink\n" * 2000)
+    assert len(text) > 20000
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith(".json"):
+            return httpx.Response(200, json={"last": {"status": "success", "end": "2026-11-10T20:00:00Z"}})
+        return httpx.Response(200, text=text)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    service = FleetService(Settings(
+        config_root=".",
+        apps_file="apps.yml",
+        database_url="sqlite://",
+        history_dir=".",
+        cookie_secure=False,
+        cookie_name="ie_session",
+        setup_token_file="missing",
+        client_slug="test",
+        public_host="localhost",
+        docker_proxy_url="http://127.0.0.1:9",
+        scheduler=False,
+        netbox_url="http://netbox.test",
+        netbox_token_file="missing",
+        netdisco_database_url="",
+        netdisco_out_dir=".",
+        mib_dir=".",
+        candidate_dir=".",
+        generator_bin="missing",
+        oxidized_url="http://oxidized:8888",
+    ), client=client)
+    body = service._oxidized_config(client, "sw1")
+    assert body["config"] == text
+    assert body["bytes"] == len(text.encode("utf-8"))
+    assert body["status"] == "success"
+
+
 def test_backup_redaction_drops_the_secret_value():
     text = "hostname core-1\npassword 7 0822455C0A\nsnmp-server community public RO\ninterface Gi1/0/1"
     cleaned = redact_config(text)

@@ -322,6 +322,50 @@ def test_vault_hides_secrets_until_the_admin_reauthenticates(tmp_path, monkeypat
     assert SECRET not in engineer_reveal.text
 
 
+def test_device_logins_are_tried_and_the_match_is_reused(tmp_path, monkeypatch):
+    app, client = _app(tmp_path, monkeypatch)
+    _boot(client)
+    csrf = _login(client, "admin@example.com", PASSWORD)
+    secret = "device-login-secret"
+    other = "second-login-secret"
+    created = client.post(
+        "/api/v1/settings/vault/device-logins",
+        headers={"X-CSRF-Token": csrf},
+        json={"label": "Claremont", "username": "backup", "password": secret},
+    )
+    assert created.status_code == 200, created.text
+    assert secret not in created.text
+    second = client.post(
+        "/api/v1/settings/vault/device-logins",
+        headers={"X-CSRF-Token": csrf},
+        json={"label": "Other", "username": "other", "password": other},
+    )
+    assert second.status_code == 200, second.text
+    assert other not in second.text
+    listed = client.get("/api/v1/settings/vault/device-logins")
+    assert listed.status_code == 200
+    assert secret not in listed.text and other not in listed.text
+    from ie_config.device_logins import credential_for, load_accounts, load_store, match_devices
+    calls = []
+
+    def fake(ip, username, password):
+        calls.append((ip, username))
+        if username == "other":
+            return "ok"
+        return "auth"
+
+    learned = match_devices(app.state.settings, [{"name": "sw1", "ip": "10.0.0.8"}], fake)
+    assert learned == ["sw1"]
+    assert [item[1] for item in calls] == ["backup", "other"]
+    store = load_store(app.state.settings)
+    assert credential_for(load_accounts(app.state.settings), "SW1", store["worked"]) == ("other", other)
+    calls.clear()
+    assert match_devices(app.state.settings, [{"name": "sw1", "ip": "10.0.0.8"}], fake) == []
+    assert calls == []
+    denied = TestClient(app)
+    assert denied.get("/internal/oxidized/nodes").status_code == 401
+
+
 class _LogGrab(logging.Handler):
     def __init__(self):
         super().__init__()

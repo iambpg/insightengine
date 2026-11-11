@@ -4,7 +4,24 @@
 # Retry Oxidized, and while it is down answer GET /nodes with [] so the
 # healthcheck stays green. When a device exists, Oxidized binds the port and
 # this script just waits on it.
+#
+# The image entrypoint is replaced by this script, so the process would
+# otherwise stay root and read /root/.config/oxidized (a sample router.db)
+# instead of the rendered NetBox config under /home/oxidized.
 set -u
+if [ "$(id -u)" -eq 0 ]; then
+  if [ -x /usr/sbin/update-ca-certificates ] && [ -f /usr/local/share/ca-certificates/insightengine-ca.crt ]; then
+    update-ca-certificates >/dev/null 2>&1 || true
+  fi
+  exec /usr/sbin/runuser -u oxidized -- /bin/sh "$0" "$@"
+fi
+export HOME=/home/oxidized
+# OXIDIZED_HOME is the directory that contains the config file. The image
+# also ships a sample at /home/oxidized/config, and a container start command
+# that sets OXIDIZED_HOME=/home/oxidized makes Oxidized read that sample and
+# crash looking for router.db. Pin the rendered NetBox config instead.
+export OXIDIZED_HOME=/home/oxidized/.config/oxidized
+cd /home/oxidized || exit 1
 pid=""
 idle=""
 stop() {

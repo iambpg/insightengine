@@ -300,20 +300,78 @@ def test_vault_integrations_are_masked(tmp_path, caplog):
             "ciscoClientSecret": secret,
             "fortimanagerUrl": "https://fmg.example.com",
             "fortimanagerToken": token,
+            "iseUrl": "https://ise.example.com",
+            "iseUsername": "iseadmin",
+            "isePassword": "IsePass1234",
+            "infobloxUrl": "https://gm.example.com",
+            "infobloxUsername": "ibadmin",
+            "infobloxPassword": "IbloxPass1234",
         },
     )
     assert saved.status_code == 200, saved.text
     body = saved.json()
     assert body["integrations"]["cisco"]["secretSet"] is True
     assert body["integrations"]["fortimanager"]["tokenSet"] is True
+    assert body["integrations"]["fortimanager"]["url"] == "https://fmg.example.com"
+    assert body["integrations"]["ise"]["url"] == "https://ise.example.com"
+    assert body["integrations"]["ise"]["username"] == "iseadmin"
+    assert body["integrations"]["ise"]["passwordSet"] is True
+    assert body["integrations"]["infoblox"]["url"] == "https://gm.example.com"
+    assert body["integrations"]["infoblox"]["username"] == "ibadmin"
+    assert body["integrations"]["infoblox"]["passwordSet"] is True
     blob = saved.text + caplog.text
     assert secret not in blob
     assert token not in blob
+    assert "IsePass1234" not in blob
+    assert "IbloxPass1234" not in blob
     assert "cisco-client-id" not in blob
     listed = client.get("/api/v1/settings/vault")
     assert secret not in listed.text
     assert token not in listed.text
+    assert "IsePass1234" not in listed.text
+    assert "IbloxPass1234" not in listed.text
+    assert listed.json()["integrations"]["infoblox"]["username"] == "ibadmin"
     assert "cisco-client-id" not in listed.text
+    assert listed.json()["integrations"]["ise"]["username"] == "iseadmin"
+    assert listed.json()["integrations"]["fortimanager"]["url"] == "https://fmg.example.com"
+    locked = client.post(
+        "/api/v1/settings/vault/reveal",
+        headers={"X-CSRF-Token": csrf},
+        json={"key": "ISE_PASSWORD", "action": "reveal"},
+    )
+    assert locked.status_code == 403
+    assert locked.json()["error"]["code"] == "reauth_required"
+    assert "IsePass1234" not in locked.text
+    opened = client.post(
+        "/api/v1/settings/vault/unlock",
+        headers={"X-CSRF-Token": csrf},
+        json={"password": "Adminpass1234"},
+    )
+    assert opened.status_code == 200, opened.text
+    shown = client.post(
+        "/api/v1/settings/vault/reveal",
+        headers={"X-CSRF-Token": csrf},
+        json={"key": "ISE_PASSWORD", "action": "reveal"},
+    )
+    assert shown.status_code == 200, shown.text
+    assert shown.json()["value"] == "IsePass1234"
+    iblox = client.post(
+        "/api/v1/settings/vault/reveal",
+        headers={"X-CSRF-Token": csrf},
+        json={"key": "INFOBLOX_PASSWORD", "action": "reveal"},
+    )
+    assert iblox.status_code == 200, iblox.text
+    assert iblox.json()["value"] == "IbloxPass1234"
+    assert "IbloxPass1234" not in caplog.text
+    token_shown = client.post(
+        "/api/v1/settings/vault/reveal",
+        headers={"X-CSRF-Token": csrf},
+        json={"key": "FORTIMANAGER_TOKEN", "action": "reveal"},
+    )
+    assert token_shown.status_code == 200, token_shown.text
+    assert token_shown.json()["value"] == token
+    assert "IsePass1234" not in caplog.text
+    assert token not in caplog.text
     revealed = client.post(
         "/api/v1/settings/vault/reveal",
         headers={"X-CSRF-Token": csrf},
@@ -501,3 +559,298 @@ def test_walk_handles_five_thousand_rows():
     assert len(rows) == 5000
     assert rows[0][1] == "ap-00001"
     assert rows[-1][1] == "ap-05000"
+
+
+def test_ise_tab_asks_for_credentials(tmp_path):
+    client, _csrf, _app = _client(tmp_path)
+    body = client.get("/api/v1/netbridge/ise").json()
+    assert body["configured"] is False
+    assert "Vault" in body["message"]
+    assert body["rows"] == []
+    assert body["activeSessions"] is None
+    assert client.get("/api/v1/netbridge/open-count").json()["iseConfigured"] is False
+    assert client.get("/api/v1/netbridge/open-count").json()["infobloxConfigured"] is False
+
+
+def test_ise_pull_reads_version_count_and_sessions():
+    from ie_config.netbridge.ise import pull
+
+    password = "ise-password-value"
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        assert request.headers["authorization"].startswith("Basic ")
+        assert password not in str(request.url)
+        if request.url.path.endswith("/Version"):
+            xml = "<product><version>3.3.0.430</version></product>"
+        elif request.url.path.endswith("/ActiveCount"):
+            xml = "<sessionCount><count>2</count></sessionCount>"
+        else:
+            assert "/AuthList/" in request.url.path
+            assert "%20" in request.url.path
+            xml = """
+            <activeSessionList>
+              <activeSession>
+                <user_name>alex</user_name>
+                <calling_station_id>AA:BB:CC:DD:EE:FF</calling_station_id>
+                <nas_ip_address>10.129.32.16</nas_ip_address>
+                <network_device_name>claremont-sw</network_device_name>
+                <authentication_method>dot1x</authentication_method>
+                <acs_server>ise-mnt</acs_server>
+                <passed>true</passed>
+                <failed>false</failed>
+              </activeSession>
+            </activeSessionList>
+            """
+        return httpx.Response(200, text=xml)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    body = pull("https://ise.example", "ers-admin", password, http=client)
+    assert body["ok"] is True
+    assert body["version"] == "3.3.0.430"
+    assert body["activeSessions"] == 2
+    assert body["rows"] == [{
+        "user": "alex",
+        "mac": "AA:BB:CC:DD:EE:FF",
+        "nas": "10.129.32.16",
+        "device": "claremont-sw",
+        "method": "dot1x",
+        "server": "ise-mnt",
+        "result": "Passed",
+    }]
+    assert any(path.endswith("/Version") for path in seen)
+    assert password not in json.dumps(body)
+
+
+def test_ise_health_groups_admin_and_policy_nodes():
+    from ie_config.netbridge.ise import health
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Version"):
+            return httpx.Response(200, text="<product><version>3.4.0.608</version></product>")
+        if request.url.path.endswith("/ActiveCount"):
+            return httpx.Response(200, text="<sessionCount><count>12</count></sessionCount>")
+        assert request.url.path == "/api/v1/deployment/node"
+        return httpx.Response(200, json={"response": [
+            {"hostname": "pnp-psn1", "ipAddress": "10.96.1.152", "fqdn": "pnp-psn1.example", "nodeStatus": "Connected", "roles": [], "services": ["Session"]},
+            {"hostname": "pnp-pan1", "ipAddress": "10.96.1.150", "fqdn": "pnp-pan1.example", "nodeStatus": "Connected", "roles": ["PrimaryAdmin"], "services": []},
+            {"hostname": "pnp-mon2", "ipAddress": "10.97.1.151", "fqdn": "pnp-mon2.example", "nodeStatus": "NotReachable", "roles": ["PrimaryDedicatedMonitoring"], "services": []},
+        ]})
+
+    body = health("https://ise.example", "ers-admin", "secret-value", http=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert body["ok"] is True
+    assert body["version"] == "3.4.0.608"
+    assert body["activeSessions"] == 12
+    assert [node["hostname"] for node in body["nodes"]] == ["pnp-pan1", "pnp-mon2", "pnp-psn1"]
+    assert body["nodes"][0]["group"] == "main"
+    assert body["nodes"][0]["roles"] == ["Primary Admin"]
+    assert body["nodes"][1]["healthy"] is False
+    assert body["nodes"][1]["issues"] == ["Deployment status is NotReachable"]
+    assert body["nodes"][0]["cpu"] is None
+    assert body["nodes"][2]["group"] == "policy"
+    assert body["nodes"][2]["roles"] == ["Policy Service"]
+    assert "secret-value" not in json.dumps(body)
+
+
+def test_ise_node_detail_only_opens_a_known_node():
+    from ie_config.netbridge.ise import node_detail
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Version"):
+            return httpx.Response(200, text="<product><version>3.4.0.608</version></product>")
+        if request.url.path == "/api/v1/deployment/node":
+            return httpx.Response(200, json={"response": [
+                {"hostname": "pnp-pan1", "ipAddress": "10.96.1.150", "fqdn": "pnp-pan1.example", "nodeStatus": "Connected", "roles": ["PrimaryAdmin"], "services": []},
+            ]})
+        return httpx.Response(404, text="")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    found = node_detail("https://ise.example", "ers-admin", "secret-value", "pnp-pan1", http=client, community="")
+    assert found["ok"] is True
+    assert found["node"]["fqdn"] == "pnp-pan1.example"
+    assert found["node"]["cpus"] == []
+    missing = node_detail("https://ise.example", "ers-admin", "secret-value", "../other", http=client, community="")
+    assert missing["node"] is None
+    assert "secret-value" not in json.dumps(found)
+
+
+def test_ise_storage_entries_split_disks_and_memory():
+    from ie_config.netbridge.ise import _storage_entries, _uptime
+
+    descr = [("1.3.1", b"Physical memory"), ("1.3.55", b"/"), ("1.3.31", b"/run")]
+    size = [("1.5.1", 100), ("1.5.55", 4), ("1.5.31", 10)]
+    used = [("1.6.1", 80), ("1.6.55", 1), ("1.6.31", 1)]
+    units = [("1.4.1", 1024), ("1.4.55", 1024), ("1.4.31", 1024)]
+    disks = _storage_entries(descr, size, used, units, files=True)
+    memory = _storage_entries(descr, size, used, units, files=False)
+    assert [row["name"] for row in disks] == ["/"]
+    assert disks[0]["percent"] == 25
+    assert disks[0]["size"] == "4 KB"
+    assert memory[0]["name"] == "Physical memory"
+    assert _uptime(100 * (2 * 86400 + 3 * 3600)) == "2 days 3 hours"
+
+
+def test_ise_resource_rows_become_cpu_memory_disk_and_services():
+    from ie_config.netbridge.ise import _resources_from_rows
+
+    body = _resources_from_rows(
+        [("1.2.1", 10), ("1.2.2", 30)],
+        [("1.3.1", b"Physical memory"), ("1.3.55", b"/"), ("1.3.66", b"/opt")],
+        [("1.5.1", 100), ("1.5.55", 200), ("1.5.66", 50)],
+        [("1.6.1", 91), ("1.6.55", 50), ("1.6.66", 10)],
+        [("1.7.4", b"nginx"), ("1.7.9", b"redis-server")],
+    )
+    assert body["cpu"] == 20
+    assert body["memory"] == 91
+    assert body["diskRoot"] == 25
+    assert body["diskOpt"] == 20
+    assert body["services"] == [
+        {"name": "Web", "running": True},
+        {"name": "Cache", "running": True},
+    ]
+    assert body["issues"] == ["Memory is 91%"]
+    assert body["ntp"] is False
+    assert body["directory"] is False
+
+
+def test_ise_operations_reads_sessions_inventory_and_dependencies():
+    from datetime import datetime, timezone
+    from ie_config.netbridge.ise import operations
+
+    password = "ise-password-value"
+    moment = datetime(2026, 11, 11, 20, 0, tzinfo=timezone.utc)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert password not in str(request.url)
+        path = request.url.path
+        if path.endswith("/Version"):
+            return httpx.Response(200, text="<product><version>3.4.0.608</version></product>")
+        if path.endswith("/ActiveCount"):
+            return httpx.Response(200, text="<sessionCount><count>1200</count></sessionCount>")
+        if "/AuthList/" in path:
+            xml = """
+            <activeSessionList>
+              <activeSession>
+                <user_name>alex</user_name>
+                <calling_station_id>AA:BB:CC:DD:EE:FF</calling_station_id>
+                <framed_ip_address>10.1.1.20</framed_ip_address>
+                <nas_ip_address>10.129.32.16</nas_ip_address>
+                <server>pnp-psn1</server>
+              </activeSession>
+            </activeSessionList>
+            """
+            return httpx.Response(200, text=xml)
+        if path == "/ers/config/endpoint":
+            return httpx.Response(200, json={"SearchResult": {"total": 50, "resources": []}})
+        if path == "/ers/config/activedirectory/abc":
+            return httpx.Response(200, json={"ERSActiveDirectory": {"name": "PnP-AD", "domain": "example.local"}})
+        if path == "/ers/config/activedirectory":
+            return httpx.Response(200, json={"SearchResult": {"total": 1, "resources": [
+                {"name": "PnP-AD", "link": {"href": "https://evil.example/ers/config/activedirectory/abc"}},
+            ]}})
+        if path.startswith("/ers/config/"):
+            return httpx.Response(200, json={"SearchResult": {"total": 3, "resources": []}})
+        if path == "/api/v1/deployment/node":
+            return httpx.Response(200, json={"response": [
+                {"hostname": "pnp-pan1", "ipAddress": "10.96.1.150", "fqdn": "pnp-pan1.example", "nodeStatus": "Connected", "roles": ["PrimaryAdmin"], "services": []},
+            ]})
+        if path == "/api/v1/certs/trusted-certificate":
+            return httpx.Response(200, json={"response": [
+                {"friendlyName": "Old CA", "expirationDate": "2020-01-01T00:00:00.000+0000"},
+                {"friendlyName": "Soon CA", "expirationDate": "2026-12-01T00:00:00.000+0000"},
+                {"friendlyName": "Later CA", "expirationDate": "2027-06-01T00:00:00.000+0000"},
+            ]})
+        if path == "/admin/API/mnt/Alarm":
+            return httpx.Response(404, text="")
+        return httpx.Response(404, text=path)
+
+    body = operations(
+        "https://ise.example",
+        "ers-admin",
+        password,
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+        now=moment,
+        resolve=lambda host: {"10.96.1.150"} if host == "pnp-pan1.example" else set(),
+        probe=lambda ip: ip == "10.96.1.150",
+    )
+    assert body["ok"] is True
+    assert body["sessions"]["active"] == 1200
+    assert body["sessions"]["recent"] == 1
+    assert body["sessions"]["rows"][0]["server"] == "pnp-psn1"
+    assert body["sessions"]["rows"][0]["client"] == "10.1.1.20"
+    assert body["sessions"]["message"] == ""
+    inventory = {row["name"]: row["count"] for row in body["inventory"]}
+    assert inventory["Endpoints"] == 50
+    assert inventory["Network devices"] == 3
+    assert inventory["Active Directory"] == 1
+    assert body["directories"] == [{"name": "PnP-AD", "domain": "example.local"}]
+    deps = {row["name"]: row for row in body["dependencies"]}
+    assert deps["DNS"]["status"] == "ok"
+    assert deps["DNS"]["rows"][0] == {"name": "pnp-pan1", "status": "ok", "detail": "Resolves to the deployment address."}
+    assert deps["Reachability"]["rows"][0]["status"] == "ok"
+    assert deps["Active Directory"]["status"] == "ok"
+    assert "example.local" in deps["Active Directory"]["detail"]
+    assert deps["Reachability"]["status"] == "ok"
+    assert deps["Certificates"]["status"] == "warning"
+    assert "expired" in deps["Certificates"]["detail"]
+    assert body["alarms"]["available"] is False
+    assert "secret" not in json.dumps(body)
+    assert password not in json.dumps(body)
+    from ie_config.netbridge.ise import _parse_time
+    assert _parse_time("Wed Jun 01 00:00:00 SAST 2027").year == 2027
+
+
+def test_infoblox_health_reads_grid_members_and_service_status():
+    from ie_config.netbridge.infoblox import fetch, member_detail
+
+    password = "infoblox-password"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert password not in str(request.url)
+        path = request.url.path
+        if "/wapi/v2.13.1/" in path:
+            return httpx.Response(404, json={"Error": "unknown version"})
+        if path.endswith("/grid"):
+            assert path.startswith("/wapi/v2.12/")
+            return httpx.Response(200, json=[{"name": "PnP"}])
+        if path.endswith("/member"):
+            return httpx.Response(200, json=[
+                {
+                    "host_name": "gm.example.com",
+                    "platform": "VNIOS",
+                    "vip_setting": {"address": "10.1.1.10"},
+                    "service_status": [
+                        {"service": "DNS", "status": "WORKING"},
+                        {"service": "DHCP", "status": "FAILED"},
+                        {"service": "TFTP", "status": "INACTIVE"},
+                    ],
+                    "node_info": [{"ha_status": "Active", "hwtype": "IB-V1425"}],
+                },
+                {
+                    "host_name": "member.example.com",
+                    "vip_setting": {"address": "10.1.1.11"},
+                    "service_status": [{"service": "DNS", "status": "WORKING"}],
+                    "node_info": [{"ha_status": "Not Configured"}],
+                },
+            ])
+        return httpx.Response(404, text=path)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    body = fetch("https://10.1.1.10", "ibadmin", password, http=client)
+    assert body["ok"] is True
+    assert body["grid"] == "PnP"
+    assert body["version"] == "v2.12"
+    assert [row["hostname"] for row in body["members"]] == ["gm.example.com", "member.example.com"]
+    master = body["members"][0]
+    assert master["group"] == "grid"
+    assert master["healthy"] is False
+    assert master["services"] == [{"name": "DNS", "running": True}, {"name": "DHCP", "running": False}]
+    assert "DHCP is failed" in master["issues"]
+    assert "Active" in master["roles"]
+    assert body["members"][1]["group"] == "member"
+    assert body["members"][1]["healthy"] is True
+    missing = member_detail("https://10.1.1.10", "ibadmin", password, "other.example.com", http=client)
+    assert missing["member"] is None
+    assert password not in json.dumps(body)
+

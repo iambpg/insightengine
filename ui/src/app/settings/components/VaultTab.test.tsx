@@ -31,6 +31,14 @@ describe('VaultTab', () => {
     render(<VaultTab />);
 
     expect(screen.getByRole('heading', { name: 'Vault' })).toBeInTheDocument();
+    expect(screen.getByLabelText('ISE URL')).toHaveAttribute('type', 'text');
+    expect(screen.getByLabelText('ISE username')).toHaveAttribute('type', 'text');
+    expect(screen.getByLabelText('FortiManager URL')).toHaveAttribute('type', 'text');
+    expect(screen.getByLabelText('Infoblox URL')).toHaveAttribute('type', 'text');
+    expect(screen.getByLabelText('Infoblox username')).toHaveAttribute('type', 'text');
+    expect(screen.getByRole('button', { name: 'Show ISE password' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show Infoblox password' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show FortiManager API token' })).toBeInTheDocument();
     for (const name of GROUPS) {
       const button = groupButton(name);
       expect(button).toHaveAttribute('aria-expanded', 'false');

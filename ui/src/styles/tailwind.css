@@ -113,6 +113,9 @@
   .drawer-in {
     animation: drawerIn 0.28s ease-out;
   }
+  .drawer-in-left {
+    animation: drawerInLeft 0.28s ease-out;
+  }
   .slide-up {
     animation: slideUp 0.2s ease-out;
   }
@@ -143,6 +146,10 @@
 }
 @keyframes drawerIn {
   from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes drawerInLeft {
+  from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
 @keyframes slideUp {
@@ -185,6 +192,7 @@
   .fade-in,
   .slide-in-right,
   .drawer-in,
+  .drawer-in-left,
   .slide-up,
   .pop-in,
   .led-warn-blink,

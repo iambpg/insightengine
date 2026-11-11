@@ -33,23 +33,42 @@ output:
 username: '@@DEVICE_USERNAME@@'
 password: '@@DEVICE_PASSWORD@@'
 model: ios
+# NetBox often has a manufacturer and no platform. Map the manufacturer to the
+# command set Oxidized knows. A platform slug that already matches is kept.
+model_map:
+  !ruby/regexp /(?i)cisco/: ios
+  !ruby/regexp /(?i)forti/: fortios
+  !ruby/regexp /(?i)palo/: panos
+  !ruby/regexp /(?i)juniper/: junos
+  ios: ios
+  iosxe: ios
+  nxos: nxos
+  aireos: aireos
+  fortios: fortios
+  panos: panos
 source:
   default: http
   http:
     # Device list straight from NetBox (same CA-verified internal endpoint).
-    # Default filter is status=active: approved discoveries and devices added
-    # by hand. tag=oxidized is optional; that tag 400s until seed creates it.
-    # TODO(Phindani): NetBox platform names/slugs must match Oxidized model
-    # names (ios, junos, fortios, panos, ...). Verify the 'model' mapping.
-    url: https://caddy:8443/api/dcim/devices/?@@NETBOX_FILTER@@&limit=1000
-    scheme: https
-    secure: true
+    # The filter is status=active&tag=oxidized: only devices marked for backup.
+    # Manufacturer chooses the command set when the platform is empty.
+    # ie-config returns the same NetBox devices and adds username and password
+    # when Settings → Vault has a login assigned to that device. Other devices
+    # keep the username and password above.
+    url: http://ie-config:8080/internal/oxidized/nodes
+    scheme: http
+    secure: false
+    hosts_location: results
     map:
       name: name
-      model: platform.slug
+      model: device_type.manufacturer.name
+      ip: primary_ip4.address
       group: site.slug
+      username: username
+      password: password
     headers:
       Authorization: 'Bearer @@NETBOX_TOKEN@@'
+      X-Oxidized-Token: '@@SOURCE_TOKEN@@'
     pagination: true
     pagination_key_name: next
 hooks:

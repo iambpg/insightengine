@@ -270,7 +270,7 @@ export async function setDeviceSites(ids: string[], site: string) {
 
 export async function netbridgeGet(path: string) {
   await delay(40);
-  if (path.startsWith('/open-count')) return { open: 2 };
+  if (path.startsWith('/open-count')) return { open: 2, iseConfigured: false, infobloxConfigured: false };
   if (path.startsWith('/summary')) {
     return {
       netdiscoDevices: 12,
@@ -282,6 +282,7 @@ export async function netbridgeGet(path: string) {
       netdisco: { ok: true, message: '' },
       eox: { configured: true, message: '' },
       fortimanager: { configured: false, message: 'FortiManager URL and token are not configured. Add them in Settings → Vault.' },
+      ise: { configured: false, message: 'ISE URL, username, and password are not configured. Add them in Settings → Vault.' },
       jobs: [{ id: 1, kind: 'ap-scan', actor: 'admin@example.com', status: 'done', counts: { aps: 4 }, errors: [], startedAt: '2026-11-01T00:00:00Z', finishedAt: '2026-11-01T00:01:00Z', detail: '' }],
     };
   }
@@ -307,6 +308,71 @@ export async function netbridgeGet(path: string) {
   }
   if (path.startsWith('/fortimanager')) {
     return { configured: false, message: 'FortiManager URL and token are not configured. Add them in Settings → Vault.', instances: [], rows: [], total: 0, page: 1, pageSize: 25 };
+  }
+  if (path.startsWith('/infoblox/members/')) {
+    return {
+      configured: false,
+      ok: false,
+      message: 'Infoblox URL, username, and password are not configured. Add them in Settings → Vault.',
+      grid: '',
+      version: '',
+      member: null,
+    };
+  }
+  if (path.startsWith('/infoblox/health')) {
+    return {
+      configured: false,
+      ok: false,
+      message: 'Infoblox URL, username, and password are not configured. Add them in Settings → Vault.',
+      grid: '',
+      version: '',
+      members: [],
+    };
+  }
+  if (path.startsWith('/ise/operations')) {
+    return {
+      configured: false,
+      ok: false,
+      message: 'ISE URL, username, and password are not configured. Add them in Settings → Vault.',
+      version: '',
+      sessions: { active: null, windowMinutes: 30, recent: null, rows: [], message: '' },
+      inventory: [],
+      directories: [],
+      dependencies: [],
+      alarms: { available: false, message: '', rows: [] },
+    };
+  }
+  if (path.startsWith('/ise/nodes/')) {
+    return {
+      configured: false,
+      ok: false,
+      message: 'ISE URL, username, and password are not configured. Add them in Settings → Vault.',
+      version: '',
+      node: null,
+    };
+  }
+  if (path.startsWith('/ise/health')) {
+    return {
+      configured: false,
+      ok: false,
+      message: 'ISE URL, username, and password are not configured. Add them in Settings → Vault.',
+      version: '',
+      activeSessions: null,
+      nodes: [],
+    };
+  }
+  if (path.startsWith('/ise')) {
+    return {
+      configured: false,
+      ok: false,
+      message: 'ISE URL, username, and password are not configured. Add them in Settings → Vault.',
+      version: '',
+      activeSessions: null,
+      rows: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+    };
   }
   return { rows: [], total: 0, page: 1, pageSize: 25, message: '' };
 }

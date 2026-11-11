@@ -37,7 +37,6 @@ const GROUPS: { title: string; items: NavItem[] }[] = [
         label: 'NetBridge',
         icon: 'ArrowsRightLeftIcon',
       },
-      { href: '/device-parents', label: 'Device parents', icon: 'ShareIcon' },
     ],
   },
   {
@@ -65,14 +64,18 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
     initials: 'MB',
   });
   const [pending, setPending] = useState(0);
+  const [iseConfigured, setIseConfigured] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     api
       .netbridgeGet('/open-count')
       .then((body) => {
-        const count = Number((body as { open?: number })?.open || 0);
-        if (!cancelled) setPending(count);
+        const row = body as { open?: number; iseConfigured?: boolean };
+        if (!cancelled) {
+          setPending(Number(row?.open || 0));
+          setIseConfigured(Boolean(row?.iseConfigured));
+        }
       })
       .catch((cause) => {
         reportLoadError(cause, 'open conflicts');
@@ -81,7 +84,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     const apply = () => {
@@ -128,7 +131,11 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onCloseMobile
 
       <nav className="scroll-thin flex-1 space-y-5 overflow-y-auto px-2 py-4" aria-label="Primary">
         {GROUPS.map((g) => {
-          const items = g.items.filter((item) => (isMockMode() || item.href !== '/device-detail') && (item.href !== '/settings' || allowSettings(who.role)));
+          let items = g.items.filter((item) => (isMockMode() || item.href !== '/device-detail') && (item.href !== '/settings' || allowSettings(who.role)));
+          if (g.title === 'Inventory') {
+            if (iseConfigured) items = [...items, { href: '/ise', label: 'ISE', icon: 'ShieldCheckIcon' }];
+            items = [...items, { href: '/infoblox', label: 'Infoblox', icon: 'CircleStackIcon' }];
+          }
           if (items.length === 0) return null;
           return (
           <div key={`grp-${g.title}`}>
