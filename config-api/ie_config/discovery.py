@@ -1236,7 +1236,10 @@ class Discovery:
         now = time.monotonic()
         if self._catalog is not None and (now - self._catalog_at) < _CATALOG_TTL:
             return dict(self._catalog)
-        empty = {"ok": False, "roles": [], "sites": [], "platforms": [], "roleChoices": [], "siteChoices": []}
+        empty = {
+            "ok": False, "roles": [], "sites": [], "platforms": [], "roleChoices": [], "siteChoices": [],
+            "tenantGroups": [], "tenants": [],
+        }
         if not self.netbox_headers():
             return empty
         try:
@@ -1245,6 +1248,12 @@ class Discovery:
             platforms = self._netbox_get_all("/api/dcim/platforms/?limit=500")
         except Exception:
             return empty
+        tenant_groups, tenants = [], []
+        try:
+            tenant_groups = self._netbox_get_all("/api/tenancy/tenant-groups/?limit=200")
+            tenants = self._netbox_get_all("/api/tenancy/tenants/?limit=1000")
+        except Exception:
+            tenant_groups, tenants = [], []
         choices = []
         for row in roles or []:
             name = (row.get("name") or "").strip()
@@ -1264,6 +1273,8 @@ class Discovery:
             "sites": _names(sites),
             "siteChoices": site_choices,
             "platforms": _names(platforms),
+            "tenantGroups": _choice_rows(tenant_groups),
+            "tenants": _tenant_rows(tenants),
         }
         self._catalog = body
         self._catalog_at = now
@@ -1332,6 +1343,29 @@ class Discovery:
             db.commit()
         return {"ok": True, "site": chosen, "updated": updated, "missing": missing}
 
+    def set_tenants(self, ids, tenant: str) -> dict:
+        """Remember the NetBox tenant on pending candidates. Approval reads it back."""
+        chosen = (tenant or "").strip()
+        if len(chosen) > 128:
+            raise ValueError("tenant is too long")
+        updated = []
+        missing = []
+        with self.sf() as db:
+            for raw in ids or []:
+                try:
+                    cid = int(raw)
+                except (TypeError, ValueError):
+                    missing.append(str(raw))
+                    continue
+                row = db.get(DiscoveryCandidate, cid)
+                if row is None or row.status != "pending":
+                    missing.append(str(cid))
+                    continue
+                row.tenant_slug = chosen
+                updated.append(str(cid))
+            db.commit()
+        return {"ok": True, "tenant": chosen, "updated": updated, "missing": missing}
+
 
 _SNMP_ERRORS = {
     "timeout": "no response (timed out)",
@@ -1383,6 +1417,28 @@ def _names(rows: list[dict]) -> list[str]:
         name = (row.get("name") or row.get("slug") or "").strip()
         if name and name not in found:
             found.append(name)
+    return found
+
+
+def _choice_rows(rows: list[dict]) -> list[dict]:
+    found = []
+    for row in rows or []:
+        name = (row.get("name") or "").strip()
+        if not name:
+            continue
+        found.append({"name": name, "slug": (row.get("slug") or "").strip()})
+    return found
+
+
+def _tenant_rows(rows: list[dict]) -> list[dict]:
+    found = []
+    for row in rows or []:
+        name = (row.get("name") or "").strip()
+        if not name:
+            continue
+        group = row.get("group") or {}
+        group_name = (group.get("name") or "").strip() if isinstance(group, dict) else ""
+        found.append({"name": name, "slug": (row.get("slug") or "").strip(), "group": group_name})
     return found
 
 
@@ -1519,6 +1575,8 @@ def unapproved_for_ui(row: dict, suffixes: list[str] | None = None) -> dict:
         suggested["site"] = row["site"]
     if row.get("platform"):
         suggested["platform"] = row["platform"]
+    if row.get("tenant"):
+        suggested["tenant"] = row["tenant"]
     return {
         "id": str(row.get("id")),
         "ip": row.get("ip") or "",
@@ -1552,6 +1610,7 @@ def _public(row: DiscoveryCandidate) -> dict:
         "status": row.status,
         "role": row.role_slug,
         "site": row.site_slug,
+        "tenant": row.tenant_slug,
         "netboxDeviceId": row.netbox_device_id or None,
         "firstSeen": _iso(row.first_seen),
         "lastSeen": _iso(row.last_seen),
@@ -1643,6 +1702,27 @@ class NetBoxWriter:
                 data = resp.json()
                 return data if isinstance(data, dict) else {"results": data}
             return {}
+
+    def find_tenant(self, name: str) -> int | None:
+        """Match a tenant the operator picked. Does not create one."""
+        label = (name or "").strip()
+        if not label:
+            return None
+        slug = _slug(label)
+        found = self._req("GET", "/api/tenancy/tenants/?slug=%s" % quote(slug, safe=""))
+        for row in found.get("results") or []:
+            same_slug = str(row.get("slug") or "") == slug
+            same_name = str(row.get("name") or "").strip().lower() == label.lower()
+            if (same_slug or same_name) and row.get("id") is not None:
+                return int(row["id"])
+        try:
+            by_name = self._req("GET", "/api/tenancy/tenants/?name__ie=%s" % quote(label, safe=""))
+        except RuntimeError:
+            by_name = {}
+        for row in by_name.get("results") or []:
+            if str(row.get("name") or "").strip().lower() == label.lower() and row.get("id") is not None:
+                return int(row["id"])
+        return None
 
     def ensure(self, list_path: str, slug: str, body: dict) -> dict:
         found = self._req("GET", "%s?slug=%s" % (list_path, quote(slug, safe="")))
@@ -1782,6 +1862,12 @@ class NetBoxWriter:
             pass
         if platform_id:
             device_body["platform"] = platform_id
+        tenant_name = (candidate.get("tenant") or "").strip()
+        if tenant_name:
+            tenant_id = self.find_tenant(tenant_name)
+            if tenant_id is None:
+                raise ValueError("tenant was not found in NetBox")
+            device_body["tenant"] = tenant_id
         device = self._req("POST", "/api/dcim/devices/", device_body)
         try:
             iface = self._req("POST", "/api/dcim/interfaces/", {

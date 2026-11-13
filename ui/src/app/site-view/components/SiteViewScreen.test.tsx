@@ -17,7 +17,7 @@ vi.mock('@/lib/apiMode', () => ({
 }));
 
 vi.mock('@/lib/apiClient', () => ({
-  api: { listSites: vi.fn(), listSiteDevices: vi.fn() },
+  api: { listSites: vi.fn(), listSiteDevices: vi.fn(), listAlerts: vi.fn(), getSiteBriefing: vi.fn(), getSiteSla: vi.fn() },
 }));
 
 function site(id: string, name: string): SiteRow {
@@ -39,6 +39,18 @@ describe('SiteViewScreen client navigation', () => {
     window.history.pushState({}, '', '/');
     vi.mocked(api.listSites).mockReset();
     vi.mocked(api.listSiteDevices).mockReset();
+    vi.mocked(api.listAlerts).mockReset();
+    vi.mocked(api.listAlerts).mockResolvedValue([]);
+    vi.mocked(api.getSiteSla).mockReset();
+    vi.mocked(api.getSiteSla).mockResolvedValue({ points: [], limiterMbps: null, note: '', windowSeconds: 180 });
+    vi.mocked(api.getSiteBriefing).mockReset();
+    vi.mocked(api.getSiteBriefing).mockResolvedValue({
+      window: 'the past 24 hours',
+      summary: 'Quiet.',
+      sections: [],
+      talkers: [],
+      talkerNote: '',
+    });
     vi.mocked(api.listSites).mockResolvedValue({
       rows: [site('1', 'Rotterdam'), site('2', 'Amsterdam')],
       total: 2,

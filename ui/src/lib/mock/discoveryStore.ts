@@ -56,6 +56,18 @@ export function setSites(ids: string[], site: string): { ok: boolean; site: stri
   return { ok: true, site: chosen, updated };
 }
 
+export function setTenants(ids: string[], tenant: string): { ok: boolean; tenant: string; updated: string[] } {
+  const chosen = tenant.trim();
+  const updated: string[] = [];
+  for (const id of ids) {
+    const device = devices.find((item) => item.id === id);
+    if (!device) continue;
+    device.suggested = { ...device.suggested, tenant: chosen };
+    updated.push(id);
+  }
+  return { ok: true, tenant: chosen, updated };
+}
+
 export function setRoles(ids: string[], role: string): { ok: boolean; role: string; updated: string[] } {
   const chosen = role.trim();
   if (!chosen) throw new ApiError(400, 'bad_body', 'role is required');

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
+import UsageGauge from '@/components/ui/UsageGauge';
 
 type Service = { name: string; running?: boolean };
 
@@ -109,22 +110,6 @@ function Stat({ label, value, note }: { label: string; value: string | number; n
   );
 }
 
-function Meter({ label, value }: { label: string; value?: number | null }) {
-  const width = value == null ? 0 : Math.max(0, Math.min(100, value));
-  const tone = value == null ? 'bg-muted-foreground/30' : value >= 90 ? 'bg-destructive' : value >= 75 ? 'bg-warning' : 'bg-success';
-  return (
-    <div>
-      <div className="flex items-center justify-between text-xs">
-        <dt className="text-muted-foreground">{label}</dt>
-        <dd className="tabular font-medium">{value == null ? '—' : `${value}%`}</dd>
-      </div>
-      <div className="mt-1 h-1.5 rounded-full bg-muted">
-        <div className={`h-1.5 rounded-full ${tone}`} style={{ width: `${width}%` }} />
-      </div>
-    </div>
-  );
-}
-
 function MemberGroup({ title, note, members, loading }: { title: string; note: string; members: Member[]; loading: boolean }) {
   return (
     <section aria-label={title} className="space-y-3">
@@ -159,12 +144,12 @@ function MemberGroup({ title, note, members, loading }: { title: string; note: s
                 ))}
               </ul>
             </div>
-            <dl className="mt-3 space-y-2">
-              <Meter label="CPU" value={member.cpu} />
-              <Meter label="Memory" value={member.memory} />
-              <Meter label="Disk /" value={member.diskRoot} />
-              <Meter label="Disk /opt" value={member.diskOpt} />
-            </dl>
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              <UsageGauge label="CPU" value={member.cpu} />
+              <UsageGauge label="Memory" value={member.memory} />
+              <UsageGauge label="Disk /" value={member.diskRoot} />
+              <UsageGauge label="Disk /opt" value={member.diskOpt} />
+            </div>
             <div className="mt-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">API services</p>
               {(member.services || []).length === 0 ? (

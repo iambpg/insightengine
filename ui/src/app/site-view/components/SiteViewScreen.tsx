@@ -82,7 +82,7 @@ export default function SiteViewScreen() {
     <div className="space-y-5">
       <header className="px-4">
         <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
-        <p className="mt-1 text-sm text-muted-foreground">About 2,000 sites, about 10 switches each. Search, filter, then inspect a site's devices.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Search a site, then see whether the store is working, what is wrong, and the wireless, switching, and WAN readings for that site.</p>
       </header>
       {isMockMode() ? <ExampleDataBanner /> : null}
 

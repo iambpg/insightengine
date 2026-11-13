@@ -1,4 +1,4 @@
-import type { AlertItem, DeviceDetailData, DeviceRow, SeriesPoint, SiteRow } from '@/lib/types';
+import type { AlertItem, DeviceDetailData, DeviceRow, SeriesPoint, SiteBriefing, SiteRow, SiteSlaSeries } from '@/lib/types';
 import type { DeviceQuery, Paged, SiteQuery } from '@/lib/apiClient';
 import type { RangeKey } from '@/lib/mockData';
 import { ApiError } from '@/lib/apiError';
@@ -164,6 +164,16 @@ export async function listSiteDevices(siteId: string | number): Promise<DeviceRo
   return request(`${API}/sites/${encodeURIComponent(String(siteId))}/devices`);
 }
 
+export async function getSiteSla(siteId: string | number): Promise<SiteSlaSeries> {
+  return request(`${API}/sites/${encodeURIComponent(String(siteId))}/sla`);
+}
+
+export async function getSiteBriefing(siteId: string | number, range: string, customMin?: number): Promise<SiteBriefing> {
+  const params = new URLSearchParams({ range });
+  if (range === 'custom' && customMin) params.set('custom_min', String(customMin));
+  return request(`${API}/sites/${encodeURIComponent(String(siteId))}/briefing?${params}`);
+}
+
 export async function listDiscovered(query?: { page?: number; pageSize?: number; q?: string }) {
   if (!query) return request<UnapprovedDevice[]>(`${API}/discovery/unapproved`);
   const params = new URLSearchParams({
@@ -187,6 +197,13 @@ export async function setDeviceSites(ids: string[], site: string) {
   return request<{ ok: boolean; site: string; updated: string[] }>(`${API}/discovery/sites`, {
     method: 'POST',
     body: { ids, site },
+  });
+}
+
+export async function setDeviceTenants(ids: string[], tenant: string) {
+  return request<{ ok: boolean; tenant: string; updated: string[] }>(`${API}/discovery/tenants`, {
+    method: 'POST',
+    body: { ids, tenant },
   });
 }
 

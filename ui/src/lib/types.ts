@@ -110,10 +110,50 @@ export interface SiteRow {
   name: string;
   region: string;
   city: string;
+  description?: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   deviceCount: number;
   health: DeviceHealth;
   alerts: number;
   lastDiscovery: string;
+}
+
+/** One row behind a summarized warning. Hover previews it. Click opens the list. */
+export interface SiteNotice {
+  id: string;
+  label: string;
+  tone: 'warning' | 'critical' | 'info' | 'success';
+  total?: number;
+  items: { title: string; detail?: string; meta?: string; href?: string }[];
+}
+
+/** Manager account of one site over a chosen window. GET /api/v1/sites/{id}/briefing */
+export interface SiteBriefing {
+  window: string;
+  summary: string;
+  sections: { id: string; title: string; text: string; notices?: SiteNotice[] }[];
+  talkers: { device: string; port: string; inMbps: number; outMbps: number }[];
+  talkerNote: string;
+  sla?: SiteSlaSeries;
+}
+
+/** Live WAN graph. GET /api/v1/sites/{id}/sla. One point per second. */
+export interface SiteSlaSeries {
+  points: { t: number; label: string; inMbps: number; outMbps: number }[];
+  limiterMbps: number | null;
+  limiterInMbps?: number | null;
+  limiterOutMbps?: number | null;
+  interfaces?: { name: string; inMbps: number | null; outMbps: number | null }[];
+  links?: {
+    name: string;
+    inMbps: number | null;
+    outMbps: number | null;
+    points: { t: number; inMbps: number; outMbps: number }[];
+  }[];
+  note: string;
+  windowSeconds?: number;
 }
 
 /** Device Netdisco found that is not in NetBox. Matches GET /api/v1/discovery/unapproved. */
@@ -204,6 +244,7 @@ export interface AccessPointRadio {
   rssiAvg?: number | null;
   snrAvg?: number | null;
   band?: string;
+  operUp?: boolean | null;
 }
 
 export interface AccessPointSsid {

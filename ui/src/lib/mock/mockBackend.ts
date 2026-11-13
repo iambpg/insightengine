@@ -13,7 +13,7 @@ import {
   type RangeKey,
 } from '@/lib/mockData';
 import type { DeviceQuery, Paged, SiteQuery } from '@/lib/apiClient';
-import type { AlertItem, DeviceDetailData, DeviceRow, SeriesPoint, SiteRow } from '@/lib/types';
+import type { AlertItem, DeviceDetailData, DeviceRow, SeriesPoint, SiteBriefing, SiteRow, SiteSlaSeries } from '@/lib/types';
 import { mockLogin } from '@/lib/mock/mockAuth';
 import {
   approveUnapproved,
@@ -25,6 +25,7 @@ import {
   resetDiscoveryStore,
   setRoles,
   setSites,
+  setTenants,
   startScan as beginScan,
 } from '@/lib/mock/discoveryStore';
 import { readMockSetupState } from '@/lib/mock/setupState';
@@ -238,6 +239,39 @@ export async function listSiteDevices(siteId: string | number): Promise<DeviceRo
   return buildSiteDevices(mockSiteIndex(siteId));
 }
 
+export async function getSiteSla(): Promise<SiteSlaSeries> {
+  await delay(40);
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    points: [0, 1, 2].map((offset) => ({
+      t: now - 2 + offset,
+      label: '',
+      inMbps: 1.2,
+      outMbps: 0.4,
+    })),
+    limiterMbps: null,
+    note: '',
+    windowSeconds: 180,
+  };
+}
+
+export async function getSiteBriefing(siteId: string | number, range: string): Promise<SiteBriefing> {
+  await delay(180);
+  return {
+    window: range === '1h' ? 'the past hour' : 'the past 24 hours',
+    summary: `Example account for site ${siteId}. The live page uses syslog and SNMP for this window.`,
+    sections: [
+      { id: 'lan', title: 'LAN Network', text: 'Example switches answered. No input errors were counted.' },
+      { id: 'performance', title: 'CPU and memory', text: 'Example CPU stayed under 40%.' },
+      { id: 'logs', title: 'Logs and config changes', text: 'Example data has no syslog lines.' },
+      { id: 'wifi', title: 'Wi-Fi Network', text: '12 clients are connected. Clients are not listed.' },
+      { id: 'wan', title: 'SDWAN/WAN Network', text: 'Example WAN throughput was not returned.' },
+    ],
+    talkers: [{ device: 'sw-1', port: 'Gi1/0/1', inMbps: 12.4, outMbps: 3.2 }],
+    talkerNote: 'These are the ports that carried the most traffic in this window. Individual clients are not listed.',
+  };
+}
+
 export async function listDiscovered(query?: { page?: number; pageSize?: number; q?: string }) {
   await delay(300);
   const rows = listUnapproved();
@@ -266,6 +300,11 @@ export async function setDeviceRoles(ids: string[], role: string) {
 export async function setDeviceSites(ids: string[], site: string) {
   await delay(40);
   return setSites(ids, site);
+}
+
+export async function setDeviceTenants(ids: string[], tenant: string) {
+  await delay(40);
+  return setTenants(ids, tenant);
 }
 
 export async function netbridgeGet(path: string) {
@@ -416,7 +455,7 @@ const MOCK_PLATFORMS = ['ios-xe', 'ios', 'nxos', 'junos', 'fortios', 'aoscx'];
 
 export async function discoveryCatalog() {
   await delay(120);
-  return { ok: true, roles: MOCK_ROLES, sites: MOCK_SITES, platforms: MOCK_PLATFORMS };
+  return { ok: true, roles: MOCK_ROLES, sites: MOCK_SITES, platforms: MOCK_PLATFORMS, tenantGroups: [], tenants: [] };
 }
 
 export async function listAlerts(): Promise<AlertItem[]> {

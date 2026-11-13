@@ -21,6 +21,7 @@ export interface SeriesDef {
   key: string;
   label: string;
   color: string;
+  dash?: string;
 }
 
 interface Props {
@@ -32,6 +33,7 @@ interface Props {
   yMax?: number;
   gradientId: string;
   stacked?: boolean;
+  legend?: boolean;
 }
 
 interface TipProps {
@@ -58,7 +60,7 @@ function Tip({ active, payload, label, unit }: TipProps) {
 }
 
 // Recharts is browser-only; this file is a client component and is imported dynamically with ssr:false by its parent.
-export default function ZoomableChart({ data, series, kind, unit, height = 220, yMax, gradientId, stacked }: Props) {
+export default function ZoomableChart({ data, series, kind, unit, height = 220, yMax, gradientId, stacked, legend = true }: Props) {
   const [left, setLeft] = useState<string | null>(null);
   const [right, setRight] = useState<string | null>(null);
   const [zoom, setZoom] = useState<{ from: number; to: number } | null>(null);
@@ -84,7 +86,7 @@ export default function ZoomableChart({ data, series, kind, unit, height = 220, 
 
   const common = {
     data: view,
-    margin: { top: 8, right: 8, left: -12, bottom: 0 },
+    margin: { top: 8, right: 12, left: 8, bottom: 0 },
     onMouseDown: (e: { activeLabel?: string | number }) => e?.activeLabel !== undefined && setLeft(String(e.activeLabel)),
     onMouseMove: (e: { activeLabel?: string | number }) => left && e?.activeLabel !== undefined && setRight(String(e.activeLabel)),
     onMouseUp: finish,
@@ -94,9 +96,16 @@ export default function ZoomableChart({ data, series, kind, unit, height = 220, 
     <>
       <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
       <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={{ stroke: 'var(--border)' }} minTickGap={36} />
-      <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} domain={[0, yMax ?? 'auto']} width={44} />
+      <YAxis
+        tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
+        tickLine={false}
+        axisLine={false}
+        domain={[0, yMax ?? 'auto']}
+        width={64}
+        label={{ value: unit, angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--muted-foreground)' } }}
+      />
       <Tooltip content={<Tip unit={unit} />} />
-      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+      {legend ? <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} /> : null}
       {left && right ? <ReferenceArea x1={left} x2={right} fill="var(--accent)" fillOpacity={0.2} stroke="var(--accent)" /> : null}
     </>
   );
@@ -132,7 +141,7 @@ export default function ZoomableChart({ data, series, kind, unit, height = 220, 
           <LineChart {...common}>
             {axes}
             {series.map((s) => (
-              <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+              <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} strokeDasharray={s.dash} dot={false} connectNulls={false} isAnimationActive={false} />
             ))}
           </LineChart>
         ) : (

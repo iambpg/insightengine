@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import Icon from '@/components/ui/AppIcon';
 import Badge from '@/components/ui/Badge';
+import InspectNote from '@/components/ui/InspectNote';
 import EmptyState from '@/components/ui/EmptyState';
 import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import Pagination from '@/components/ui/Pagination';
@@ -182,30 +183,49 @@ export default function AlertsView() {
         {summaryCards.map((c) => {
           const m = SEV_META[c.key];
           const on = severity === c.key;
+          const rows = (alerts ?? []).filter((alert) => alert.status === 'open' && alert.severity === c.key).slice(0, 40);
           return (
-            <button
+            <InspectNote
               key={`sum-${c.key}`}
-              type="button"
-              onClick={() => setSeverity(on ? 'all' : c.key)}
-              aria-pressed={on}
-              className={`flex items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-card transition-all hover:bg-muted/50 active:scale-[0.99] ${on ? 'border-primary ring-1 ring-primary' : 'border-border'}`}
+              label={`Open ${m.label.toLowerCase()}`}
+              tone={c.key === 'critical' ? 'critical' : c.key === 'warning' ? 'warning' : 'info'}
+              total={c.count}
+              className="w-full"
+              actionLabel="Show only these"
+              onAction={() => setSeverity(c.key)}
+              items={rows.map((alert) => ({
+                title: alert.title,
+                detail: [alert.site, alert.deviceHostname, alert.detail].filter(Boolean).join(' · '),
+                meta: alert.raisedAt,
+                href: alert.deviceId ? devicePath(alert.deviceId, alert.formFactor) : undefined,
+              }))}
             >
-              <span className={`flex h-10 w-10 items-center justify-center rounded-full ${c.key === 'critical' ? 'bg-destructive/10 text-destructive' : c.key === 'warning' ? 'bg-warning/15 text-warning' : 'bg-info/10 text-info'}`}>
-                <Icon name={m.icon} size={22} variant="solid" />
+              <span className={`flex w-full items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-card ${on ? 'border-primary ring-1 ring-primary' : 'border-border'}`}>
+                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${c.key === 'critical' ? 'bg-destructive/10 text-destructive' : c.key === 'warning' ? 'bg-warning/15 text-warning' : 'bg-info/10 text-info'}`}>
+                  <Icon name={m.icon} size={22} variant="solid" />
+                </span>
+                <span>
+                  <span className="block text-2xl font-semibold tabular leading-none">{alerts ? c.count : '—'}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Open {m.label.toLowerCase()}</span>
+                </span>
               </span>
-              <span>
-                <span className="block text-2xl font-semibold tabular leading-none">{alerts ? c.count : '—'}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">Open {m.label.toLowerCase()}</span>
-              </span>
-            </button>
+            </InspectNote>
           );
         })}
-        <button
-          type="button"
-          onClick={() => setStatus(status === 'acknowledged' ? 'open' : 'acknowledged')}
-          aria-pressed={status === 'acknowledged'}
-          className={`flex items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-card transition-all hover:bg-muted/50 active:scale-[0.99] ${status === 'acknowledged' ? 'border-primary ring-1 ring-primary' : 'border-border'}`}
+        <InspectNote
+          label="Acknowledged"
+          tone="success"
+          total={counts.acknowledged}
+          className="w-full"
+          actionLabel="Show acknowledged"
+          onAction={() => setStatus('acknowledged')}
+          items={(alerts ?? []).filter((alert) => alert.status === 'acknowledged').slice(0, 40).map((alert) => ({
+            title: alert.title,
+            detail: [alert.site, alert.deviceHostname, alert.detail].filter(Boolean).join(' · '),
+            meta: alert.raisedAt,
+          }))}
         >
+          <span className={`flex w-full items-center gap-3 rounded-lg border bg-card p-4 text-left shadow-card ${status === 'acknowledged' ? 'border-primary ring-1 ring-primary' : 'border-border'}`}>
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
             <Icon name="CheckBadgeIcon" size={22} variant="solid" />
           </span>
@@ -213,7 +233,8 @@ export default function AlertsView() {
             <span className="block text-2xl font-semibold tabular leading-none">{alerts ? counts.acknowledged : '—'}</span>
             <span className="mt-1 block text-xs text-muted-foreground">Acknowledged</span>
           </span>
-        </button>
+          </span>
+        </InspectNote>
       </section>
 
       <section className="rounded-none border-x-0 border-y border-border bg-card shadow-card" aria-label="Alert triage">

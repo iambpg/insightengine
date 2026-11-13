@@ -108,6 +108,7 @@ class DiscoveryCandidate(Base):
     netbox_device_id: Mapped[str] = mapped_column(String(32), default="")
     site_slug: Mapped[str] = mapped_column(String(64), default="")
     role_slug: Mapped[str] = mapped_column(String(64), default="")
+    tenant_slug: Mapped[str] = mapped_column(String(128), default="")
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     detail: Mapped[str] = mapped_column(Text, default="")
@@ -183,6 +184,20 @@ class NetbridgeEox(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+def ensure_discovery_schema(engine) -> None:
+    """Add columns that create_all does not add to a database that already exists."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    if "discovery_candidates" not in insp.get_table_names():
+        return
+    names = {column["name"] for column in insp.get_columns("discovery_candidates")}
+    if "tenant_slug" in names:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE discovery_candidates ADD COLUMN tenant_slug VARCHAR(128) DEFAULT ''"))
+
+
 def make_engine(url: str):
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
     return create_engine(url, future=True, connect_args=connect_args)
@@ -195,4 +210,5 @@ def make_session_factory(url: str):
     from .users_migrate import ensure_user_schema
 
     ensure_user_schema(engine)
+    ensure_discovery_schema(engine)
     return sessionmaker(bind=engine, expire_on_commit=False, future=True), engine

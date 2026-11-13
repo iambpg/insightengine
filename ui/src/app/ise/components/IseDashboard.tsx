@@ -6,6 +6,8 @@ import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
+import UsageGauge from '@/components/ui/UsageGauge';
+import { ServiceDrawer, ServiceTooltip, serviceBrief, type ServiceCheckOps } from './ServiceCheck';
 
 type Service = { name: string; running?: boolean };
 
@@ -152,8 +154,8 @@ export default function IseDashboard() {
             </ul>
           ) : null}
         </div>
-        <NodeGroup title="Main nodes" note="Administration and monitoring." nodes={main} loading={loading} />
-        <NodeGroup title="Policy nodes" note="The nodes that handle authentications." nodes={policy} loading={loading} />
+        <NodeGroup title="Main nodes" note="Administration and monitoring." nodes={main} loading={loading} ops={ops} />
+        <NodeGroup title="Policy nodes" note="The nodes that handle authentications." nodes={policy} loading={loading} ops={ops} />
       </section>
     </div>
   );
@@ -383,6 +385,108 @@ function Status({ status }: { status: string }) {
   return <span className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone}`}>{label}</span>;
 }
 
+function NodePanel({ node, ops }: { node: Node; ops: Operations | null }) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState<{ name: string; anchor: DOMRect } | null>(null);
+  const [selected, setSelected] = useState('');
+  const serviceOps: ServiceCheckOps = {
+    sessions: ops?.sessions,
+    directories: ops?.directories,
+    dependencies: ops?.dependencies,
+    alarms: ops?.alarms,
+  };
+  const hovered = hover ? serviceBrief(hover.name, (node.services || []).find((service) => service.name === hover.name)?.running, node, serviceOps) : null;
+  const chosen = selected ? serviceBrief(selected, (node.services || []).find((service) => service.name === selected)?.running, node, serviceOps) : null;
+  return (
+    <article className="overflow-hidden rounded-md border border-border bg-card shadow-card">
+      <div className="flex items-start justify-between gap-3 p-4">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${node.hostname}`}
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+        >
+          <Icon name={open ? 'ChevronDownIcon' : 'ChevronRightIcon'} size={18} className="mt-0.5 shrink-0" />
+          <span className="min-w-0">
+            <h3 className="text-base font-semibold">{node.hostname}</h3>
+            <p className="font-mono-data text-xs text-muted-foreground">{node.ip || node.fqdn || 'No address'}</p>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {(node.roles || []).map((role) => (
+                <li key={role} className="rounded-md bg-muted px-2 py-0.5 text-xs">{role}</li>
+              ))}
+            </ul>
+          </span>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${node.healthy ? 'bg-success/10 text-success' : 'bg-warning/15 text-foreground'}`}>
+            <span className={`h-2 w-2 rounded-full ${node.healthy ? 'bg-success' : 'bg-warning'}`} />
+            {node.healthy ? 'Healthy' : node.status || 'Unknown'}
+          </span>
+          <Link href={`/ise/${encodeURIComponent(node.hostname)}`} aria-label={`Open ${node.hostname}`} className="text-sm font-medium text-primary">
+            Details
+          </Link>
+        </div>
+      </div>
+      {open ? (
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] border-t border-border">
+          <section aria-label={`${node.hostname} gauges`} className="flex flex-col border-r border-border p-3">
+            <h4 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Gauges</h4>
+            <div className="mt-3 flex flex-nowrap items-start gap-2">
+              <UsageGauge size="lg" label="CPU" value={node.cpu} />
+              <UsageGauge size="lg" label="Memory" value={node.memory} />
+              <UsageGauge size="lg" label="Disk /" value={node.diskRoot} />
+              <UsageGauge size="lg" label="Disk /opt" value={node.diskOpt} />
+            </div>
+          </section>
+          <section aria-label={`${node.hostname} application services`} className="flex flex-col border-r border-border p-3">
+            <h4 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Application services</h4>
+            {(node.services || []).length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">No service status</p>
+            ) : (
+              <ul className="mt-3 flex flex-wrap content-start gap-1.5">
+                {(node.services || []).map((service) => (
+                  <li key={service.name}>
+                    <button
+                      type="button"
+                      aria-label={`Open ${service.name} on ${node.hostname}`}
+                      onMouseEnter={(event) => setHover({ name: service.name, anchor: event.currentTarget.getBoundingClientRect() })}
+                      onMouseLeave={() => setHover(null)}
+                      onFocus={(event) => setHover({ name: service.name, anchor: event.currentTarget.getBoundingClientRect() })}
+                      onBlur={() => setHover(null)}
+                      onClick={() => {
+                        setHover(null);
+                        setSelected(service.name);
+                      }}
+                      className={`rounded-md border px-2.5 py-1 text-base font-semibold leading-tight hover:border-primary ${service.running === false ? 'bg-warning/15 text-foreground' : 'bg-success/10 text-success'} ${selected === service.name ? 'border-primary' : service.running === false ? 'border-warning/40' : 'border-success/30'}`}
+                    >
+                      {service.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section aria-label={`${node.hostname} deployment issues`} className="flex flex-col p-3">
+            <h4 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Deployment issues</h4>
+            {(node.issues || []).length === 0 ? (
+              <p className="mt-3 text-base text-muted-foreground">No deployment issues</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {(node.issues || []).map((issue) => (
+                  <li key={issue} className="text-base text-warning">{issue}</li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      ) : null}
+      {hovered && hover ? <ServiceTooltip brief={hovered} anchor={hover.anchor} /> : null}
+      {chosen ? <ServiceDrawer brief={chosen} node={node} onClose={() => setSelected('')} /> : null}
+    </article>
+  );
+}
+
 function Stat({ label, value, note }: { label: string; value: string | number; note: string }) {
   return (
     <div className="rounded-md border border-border bg-card p-4 shadow-card">
@@ -393,23 +497,7 @@ function Stat({ label, value, note }: { label: string; value: string | number; n
   );
 }
 
-function Meter({ label, value }: { label: string; value?: number | null }) {
-  const width = value == null ? 0 : Math.max(0, Math.min(100, value));
-  const tone = value == null ? 'bg-muted-foreground/30' : value >= 90 ? 'bg-destructive' : value >= 75 ? 'bg-warning' : 'bg-success';
-  return (
-    <div>
-      <div className="flex items-center justify-between text-xs">
-        <dt className="text-muted-foreground">{label}</dt>
-        <dd className="tabular font-medium">{value == null ? '—' : `${value}%`}</dd>
-      </div>
-      <div className="mt-1 h-1.5 rounded-full bg-muted">
-        <div className={`h-1.5 rounded-full ${tone}`} style={{ width: `${width}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function NodeGroup({ title, note, nodes, loading }: { title: string; note: string; nodes: Node[]; loading: boolean }) {
+function NodeGroup({ title, note, nodes, loading, ops }: { title: string; note: string; nodes: Node[]; loading: boolean; ops: Operations | null }) {
   return (
     <section aria-label={title} className="space-y-3">
       <div>
@@ -418,64 +506,9 @@ function NodeGroup({ title, note, nodes, loading }: { title: string; note: strin
       </div>
       {loading ? <p className="text-sm text-muted-foreground">Loading nodes…</p> : null}
       {!loading && nodes.length === 0 ? <p className="text-sm text-muted-foreground">No nodes in this group.</p> : null}
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="space-y-3">
         {nodes.map((node) => (
-          <Link
-            key={node.hostname}
-            href={`/ise/${encodeURIComponent(node.hostname)}`}
-            aria-label={`Open ${node.hostname}`}
-            className="block rounded-md border border-border bg-card p-4 shadow-card transition-colors hover:border-primary"
-          >
-            <div className="min-h-[8.4rem]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold">{node.hostname}</h3>
-                  <p className="font-mono-data text-xs text-muted-foreground">{node.ip || node.fqdn || 'No address'}</p>
-                </div>
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${node.healthy ? 'bg-success/10 text-success' : 'bg-warning/15 text-foreground'}`}>
-                  <span className={`h-2 w-2 rounded-full ${node.healthy ? 'bg-success' : 'bg-warning'}`} />
-                  {node.healthy ? 'Healthy' : node.status || 'Unknown'}
-                </span>
-              </div>
-              <ul className="mt-3 flex flex-wrap gap-1.5">
-                {(node.roles || []).map((role) => (
-                  <li key={role} className="rounded-md bg-muted px-2 py-0.5 text-xs">{role}</li>
-                ))}
-              </ul>
-            </div>
-            <dl className="mt-3 space-y-2">
-              <Meter label="CPU" value={node.cpu} />
-              <Meter label="Memory" value={node.memory} />
-              <Meter label="Disk /" value={node.diskRoot} />
-              <Meter label="Disk /opt" value={node.diskOpt} />
-            </dl>
-            <div className="mt-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Application services</p>
-              {(node.services || []).length === 0 ? (
-                <p className="mt-1 text-sm text-muted-foreground">No service status</p>
-              ) : (
-                <ul className="mt-1 flex flex-wrap gap-1.5">
-                  {(node.services || []).map((service) => (
-                    <li key={service.name} className={`rounded-md px-2 py-0.5 text-xs font-medium ${service.running === false ? 'bg-warning/15 text-foreground' : 'bg-success/10 text-success'}`}>
-                      {service.name}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="mt-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Deployment issues</p>
-              {(node.issues || []).length === 0 ? (
-                <p className="mt-1 text-sm text-muted-foreground">No deployment issues</p>
-              ) : (
-                <ul className="mt-1 space-y-1">
-                  {(node.issues || []).map((issue) => (
-                    <li key={issue} className="text-sm text-warning">{issue}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </Link>
+          <NodePanel key={node.hostname} node={node} ops={ops} />
         ))}
       </div>
     </section>

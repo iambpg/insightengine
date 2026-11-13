@@ -21,7 +21,7 @@ import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
-import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo, RadioInfo } from '@/lib/types';
+import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
 import HealthChecks from './HealthChecks';
@@ -752,12 +752,6 @@ function asPercent(value: number | null | undefined): number | null {
   return Math.abs(number) <= 1 ? number * 100 : number;
 }
 
-function parseDbm(value?: string): number | null {
-  if (!value) return null;
-  const found = value.match(/-?\d+(\.\d+)?/);
-  return found ? Number(found[0]) : null;
-}
-
 type Tone = 'good' | 'fair' | 'poor' | 'none';
 
 function toneColor(tone: Tone): string {
@@ -804,56 +798,41 @@ function worstTone(tones: Tone[]): Tone {
 
 function ApRadioBoards({ device }: { device: DeviceDetailData }) {
   const live = device.healthPanel?.accessPoint?.radios ?? [];
-  const drawn = device.faceplate.radios ?? [];
-  const boards = (live.length
-    ? live.map((radio, index) => {
-        const extra: RadioInfo | undefined = drawn[index];
-        const snr = radio.snrAvg ?? null;
-        const rssi = radio.rssiAvg ?? parseDbm(extra?.avgRssi);
-        const interference = asPercent(radio.interference);
-        const fromSnr = snr == null ? null : Math.max(0, Math.min(100, (snr / 40) * 100));
-        const fromRssi = rssi == null ? null : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100));
-        const signal = fromSnr ?? fromRssi ?? asPercent(radio.utilization ?? (extra ? extra.utilisation / 100 : null));
-        return {
-          id: `${radio.slot || extra?.id || index}`,
-          title: bandName(radio, extra?.band),
-          channel: radio.channel ?? extra?.channel ?? '—',
-          clients: radio.clients ?? extra?.clients ?? null,
-          snr,
-          rssi,
-          signal,
-          interference,
-        };
-      })
-    : drawn.map((radio) => {
-        const rssi = parseDbm(radio.avgRssi);
-        const signal = rssi == null ? asPercent(radio.utilisation) : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100));
-        return {
-          id: radio.id,
-          title: radio.band,
-          channel: radio.channel,
-          clients: radio.clients,
-          snr: null as number | null,
-          rssi,
-          signal,
-          interference: null as number | null,
-        };
-      })
-  ).sort((left, right) => bandRank(left.title) - bandRank(right.title) || left.title.localeCompare(right.title));
+  const boards = live.map((radio, index) => {
+    const snr = radio.snrAvg ?? null;
+    const rssi = radio.rssiAvg ?? null;
+    const interference = asPercent(radio.interference);
+    const fromSnr = snr == null ? null : Math.max(0, Math.min(100, (snr / 40) * 100));
+    const fromRssi = rssi == null ? null : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100));
+    return {
+      id: `${radio.slot || index}`,
+      slot: radio.slot || String(index),
+      title: bandName(radio),
+      channel: radio.channel ?? '—',
+      clients: radio.clients ?? null,
+      operUp: radio.operUp ?? null,
+      snr,
+      rssi,
+      signal: fromSnr ?? fromRssi,
+      interference,
+    };
+  }).sort((left, right) => bandRank(left.title) - bandRank(right.title) || left.title.localeCompare(right.title));
 
   return (
     <div className="mt-2 grid auto-cols-fr grid-flow-col gap-2" role="region" aria-label="Radio performance">
       {boards.length === 0 ? (
-        <p className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-xs text-muted-foreground">No radio performance yet.</p>
+        <p className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-xs text-muted-foreground">The controller has not returned radio readings for this access point.</p>
       ) : boards.map((board) => {
-        const tones = [snrTone(board.snr), rssiTone(board.rssi), signalTone(board.signal), interferenceTone(board.interference)];
-        const verdict = worstTone(tones);
-        const verdictLabel = verdict === 'good' ? 'Healthy' : verdict === 'fair' ? 'Watch' : verdict === 'poor' ? 'Poor' : 'No sample';
+        const down = board.operUp === false;
+        const missing = down ? 'Radio is down' : 'Not returned for this radio';
+        const tones = down ? [] : [snrTone(board.snr), rssiTone(board.rssi), signalTone(board.signal), interferenceTone(board.interference)];
+        const verdict = down ? 'poor' : worstTone(tones);
+        const verdictLabel = down ? 'Down' : verdict === 'good' ? 'Healthy' : verdict === 'fair' ? 'Watch' : verdict === 'poor' ? 'Poor' : 'No sample';
         const rows = [
-          { label: 'SNR', value: reading(board.snr, 'dB'), hint: board.snr == null ? 'Not sampled' : board.snr >= 25 ? 'Clear of noise' : board.snr >= 15 ? 'Some noise' : 'Hard to hear', tone: snrTone(board.snr), bar: board.snr == null ? 0 : Math.max(0, Math.min(100, (board.snr / 40) * 100)) },
-          { label: 'RSSI', value: reading(board.rssi, 'dBm'), hint: board.rssi == null ? 'Not sampled' : board.rssi >= -67 ? 'Strong at the client' : board.rssi >= -75 ? 'Usable' : 'Weak at the client', tone: rssiTone(board.rssi), bar: board.rssi == null ? 0 : Math.max(0, Math.min(100, ((board.rssi + 90) / 50) * 100)) },
-          { label: 'Signal', value: board.signal == null ? '—' : `${Math.round(board.signal)}%`, hint: board.signal == null ? 'Not sampled' : board.signal >= 70 ? 'Strong link' : board.signal >= 40 ? 'Fair link' : 'Weak link', tone: signalTone(board.signal), bar: board.signal ?? 0 },
-          { label: 'Interference', value: board.interference == null ? '—' : `${Math.round(board.interference)}%`, hint: board.interference == null ? 'Not sampled' : board.interference <= 10 ? 'Quiet channel' : board.interference <= 25 ? 'Some competition' : 'Busy channel', tone: interferenceTone(board.interference), bar: board.interference ?? 0 },
+          { label: 'SNR', value: reading(board.snr, 'dB'), hint: board.snr == null ? missing : board.snr >= 25 ? 'Clear of noise' : board.snr >= 15 ? 'Some noise' : 'Hard to hear', tone: snrTone(board.snr), bar: board.snr == null ? 0 : Math.max(0, Math.min(100, (board.snr / 40) * 100)) },
+          { label: 'RSSI', value: reading(board.rssi, 'dBm'), hint: board.rssi == null ? missing : board.rssi >= -67 ? 'Strong at the client' : board.rssi >= -75 ? 'Usable' : 'Weak at the client', tone: rssiTone(board.rssi), bar: board.rssi == null ? 0 : Math.max(0, Math.min(100, ((board.rssi + 90) / 50) * 100)) },
+          { label: 'Signal', value: board.signal == null ? '—' : `${Math.round(board.signal)}%`, hint: board.signal == null ? missing : board.signal >= 70 ? 'Strong link' : board.signal >= 40 ? 'Fair link' : 'Weak link', tone: signalTone(board.signal), bar: board.signal ?? 0 },
+          { label: 'Interference', value: board.interference == null ? '—' : `${Math.round(board.interference)}%`, hint: board.interference == null ? missing : board.interference <= 10 ? 'Quiet channel' : board.interference <= 25 ? 'Some competition' : 'Busy channel', tone: interferenceTone(board.interference), bar: board.interference ?? 0 },
         ];
         return (
           <article key={board.id} className="flex min-w-[9.5rem] flex-col rounded-lg border border-border bg-card px-2.5 py-2 shadow-card" aria-label={`${board.title} radio`}>
@@ -862,7 +841,7 @@ function ApRadioBoards({ device }: { device: DeviceDetailData }) {
               <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-semibold" style={{ color: toneColor(verdict), borderColor: toneColor(verdict) }}>{verdictLabel}</span>
             </div>
             <p className="mt-0.5 font-mono-data text-[11px] text-muted-foreground">
-              Channel {board.channel}{board.clients != null ? ` · ${board.clients} clients` : ''}
+              Radio {board.slot} · Channel {board.channel}{board.clients != null ? ` · ${board.clients} clients` : ''}
             </p>
             <dl className="mt-2 space-y-1.5">
               {rows.map((row) => (

@@ -994,6 +994,26 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
         _audit(sf, user, "discovery-site", client_ip(request), "ok", "netdisco", "", "", str(len(result.get("updated") or [])))
         return result
 
+    @app.post("/api/v1/discovery/tenants")
+    async def discovery_tenants(request: Request):
+        user, _csrf = user_of(request)
+        require_operator(user)
+        try:
+            body = await request.json()
+        except Exception:
+            raise ApiError(400, "bad_body", "body must be JSON")
+        if not isinstance(body, dict):
+            raise ApiError(400, "bad_body", "body must be a JSON object")
+        ids = body.get("ids")
+        if not isinstance(ids, list) or not ids or len(ids) > 500:
+            raise ApiError(400, "bad_body", "ids must be a list of candidates")
+        try:
+            result = discovery.set_tenants(ids, body.get("tenant") or "")
+        except ValueError as exc:
+            raise ApiError(400, "bad_body", str(exc))
+        _audit(sf, user, "discovery-tenant", client_ip(request), "ok", "netdisco", "", "", str(len(result.get("updated") or [])))
+        return result
+
     @app.post("/api/v1/discovery/{cid}/approve")
     async def approve(cid: int, request: Request):
         user, _csrf = user_of(request)
@@ -1012,6 +1032,7 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                 "ip": row.ip,
                 "name": body.get("name") or row.name,
                 "site": body.get("site") or row.site_slug,
+                "tenant": body.get("tenant") or row.tenant_slug,
                 "sysdescr": row.sysdescr,
                 "sysobjectid": row.sysobjectid,
                 "vendor": row.vendor,
@@ -1039,6 +1060,9 @@ def create_app(settings: Settings | None = None, fleet=None) -> FastAPI:
                 candidate, guess, discovery.read_sync_settings(), load_device_aliases(discovery.alias_path()),
                 discovery.hostname_suffixes(),
             )
+        except ValueError as exc:
+            _audit(sf, user, "discovery-approve", client_ip(request), "failed", "netdisco", "", "", "tenant")
+            raise ApiError(400, "bad_tenant", str(exc))
         except Exception as exc:
             log.warning("netbox approve failed: %s", exc)
             _audit(sf, user, "discovery-approve", client_ip(request), "failed", "netdisco", "", "", exc.__class__.__name__)
