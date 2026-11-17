@@ -116,6 +116,7 @@ class NetBridge:
             "netdisco": {"ok": bool(nd.get("ok")), "message": nd.get("message") or ""},
             "eox": self._eox_status(),
             "fortimanager": self._fmg_status(),
+            "ise": self._ise_status(),
             "jobs": self._recent_jobs(8),
         }
         self._cache = body
@@ -156,6 +157,24 @@ class NetBridge:
                 "configured": False,
                 "message": "FortiManager URL and token are not configured. Add them in Settings → Vault.",
             }
+        return {"configured": True, "message": ""}
+
+    def _ise_status(self) -> dict:
+        from .ise import MISSING, configured
+        url = secret_value(self.settings, "ISE_URL")
+        username = secret_value(self.settings, "ISE_USERNAME")
+        password = secret_value(self.settings, "ISE_PASSWORD")
+        if not configured(url, username, password):
+            return {"configured": False, "message": MISSING}
+        return {"configured": True, "message": ""}
+
+    def _infoblox_status(self) -> dict:
+        from .infoblox import MISSING, configured
+        url = secret_value(self.settings, "INFOBLOX_URL")
+        username = secret_value(self.settings, "INFOBLOX_USERNAME")
+        password = secret_value(self.settings, "INFOBLOX_PASSWORD")
+        if not configured(url, username, password):
+            return {"configured": False, "message": MISSING}
         return {"configured": True, "message": ""}
 
     def eox_client(self) -> eox_mod.EoxClient:
@@ -351,6 +370,93 @@ class NetBridge:
         body["message"] = ""
         body["instances"] = listed.get("instances") or []
         return body
+
+    def ise(self, page, page_size, q: str) -> dict:
+        from .ise import pull
+        listed = pull(
+            secret_value(self.settings, "ISE_URL"),
+            secret_value(self.settings, "ISE_USERNAME"),
+            secret_value(self.settings, "ISE_PASSWORD"),
+            http=getattr(self, "ise_http", None),
+        )
+        body = paginate(listed.get("rows") or [], page, page_size, q, ["user", "mac", "nas", "device", "method", "server", "result"])
+        body["configured"] = bool(listed.get("configured"))
+        body["ok"] = bool(listed.get("ok"))
+        body["message"] = listed.get("message") or ""
+        body["version"] = listed.get("version") or ""
+        body["activeSessions"] = listed.get("activeSessions")
+        return body
+
+    def ise_health(self) -> dict:
+        from ie_config.vault import read_env
+        from .ise import health
+        community = ""
+        try:
+            community = dict(read_env(self.settings)).get("SNMP_V2_COMMUNITY") or ""
+        except Exception:
+            log.warning("ise snmp community was not read")
+        return health(
+            secret_value(self.settings, "ISE_URL"),
+            secret_value(self.settings, "ISE_USERNAME"),
+            secret_value(self.settings, "ISE_PASSWORD"),
+            http=getattr(self, "ise_http", None),
+            community=community,
+        )
+
+    def ise_operations(self) -> dict:
+        from .ise import operations
+        return operations(
+            secret_value(self.settings, "ISE_URL"),
+            secret_value(self.settings, "ISE_USERNAME"),
+            secret_value(self.settings, "ISE_PASSWORD"),
+            http=getattr(self, "ise_http", None),
+        )
+
+    def ise_node(self, hostname: str) -> dict:
+        from ie_config.vault import read_env
+        from .ise import node_detail
+        community = ""
+        try:
+            community = dict(read_env(self.settings)).get("SNMP_V2_COMMUNITY") or ""
+        except Exception:
+            log.warning("ise snmp community was not read")
+        return node_detail(
+            secret_value(self.settings, "ISE_URL"),
+            secret_value(self.settings, "ISE_USERNAME"),
+            secret_value(self.settings, "ISE_PASSWORD"),
+            hostname,
+            http=getattr(self, "ise_http", None),
+            community=community,
+        )
+
+    def _infoblox_community(self) -> str:
+        from ie_config.vault import read_env
+        try:
+            return dict(read_env(self.settings)).get("SNMP_V2_COMMUNITY") or ""
+        except Exception:
+            log.warning("infoblox snmp community was not read")
+            return ""
+
+    def infoblox_health(self) -> dict:
+        from .infoblox import fetch
+        return fetch(
+            secret_value(self.settings, "INFOBLOX_URL"),
+            secret_value(self.settings, "INFOBLOX_USERNAME"),
+            secret_value(self.settings, "INFOBLOX_PASSWORD"),
+            http=getattr(self, "infoblox_http", None),
+            community=self._infoblox_community(),
+        )
+
+    def infoblox_member(self, hostname: str) -> dict:
+        from .infoblox import member_detail
+        return member_detail(
+            secret_value(self.settings, "INFOBLOX_URL"),
+            secret_value(self.settings, "INFOBLOX_USERNAME"),
+            secret_value(self.settings, "INFOBLOX_PASSWORD"),
+            hostname,
+            http=getattr(self, "infoblox_http", None),
+            community=self._infoblox_community(),
+        )
 
     def fmg_list(self, url: str, token: str) -> dict:
         return sources.fmg_list(url, token)

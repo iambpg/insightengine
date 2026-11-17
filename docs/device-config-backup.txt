@@ -1,0 +1,97 @@
+InsightEngine config backup
+============================
+
+InsightEngine copies a device configuration over SSH with Oxidized.
+A device is backed up only when it is active in NetBox and has the tag oxidized.
+The copy runs about every 4 hours. The address the device sees is the address
+of the InsightEngine server. On this install that address is 10.2.96.224.
+Use port 22.
+
+The backup account is the username and password stored for Oxidized:
+
+    secrets/oxidized/device_username
+    secrets/oxidized/device_password
+
+Those two files are empty until you write the account into them, one value
+per file, with no extra spaces. Do not put the password in this guide.
+After you save the files, render the Oxidized config again so it picks them up.
+
+NetBox, for each device you want backed up
+-------------------------------------------
+
+1. Set the primary IPv4 address. Oxidized connects to that address.
+2. Set the manufacturer. Cisco is backed up with IOS commands.
+   Fortinet is backed up with FortiOS commands.
+3. Add the tag oxidized.
+4. Leave the device status active.
+
+These devices already have the tag. They still need the backup account
+on the device itself:
+
+    OiOB-Bree-WLC01
+    wc00-kenil-0wlc02
+    wc18-claremont-0asp01
+    wc18-claremont-0asw01
+    wc18-claremont-0asw02
+    wc18-claremont-wc-cpt
+    wc18.cc30-claremont-1rsw01
+
+Cisco IOS and IOS-XE
+--------------------
+
+Use this on the switches, the 3560, the 9200L, the 2960, and the Catalyst 9800
+wireless controllers. The account must land in privileged mode. Oxidized runs
+show running-config and does not send an enable password.
+
+Replace the username and the secret with the Oxidized account.
+If the VTY lines already use an access list, add the permit to that list
+instead of replacing the list.
+
+    configure terminal
+    username <backup-user> privilege 15 secret <backup-secret>
+    ip ssh version 2
+    ip access-list standard INSIGHTENGINE-BACKUP
+     permit 10.2.96.224
+    line vty 0 15
+     transport input ssh
+     login local
+     exec-timeout 5 0
+     length 0
+     access-class INSIGHTENGINE-BACKUP in
+    end
+    write memory
+
+If management traffic uses a VRF, the SSH server must answer on that VRF
+and the route back to 10.2.96.224 must exist in it.
+
+FortiGate
+---------
+
+Use this on wc18-claremont-wc-cpt and any other FortiGate with the tag.
+The account must be allowed to read the full configuration. Oxidized runs
+get system status and show.
+
+    config system admin
+        edit <backup-user>
+            set accprofile super_admin_readonly
+            set password <backup-secret>
+            set trusthost1 10.2.96.224 255.255.255.255
+            set ssh-authentication password
+        next
+    end
+
+SSH must be enabled on the management interface that owns 10.129.32.2,
+and that interface must permit the InsightEngine address.
+
+    config system interface
+        edit <management-interface>
+            append allowaccess ssh
+        next
+    end
+
+After the account exists
+------------------------
+
+Open the device in InsightEngine and use the Configs tab.
+The first successful SSH login stores the configuration.
+A later login stores a new copy when the configuration changed.

@@ -1578,6 +1578,33 @@ services:
         limits: {memory: "${LOKI_MEM:-8g}", cpus: "${LOKI_CPUS:-4}"}   # ESTIMATE
         reservations: {memory: 1g}
 
+  syslog-relay:
+    # Cisco syslog has a timezone and no hostname. This keeps the sender address
+    # on the line so a device page can find its own logs.
+    image: insightengine/ie-config:local
+    container_name: syslog-relay-${CLIENT_SLUG}
+    profiles: [logs]
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    environment:
+      TELEGRAF_ADDR: telegraf-syslog:6514
+      LISTEN_PORT: "6514"
+    command: ["python", "/opt/syslog-relay.py"]
+    volumes:
+      - ./config/telegraf/syslog/relay.py:/opt/syslog-relay.py:ro
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/udp"
+      - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/tcp"
+    depends_on:
+      telegraf-syslog: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',6514),2); s.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   telegraf-syslog:
     image: ${TELEGRAF_IMAGE}
     container_name: telegraf-syslog-${CLIENT_SLUG}
@@ -1588,10 +1615,6 @@ services:
     user: "10001:10001"
     environment:
       CLIENT_SLUG: ${CLIENT_SLUG}
-    ports:
-      # Devices send to host UDP/TCP 514; mapped to unprivileged ports in the container.
-      - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/udp"
-      - "${HOST_BIND:-0.0.0.0}:${PORT_SYSLOG:-514}:6514/tcp"
     volumes:
       - ./config/telegraf/syslog:/etc/telegraf:ro
     command: ["telegraf", "--config", "/etc/telegraf/telegraf.conf"]

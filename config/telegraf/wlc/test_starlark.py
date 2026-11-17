@@ -231,11 +231,20 @@ class StarlarkDialectTests(unittest.TestCase):
             self.assertNotRegex(code, r"\bwhile\b", "%s uses while" % path)
 
     def test_host_api_and_syslog_have_no_starlark_scripts(self) -> None:
-        for name in ("host", "api", "syslog"):
+        # The UDP/TCP listener emits one raw line. Starlark in the syslog
+        # config parses hostname, severity, and message from that line.
+        # Host and API configs stay free of Starlark, and syslog has no .star file.
+        for name in ("host", "api"):
             base = ROOT / "config" / "telegraf" / name
             self.assertFalse(list(base.rglob("*.star")), name)
             for conf in base.rglob("*.conf"):
                 self.assertNotIn("processors.starlark", conf.read_text(encoding="utf-8"), str(conf))
+        syslog = ROOT / "config" / "telegraf" / "syslog"
+        self.assertFalse(list(syslog.rglob("*.star")), "syslog")
+        confs = sorted(syslog.rglob("*.conf"))
+        self.assertEqual([path.name for path in confs], ["telegraf.conf"])
+        text = confs[0].read_text(encoding="utf-8")
+        self.assertEqual(text.count("[[processors.starlark]]"), 1, str(confs[0]))
 
     def test_dialect_rejects_while_loops(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

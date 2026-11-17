@@ -18,15 +18,20 @@ vi.mock('@/lib/apiClient', () => ({
           openConflicts: 3,
           eox: { configured: false, message: 'Cisco Support API credentials are not configured. Add the client id and secret in Settings → Vault.' },
           fortimanager: { configured: false, message: '' },
+          ise: { configured: false, message: 'ISE URL, username, and password are not configured. Add them in Settings → Vault.' },
           jobs: [],
         };
       }
       if (path.startsWith('/eox')) {
         return { configured: false, message: 'Cisco Support API credentials are not configured. Add the client id and secret in Settings → Vault.', rows: [], total: 0, counts: { past: 0, soon: 0, ok: 0, unknown: 0 } };
       }
+      if (path.startsWith('/ise')) {
+        return { configured: false, ok: false, message: 'ISE URL, username, and password are not configured. Add them in Settings → Vault.', version: '', activeSessions: null, rows: [], total: 0 };
+      }
       return { rows: [], total: 0, message: '' };
     }),
     netbridgePost: vi.fn(),
+    getHierarchy: vi.fn(async () => ({ nodes: [], autoApply: false, degraded: [] })),
     listDiscovered: vi.fn(async () => []),
     listScans: vi.fn(async () => []),
     discoveryCatalog: vi.fn(async () => ({ roles: ['Access switch'], roleChoices: [{ name: 'Access switch', slug: 'access-switch' }], sites: [], platforms: [] })),
@@ -43,6 +48,9 @@ describe('NetBridge', () => {
     await user.click(screen.getByRole('tab', { name: 'End of Life' }));
     expect(screen.getByRole('button', { name: /Past LDoS/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /<12 months/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Device parents' }));
+    expect(await screen.findByRole('heading', { name: 'Device parents' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'ISE' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Not in NetBox' }));
     expect(await screen.findByRole('heading', { name: 'Not in NetBox' })).toBeInTheDocument();
   });

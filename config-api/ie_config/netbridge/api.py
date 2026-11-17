@@ -42,7 +42,11 @@ def mount_netbridge(app, user_of, audit) -> None:
     @app.get("/api/v1/netbridge/open-count")
     def open_count(request: Request):
         reader(request)
-        return {"open": bridge().open_count()}
+        return {
+            "open": bridge().open_count(),
+            "iseConfigured": bool(bridge()._ise_status().get("configured")),
+            "infobloxConfigured": bool(bridge()._infoblox_status().get("configured")),
+        }
 
     @app.post("/api/v1/netbridge/refresh")
     def refresh(request: Request):
@@ -78,6 +82,36 @@ def mount_netbridge(app, user_of, audit) -> None:
         result = bridge().scan_aps(bridge().actor(user), str(body.get("wlc") or ""))
         audit(app.state.sf, user, "netbridge-ap-scan", _ip(request), "ok" if result.get("ok") else "failed", "netbridge", "", "", "")
         return result
+
+    @app.get("/api/v1/netbridge/ise/health")
+    def ise_health(request: Request):
+        reader(request)
+        return bridge().ise_health()
+
+    @app.get("/api/v1/netbridge/ise/operations")
+    def ise_operations(request: Request):
+        reader(request)
+        return bridge().ise_operations()
+
+    @app.get("/api/v1/netbridge/ise/nodes/{hostname}")
+    def ise_node(hostname: str, request: Request):
+        reader(request)
+        return bridge().ise_node(hostname)
+
+    @app.get("/api/v1/netbridge/infoblox/health")
+    def infoblox_health(request: Request):
+        reader(request)
+        return bridge().infoblox_health()
+
+    @app.get("/api/v1/netbridge/infoblox/members/{hostname}")
+    def infoblox_member(hostname: str, request: Request):
+        reader(request)
+        return bridge().infoblox_member(hostname)
+
+    @app.get("/api/v1/netbridge/ise")
+    def ise(request: Request):
+        reader(request)
+        return bridge().ise(_q(request, "page"), _q(request, "page_size"), _q(request, "q"))
 
     @app.get("/api/v1/netbridge/fortimanager")
     def fortimanager(request: Request):

@@ -6,7 +6,9 @@ import type {
   DeviceHealth,
   DeviceRow,
   SeriesPoint,
+  SiteBriefing,
   SiteRow,
+  SiteSlaSeries,
 } from '@/lib/types';
 import type { RangeKey } from '@/lib/mockData';
 import type {
@@ -165,6 +167,16 @@ export const api = {
     return (await backend()).listSiteDevices(siteId);
   },
 
+  // BACKEND: GET /api/v1/sites/{id}/sla
+  async getSiteSla(siteId: string | number): Promise<SiteSlaSeries> {
+    return (await backend()).getSiteSla(siteId);
+  },
+
+  // BACKEND: GET /api/v1/sites/{id}/briefing?range=&custom_min=
+  async getSiteBriefing(siteId: string | number, range: string, customMin?: number): Promise<SiteBriefing> {
+    return (await backend()).getSiteBriefing(siteId, range, customMin);
+  },
+
   // BACKEND: GET /api/v1/discovery/unapproved?page=&page_size=&q=
   async listDiscovered(query?: { page?: number; pageSize?: number; q?: string }) {
     return (await backend()).listDiscovered(query);
@@ -178,6 +190,11 @@ export const api = {
   // BACKEND: POST /api/v1/discovery/sites  { ids, site }
   async setDeviceSites(ids: string[], site: string) {
     return (await backend()).setDeviceSites(ids, site);
+  },
+
+  // BACKEND: POST /api/v1/discovery/tenants  { ids, tenant }
+  async setDeviceTenants(ids: string[], tenant: string) {
+    return (await backend()).setDeviceTenants(ids, tenant);
   },
 
   // BACKEND: GET /api/v1/netbridge/...

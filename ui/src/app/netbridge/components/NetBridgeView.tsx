@@ -11,11 +11,13 @@ import { devicePath } from '@/lib/apiMode';
 import { accessPointId } from '@/lib/deviceHealthPath';
 import { isApiError } from '@/lib/apiError';
 import NotInNetBoxView from '@/app/not-in-net-box/components/NotInNetBoxView';
+import DeviceParentsView from '@/app/device-parents/components/DeviceParentsView';
 import { allowOperate } from '@/lib/settings/access';
 import { useKnownRole } from '@/lib/useSession';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'parents', label: 'Device parents' },
   { id: 'missing', label: 'Not in NetBox' },
   { id: 'stacks', label: 'Stacks' },
   { id: 'addresses', label: 'IP Addresses' },
@@ -101,6 +103,7 @@ export default function NetBridgeView({ initialTab = 'dashboard' }: { initialTab
       </div>
       <div role="tabpanel">
         {tab === 'dashboard' && <Dashboard summary={summary} onOpen={choose} onRefresh={loadSummary} />}
+        {tab === 'parents' && <DeviceParentsView />}
         {tab === 'missing' && <NotInNetBoxView embedded />}
         {tab === 'access-points' && <AccessPoints canWrite={canWrite} />}
         {tab === 'eox' && <EoxTab canWrite={canWrite} />}

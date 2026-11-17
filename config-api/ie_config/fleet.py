@@ -29,6 +29,7 @@ from urllib.parse import quote, unquote
 
 import httpx
 from fastapi import Request
+from fastapi.responses import JSONResponse
 
 from .errors import ApiError
 from .discovery import NetBoxWriter, _norm_model, catalog_part
@@ -1178,6 +1179,15 @@ def _lookup(pair: tuple[dict, dict], host: str, ip: str):
     return None
 
 
+def _coord(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _city(raw: dict) -> str:
     address = raw.get("physical_address") or ""
     if not isinstance(address, str) or not address.strip():
@@ -1329,7 +1339,7 @@ def _wlc_recent(query: str) -> str:
 
 _RADIO_FIELDS = (
     "channel", "utilization", "clients", "noise", "interference",
-    "txPowerDbm", "width", "rssiAvg", "snrAvg", "band",
+    "txPowerDbm", "width", "rssiAvg", "snrAvg", "band", "operUp",
 )
 
 
@@ -1402,6 +1412,44 @@ def _coalesce_ap_rows(rows: dict) -> None:
             primary["rssiAvg"] = round(sum(rssi_vals) / len(rssi_vals), 1)
         if snr_vals:
             primary["snrAvg"] = round(sum(snr_vals) / len(snr_vals), 1)
+
+
+def _ipv4(ip: str) -> bool:
+    parts = (ip or "").split(".")
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not part.isdigit() or int(part) > 255:
+            return False
+    return True
+
+
+def _loki_device_queries(name: str, ip: str) -> list[str]:
+    """Hostname match and sender-address match. This Loki rejects or between them."""
+    queries = []
+    if _ipv4(ip):
+        queries.append('{sender="%s"}' % ip)
+    if name:
+        queries.append(_loki_hostname_query(name))
+    return queries
+
+
+def _loki_hostname_query(name: str) -> str:
+    """Match this hostname, or the same name with a domain after it.
+
+    LogQL rejects unknown backslash escapes, so a hyphen must stay a hyphen
+    and a regex dot is written as a doubled backslash.
+    """
+    literal = re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", name).replace("\\", "\\\\")
+    return '{hostname=~"(?i)%s(\\\\..*)?"}' % literal
+
+
+def _syslog_text(raw: str) -> str:
+    """Telegraf writes the syslog line as logfmt: message=\"...\"."""
+    match = re.match(r'^message="(.*)"\s*$', raw, re.DOTALL)
+    if not match:
+        return raw
+    return match.group(1).replace(r'\"', '"').replace(r'\\', '\\')
 
 
 class FleetService:
@@ -1478,14 +1526,24 @@ class FleetService:
                 "region": str(region.get("name") or "") or "Unassigned",
                 "region_slug": str(region.get("slug") or ""),
                 "city": _city(raw),
+                "description": str(raw.get("description") or "").strip(),
+                "address": str(raw.get("physical_address") or "").strip(),
+                "latitude": _coord(raw.get("latitude")),
+                "longitude": _coord(raw.get("longitude")),
                 "last_updated": str(raw.get("last_updated") or ""),
             })
         self.cache.put("nb-sites", rows, ttl=60)
         return rows
 
-    def _catalog(self, client) -> dict:
-        """Role colours and device-type part numbers. Missing either stays blank."""
-        cached = self.cache.get("nb-catalog")
+    def _catalog(self, client, type_ids: set[str] | None = None) -> dict:
+        """Role colours and part numbers for the device types on this page.
+
+        The full device-type list is more than a thousand rows and is not
+        needed to show the ten devices that are actually monitored.
+        """
+        wanted = {str(item) for item in (type_ids or set()) if str(item)}
+        key = "nb-catalog" if type_ids is None else "nb-catalog:" + ",".join(sorted(wanted))
+        cached = self.cache.get(key)
         if cached is not None:
             return cached
         colors = {}
@@ -1496,13 +1554,48 @@ class FleetService:
         except UpstreamError:
             log.warning("NetBox device role colours could not be read")
         try:
-            for raw in self._walk(client, "/api/dcim/device-types/?limit=1000"):
-                parts[str(raw.get("id") or "")] = str(raw.get("part_number") or "").strip()
+            if type_ids is None:
+                for raw in self._walk(client, "/api/dcim/device-types/?limit=1000"):
+                    parts[str(raw.get("id") or "")] = str(raw.get("part_number") or "").strip()
+            else:
+                parts = self._part_numbers(client, wanted)
         except UpstreamError:
             log.warning("NetBox part numbers could not be read")
         payload = {"colors": colors, "parts": parts}
-        self.cache.put("nb-catalog", payload, ttl=120)
+        self.cache.put(key, payload, ttl=120)
         return payload
+
+    def _part_numbers(self, client, type_ids: set[str]) -> dict:
+        """Part number for each device type the fleet uses, not the whole library."""
+        ids = [item for item in type_ids if item]
+        if not ids:
+            return {}
+
+        def one(type_id: str) -> tuple[str, str]:
+            try:
+                response = self._send(
+                    client, "GET",
+                    self.settings.netbox_url + "/api/dcim/device-types/%s/" % quote(type_id, safe=""),
+                    headers=self._headers(),
+                    upstream="netbox",
+                )
+            except UpstreamError:
+                return type_id, ""
+            if response.status_code != 200:
+                return type_id, ""
+            try:
+                body = response.json()
+            except ValueError:
+                return type_id, ""
+            if not isinstance(body, dict):
+                return type_id, ""
+            return type_id, str(body.get("part_number") or "").strip()
+
+        if len(ids) == 1:
+            found_id, part = one(ids[0])
+            return {found_id: part}
+        with ThreadPoolExecutor(max_workers=min(8, len(ids))) as pool:
+            return dict(pool.map(one, ids))
 
     def _snmp_auth(self, ip: str, role_slug: str) -> str:
         path = getattr(self.settings, "snmp_auth_map", "") or "/opt/insightengine/data/snmp/auth-by-ip.yml"
@@ -1591,9 +1684,15 @@ class FleetService:
         if cached is not None:
             return cached
         sites = {row["id"]: row for row in self._sites_raw(client)}
-        catalog = self._catalog(client)
+        raws = list(self._walk(client, "/api/dcim/devices/?limit=1000&exclude=config_context"))
+        type_ids = set()
+        for raw in raws:
+            dtype = raw.get("device_type") if isinstance(raw.get("device_type"), dict) else {}
+            if dtype.get("id"):
+                type_ids.add(str(dtype.get("id")))
+        catalog = self._catalog(client, type_ids)
         rows = []
-        for raw in self._walk(client, "/api/dcim/devices/?limit=1000"):
+        for raw in raws:
             site = raw.get("site") if isinstance(raw.get("site"), dict) else {}
             site_id = str(site.get("id") or "")
             known = sites.get(site_id) or {}
@@ -2084,7 +2183,27 @@ class FleetService:
             return None
         low = text.lower()
         wanted_mac = canon_mac(text)
-        for row in self._ap_rows():
+        cached = self.cache.get("ap-snapshot")
+        rows = list((cached or {}).get("rows") or []) if isinstance(cached, dict) else []
+        if not rows:
+            one = self.cache.get("ap-one:" + low)
+            if isinstance(one, dict):
+                return one
+            try:
+                with self._session() as client:
+                    snap = self._ap_snapshot(client, only=text)
+            except Exception:
+                log.warning("access point lookup failed for %s", text)
+                return None
+            rows = list((snap or {}).get("rows") or [])
+            for row in rows:
+                values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
+                same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
+                if low in values or same_mac:
+                    self.cache.put("ap-one:" + low, row, ttl=60)
+                    return row
+            return None
+        for row in rows:
             values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
             same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
             if low in values or same_mac:
@@ -2135,7 +2254,10 @@ class FleetService:
             "uptimeSeconds": ap.get("uptimeSeconds") if ap.get("uptimeSeconds") is not None else block.get("uptimeSeconds"),
         })
         if not block.get("note"):
-            block["note"] = "Status, radios and clients come from the wireless controller."
+            missing = "AP CPU, memory and join time are not in the Telegraf stream. On the Catalyst 9800, add the access-point oper leaves for per-AP CPU, memory and the join timestamp."
+            if block.get("uptimeSeconds") is None:
+                missing += " Uptime is not arriving either. The join uptime leaf is not in the current samples."
+            block["note"] = "SNR and RSSI are the controller sample for that same radio. A radio with no clients has no SNR. " + missing
         panel["accessPoint"] = block
 
     def _detail_from_ap(self, ap: dict, rows: list[dict], alerts: dict) -> dict:
@@ -2546,74 +2668,213 @@ class FleetService:
             last = body.get("last") if isinstance(body.get("last"), dict) else {}
             status = str(last.get("status") or "")
             at = str(last.get("end") or last.get("start") or "")
+        return remember({"available": True, "reason": "", "status": status, "at": at, "config": ""})
+
+    def device_config(self, device_id: str) -> dict:
+        """Complete backup text. The device page only carries the status."""
+        key = unquote(device_id or "").strip()
+        if not key:
+            raise ApiError(404, "not_found", "unknown device")
+        cached = self.cache.get("oxidized-config:" + key)
+        if isinstance(cached, dict):
+            return cached
+        try:
+            with self._session() as client:
+                rows, _meta, _degraded = self._decorated(client)
+                found = self._find_device(rows, key)
+                if found is None:
+                    raise ApiError(404, "not_found", "unknown device")
+                body = self._oxidized_config(client, found.get("hostname") or "")
+        except UpstreamError as exc:
+            raise _as_upstream(exc)
+        self.cache.put("oxidized-config:" + key, body, ttl=60)
+        return body
+
+    def _oxidized_config(self, client, name: str) -> dict:
+        empty = {"available": False, "reason": "", "status": "", "at": "", "hostname": name, "config": "", "bytes": 0}
+        safe_name = quote(str(name or ""), safe="")
+        if not safe_name:
+            empty["reason"] = "This device has no name for Oxidized"
+            return empty
+        base = (getattr(self.settings, "oxidized_url", "") or "http://oxidized:8888").rstrip("/")
+        try:
+            shown = self._send(client, "GET", "%s/node/show/%s.json" % (base, safe_name), upstream="oxidized")
+        except UpstreamError:
+            empty["reason"] = "Oxidized is not reachable"
+            return empty
+        if shown.status_code == 404:
+            empty["reason"] = "Oxidized has no backup for this device"
+            return empty
+        if shown.status_code >= 400:
+            empty["reason"] = "Oxidized returned HTTP %s" % shown.status_code
+            return empty
+        status = ""
+        at = ""
+        try:
+            meta = shown.json()
+        except ValueError:
+            meta = {}
+        if isinstance(meta, dict):
+            last = meta.get("last") if isinstance(meta.get("last"), dict) else {}
+            status = str(last.get("status") or "")
+            at = str(last.get("end") or last.get("start") or "")
         config = ""
         try:
             fetched = self._send(client, "GET", "%s/node/fetch/%s" % (base, safe_name), upstream="oxidized")
-            if fetched.status_code < 400:
-                config = redact_config(fetched.text or "")
         except UpstreamError:
-            pass
-        return remember({"available": True, "reason": "", "status": status, "at": at, "config": config})
+            fetched = None
+        if fetched is not None and fetched.status_code < 400:
+            config = fetched.text or ""
+        if config.startswith("\ufeff"):
+            config = config[1:]
+        return {
+            "available": True,
+            "reason": "" if config else "Oxidized recorded this device but has no config text yet",
+            "status": status,
+            "at": at,
+            "hostname": name,
+            "config": config,
+            "bytes": len(config.encode("utf-8")),
+        }
 
-    def device_logs(self, hostname: str) -> dict:
+    def oxidized_source(self, token: str) -> dict:
+        """NetBox devices for Oxidized, with a per-device login when one is saved."""
+        from .device_logins import credential_for, load_store, schedule_probe, source_token_matches
+        if not source_token_matches(self.settings, token):
+            raise ApiError(401, "unauthorized", "unauthorized")
+        stored = load_store(self.settings)
+        accounts = [row for row in (stored.get("accounts") or []) if isinstance(row, dict)]
+        worked = stored.get("worked") if isinstance(stored.get("worked"), dict) else {}
+        with self._session() as client:
+            raws = list(self._walk(
+                client,
+                "/api/dcim/devices/?status=active&tag=oxidized&limit=1000&exclude=config_context",
+            ))
+        results = []
+        pending = []
+        for raw in raws:
+            if not isinstance(raw, dict):
+                continue
+            row = dict(raw)
+            name = str(row.get("name") or "")
+            primary = row.get("primary_ip4") if isinstance(row.get("primary_ip4"), dict) else {}
+            ip = str(primary.get("address") or "").split("/")[0]
+            cred = credential_for(accounts, name, worked)
+            if cred:
+                row["username"] = cred[0]
+                row["password"] = cred[1]
+            elif ip:
+                pending.append({"name": name, "ip": ip})
+            results.append(row)
+        schedule_probe(self.settings, pending)
+        return {"count": len(results), "next": None, "results": results}
+
+    def refresh_device_logins(self) -> None:
+        """Try saved logins against backup devices. Does not wait for SSH."""
+        from .device_logins import schedule_probe
+        try:
+            with self._session() as client:
+                raws = list(self._walk(
+                    client,
+                    "/api/dcim/devices/?status=active&tag=oxidized&limit=1000&exclude=config_context",
+                ))
+        except Exception:
+            log.warning("device login check could not read the backup device list")
+            return
+        pending = []
+        for raw in raws:
+            if not isinstance(raw, dict):
+                continue
+            primary = raw.get("primary_ip4") if isinstance(raw.get("primary_ip4"), dict) else {}
+            ip = str(primary.get("address") or "").split("/")[0]
+            name = str(raw.get("name") or "")
+            if name and ip:
+                pending.append({"name": name, "ip": ip})
+        schedule_probe(self.settings, pending)
+
+    def _device_ip(self, device_id: str) -> str:
+        wanted = str(device_id or "").strip()
+        if not wanted:
+            return ""
+        try:
+            with self._session() as client:
+                rows = self._devices_raw(client)
+        except Exception:
+            return ""
+        for row in rows:
+            if str(row.get("id") or "") == wanted:
+                return str(row.get("ip") or "")
+        return ""
+
+    def device_logs(self, device_id: str, hostname: str) -> dict:
         name = re.sub(r"[^A-Za-z0-9._-]+", "", (hostname or "").strip())[:120]
-        if not name:
+        ip = self._device_ip(device_id)
+        if not name and not _ipv4(ip):
             return {"hostname": "", "lines": [], "reason": "This device has no hostname."}
-        key = "logs:" + name.lower()
+        key = "logs:%s:%s" % (name.lower(), ip)
         cached = self.cache.get(key)
         if isinstance(cached, dict):
             return cached
         base = (os.environ.get("LOKI_URL") or "http://loki:3100").rstrip("/")
         now = time.time()
-        query = '{hostname=~"(?i)%s(\\..*)?"}' % re.escape(name)
+        queries = _loki_device_queries(name, ip)
         empty = {"hostname": name, "lines": [], "reason": ""}
 
         def remember(body: dict) -> dict:
             self.cache.put(key, body, ttl=30)
             return body
 
+        lines = []
         try:
             with self._session() as client:
-                response = client.get(
-                    base + "/loki/api/v1/query_range",
-                    params={
-                        "query": query,
-                        "limit": "200",
-                        "direction": "backward",
-                        "start": str(int((now - 86400) * 1e9)),
-                        "end": str(int(now * 1e9)),
-                    },
-                    timeout=httpx.Timeout(4.0, connect=2.0),
-                )
+                for query in queries:
+                    response = client.get(
+                        base + "/loki/api/v1/query_range",
+                        params={
+                            "query": query,
+                            "limit": "200",
+                            "direction": "backward",
+                            "start": str(int((now - 86400) * 1e9)),
+                            "end": str(int(now * 1e9)),
+                        },
+                        timeout=httpx.Timeout(4.0, connect=2.0),
+                    )
+                    if response.status_code != 200:
+                        empty["reason"] = "Syslog store returned HTTP %s." % response.status_code
+                        return remember(empty)
+                    try:
+                        payload = response.json()
+                    except ValueError:
+                        empty["reason"] = "Syslog store returned a response that was not JSON."
+                        return remember(empty)
+                    for stream in ((payload.get("data") or {}).get("result") or []):
+                        if not isinstance(stream, dict):
+                            continue
+                        severity = str((stream.get("stream") or {}).get("severity") or "")
+                        for pair in stream.get("values") or []:
+                            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                                continue
+                            try:
+                                at = datetime.fromtimestamp(int(pair[0]) / 1e9, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                            except (TypeError, ValueError, OSError):
+                                at = ""
+                            lines.append({"at": at, "severity": severity, "message": _syslog_text(str(pair[1]))})
         except httpx.HTTPError:
             empty["reason"] = "Syslog store is not reachable."
             return remember(empty)
-        if response.status_code != 200:
-            empty["reason"] = "Syslog store returned HTTP %s." % response.status_code
-            return remember(empty)
-        try:
-            payload = response.json()
-        except ValueError:
-            empty["reason"] = "Syslog store returned a response that was not JSON."
-            return remember(empty)
-        lines = []
-        for stream in ((payload.get("data") or {}).get("result") or []):
-            if not isinstance(stream, dict):
-                continue
-            severity = str((stream.get("stream") or {}).get("severity") or "")
-            for pair in stream.get("values") or []:
-                if not isinstance(pair, (list, tuple)) or len(pair) < 2:
-                    continue
-                try:
-                    at = datetime.fromtimestamp(int(pair[0]) / 1e9, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                except (TypeError, ValueError, OSError):
-                    at = ""
-                lines.append({"at": at, "severity": severity, "message": str(pair[1])})
         lines.sort(key=lambda row: row["at"], reverse=True)
-        if not lines:
+        seen = set()
+        unique = []
+        for row in lines:
+            mark = (row["at"], row["message"])
+            if mark in seen:
+                continue
+            seen.add(mark)
+            unique.append(row)
+        if not unique:
             empty["reason"] = "No syslog lines for this device in the last day."
             return remember(empty)
-        return remember({"hostname": name, "lines": lines[:200], "reason": ""})
+        return remember({"hostname": name, "lines": unique[:200], "reason": ""})
 
     def _detail(self, client, row: dict, rows: list[dict]) -> dict:
         device = row["_device"]
@@ -2848,6 +3109,10 @@ class FleetService:
                 "region": site["region"],
                 "region_slug": site.get("region_slug") or "",
                 "city": site["city"],
+                "description": site.get("description") or "",
+                "address": site.get("address") or "",
+                "latitude": site.get("latitude"),
+                "longitude": site.get("longitude"),
                 "deviceCount": len(members),
                 "health": site_health,
                 "alerts": open_count,
@@ -2872,6 +3137,10 @@ class FleetService:
         for row in built[start:start + page_size]:
             page_rows.append({
                 "id": row["id"], "name": row["name"], "region": row["region"], "city": row["city"],
+                "description": row.get("description") or "",
+                "address": row.get("address") or "",
+                "latitude": row.get("latitude"),
+                "longitude": row.get("longitude"),
                 "deviceCount": row["deviceCount"], "health": row["health"], "alerts": row["alerts"],
                 "lastDiscovery": row["lastDiscovery"],
             })
@@ -2906,6 +3175,246 @@ class FleetService:
         rows = [self._public_row(row) for row in devices if row["siteId"] == match["id"]]
         rows.sort(key=lambda row: row["hostname"].lower())
         return rows
+
+    def site_briefing(self, site_id: str, range_key: str, custom_min: int) -> dict:
+        """Manager account of one site. Missing readings stay missing."""
+        from .site_briefing import (
+            build_briefing,
+            bytes_to_mbps,
+            host_values,
+            lane_of,
+            name_regex,
+            prom_duration,
+            scalar,
+            talkers_from,
+            window_label,
+        )
+        window, _step = _range_window(range_key, custom_min)
+        rows = self.site_devices(site_id)
+        label = window_label(range_key, custom_min)
+        names = [str(row.get("hostname") or "") for row in rows]
+
+        def prom_names(values: list[str]) -> str:
+            # PromQL strings reject a single backslash. A literal dot is written \\.
+            return name_regex(values).replace("\\", "\\\\")
+
+        regex = prom_names(names)
+        wan_re = prom_names([
+            str(row.get("hostname") or "") for row in rows
+            if lane_of(row.get("role") or "", row.get("formFactor") or "") == "wan"
+        ])
+        ap_re = prom_names([
+            str(row.get("hostname") or "") for row in rows
+            if lane_of(row.get("role") or "", row.get("formFactor") or "") == "wifi"
+        ])
+        cpu = memory = port_errors = ports_down = None
+        clients = noise = interference = wan_in = wan_out = loss = None
+        talkers: list[dict] = []
+        logs: list[dict] = []
+        sla = None
+        if regex or rows:
+            try:
+                with self._session() as client:
+                    logs = self._site_logs(client, rows, window)
+                    if regex:
+                        duration = prom_duration(window)
+                        found = self._prom_many(client, self._briefing_queries(regex, duration, wan_re, ap_re))
+                        cpu = host_values(found.get("cpu_cisco") or []) + host_values(found.get("cpu_fg") or [])
+                        memory = host_values(found.get("memory") or [])
+                        port_errors = host_values(found.get("errors") or [])
+                        ports_down = host_values(found.get("down") or [])
+                        talkers = talkers_from(found.get("inbound") or [], found.get("outbound") or [], window)
+                        if ap_re:
+                            clients = scalar(found.get("clients"))
+                            noise = scalar(found.get("noise"))
+                            interference = scalar(found.get("interference"))
+                        if wan_re:
+                            wan_in = bytes_to_mbps(scalar(found.get("wan_in")), window)
+                            wan_out = bytes_to_mbps(scalar(found.get("wan_out")), window)
+                            loss = scalar(found.get("loss"))
+                            end = time.time()
+                            step = max(60, int(window / 90))
+                            sla = self._wan_graph(client, wan_re, end - window, end, step, "5m")
+            except UpstreamError:
+                log.warning("site briefing could not reach a reading source")
+        return build_briefing(
+            window_label=label,
+            devices=rows,
+            logs=logs,
+            cpu=cpu,
+            memory=memory,
+            port_errors=port_errors,
+            ports_down=ports_down,
+            clients=clients,
+            noise=noise,
+            interference=interference,
+            wan_in=wan_in,
+            wan_out=wan_out,
+            wan_known=bool(wan_re),
+            loss=loss,
+            talkers=talkers,
+            sla=sla,
+        )
+
+    def site_wan_sla(self, site_id: str) -> dict:
+        """Rolling WAN throughput. One point every 5 seconds so the graph moves live."""
+        from .site_briefing import lane_of, name_regex
+
+        rows = self.site_devices(site_id)
+        wan_re = name_regex([
+            str(row.get("hostname") or "") for row in rows
+            if lane_of(row.get("role") or "", row.get("formFactor") or "") == "wan"
+        ]).replace("\\", "\\\\")
+        window = 180
+        empty = {
+            "points": [],
+            "limiterMbps": None,
+            "note": "No SD-WAN or WAN device is recorded at this site.",
+            "windowSeconds": window,
+        }
+        if not wan_re:
+            return empty
+        end = time.time()
+        try:
+            with self._session() as client:
+                body = self._wan_graph(client, wan_re, end - window, end, 5, "2m")
+        except UpstreamError:
+            log.warning("live WAN graph could not reach Prometheus")
+            empty["note"] = "No WAN throughput sample arrived in this window."
+            return empty
+        body["windowSeconds"] = window
+        return body
+
+    def _wan_graph(self, client, wan_re: str, start: float, end: float, step: int, rate_range: str) -> dict:
+        """Throughput and limiter for the FortiGate interfaces that have a bandwidth statement."""
+        from .site_briefing import fortigate_limits, link_points, name_regex, sla_points
+
+        host = '{hostname=~"%s"}' % wan_re
+        inbound_bw = self._prom(client, "(fortigate_if_in_bw_kbps%s > 0) or (fortigate_if_est_up_bw_kbps%s > 0)" % (host, host))
+        outbound_bw = self._prom(client, "(fortigate_if_out_bw_kbps%s > 0) or (fortigate_if_est_down_bw_kbps%s > 0)" % (host, host))
+        limits = fortigate_limits(inbound_bw, outbound_bw)
+        names = [item["name"] for item in limits["interfaces"]]
+        traffic = host
+        group = "sum"
+        if names:
+            traffic = '{hostname=~"%s",ifName=~"%s"}' % (wan_re, name_regex(names).replace("\\", "\\\\"))
+            group = "sum by (ifName)"
+        inbound = self._prom_range(
+            client,
+            "%s(rate(ifHCInOctets%s[%s])) * 8 / 1000000" % (group, traffic, rate_range),
+            start, end, step,
+        )
+        outbound = self._prom_range(
+            client,
+            "%s(rate(ifHCOutOctets%s[%s])) * 8 / 1000000" % (group, traffic, rate_range),
+            start, end, step,
+        )
+        by_name = {item["name"]: item for item in limits["interfaces"]}
+        links = link_points(inbound, outbound, names)
+        for link in links:
+            face = by_name.get(link["name"]) or {}
+            link["inMbps"] = face.get("inMbps")
+            link["outMbps"] = face.get("outMbps")
+        if links:
+            totals: dict[int, list[float]] = {}
+            for link in links:
+                for point in link["points"]:
+                    row = totals.setdefault(int(point["t"]), [0.0, 0.0])
+                    row[0] += float(point["inMbps"])
+                    row[1] += float(point["outMbps"])
+            ordered = sorted(totals)
+            inbound = [{"values": [[stamp, totals[stamp][0]] for stamp in ordered]}]
+            outbound = [{"values": [[stamp, totals[stamp][1]] for stamp in ordered]}]
+        body = sla_points(inbound, outbound, limits["limiterInMbps"], limits["limiterOutMbps"])
+        body["interfaces"] = limits["interfaces"]
+        body["links"] = links
+        return body
+
+    def _briefing_queries(self, regex: str, duration: str, wan_re: str, ap_re: str) -> dict:
+        host = '{hostname=~"%s"}' % regex
+        queries = {
+            "cpu_cisco": "max by (hostname) (max_over_time(cpmCPUTotal5minRev%s[%s]))" % (host, duration),
+            "cpu_fg": "max by (hostname) (max_over_time(fgSysCpuUsage%s[%s]))" % (host, duration),
+            "memory": (
+                "(sum by (hostname) (ciscoMemoryPoolUsed%(h)s) / clamp_min(sum by (hostname) (ciscoMemoryPoolUsed%(h)s) + sum by (hostname) (ciscoMemoryPoolFree%(h)s), 1)) * 100 "
+                "or avg by (hostname) (fgSysMemUsage%(h)s)"
+            ) % {"h": host},
+            "errors": "sum by (hostname) (increase(ifInErrors%s[%s]))" % (host, duration),
+            "down": 'count by (hostname) (ifOperStatus{hostname=~"%s"} == 2) or count by (hostname) (ifOperStatus_info{hostname=~"%s",ifOperStatus="down"})' % (regex, regex),
+            "inbound": "sum by (hostname, ifName, ifDescr) (increase(ifHCInOctets%s[%s]))" % (host, duration),
+            "outbound": "sum by (hostname, ifName, ifDescr) (increase(ifHCOutOctets%s[%s]))" % (host, duration),
+        }
+        if wan_re:
+            wan = '{hostname=~"%s"}' % wan_re
+            queries["wan_in"] = "sum(increase(ifHCInOctets%s[%s]))" % (wan, duration)
+            queries["wan_out"] = "sum(increase(ifHCOutOctets%s[%s]))" % (wan, duration)
+            queries["loss"] = 'max(ie_sdwan_tunnel_loss_ratio{hostname=~"%s"})' % wan_re
+        if ap_re:
+            queries["clients"] = (
+                'sum(ie_wlc_ap_clients{ap_name=~"%s"}) or sum(ie_wlc_radio_clients{ap_name=~"%s"}) or sum(ie_wlc_radio_clients{ap=~"%s"})'
+            ) % (ap_re, ap_re, ap_re)
+            queries["noise"] = 'avg(ie_wlc_radio_noise{ap=~"%(r)s"} or ie_wlc_radio_noise{ap_name=~"%(r)s"})' % {"r": ap_re}
+            queries["interference"] = 'avg(ie_wlc_radio_interference{ap=~"%(r)s"} or ie_wlc_radio_interference{ap_name=~"%(r)s"})' % {"r": ap_re}
+        return queries
+
+    def _site_logs(self, client, rows: list[dict], window: int) -> list[dict]:
+        from .site_briefing import name_regex
+        now = time.time()
+        start = str(int((now - window) * 1e9))
+        end = str(int(now * 1e9))
+        by_ip = {}
+        for row in rows:
+            ip = str(row.get("mgmtIp") or "").split("/")[0].strip()
+            if _ipv4(ip):
+                by_ip[ip] = str(row.get("hostname") or "")
+        queries = []
+        hosts = name_regex([str(row.get("hostname") or "") for row in rows])
+        if hosts:
+            queries.append('{hostname=~"(?i)%s"}' % hosts.replace("\\", "\\\\"))
+        if by_ip:
+            queries.append('{sender=~"%s"}' % "|".join(sorted(by_ip)))
+        base = (os.environ.get("LOKI_URL") or "http://loki:3100").rstrip("/")
+        lines = []
+        for query in queries:
+            try:
+                response = client.get(
+                    base + "/loki/api/v1/query_range",
+                    params={"query": query, "limit": "400", "direction": "backward", "start": start, "end": end},
+                    timeout=httpx.Timeout(8.0, connect=2.0),
+                )
+            except httpx.HTTPError:
+                continue
+            if response.status_code != 200:
+                continue
+            try:
+                payload = response.json()
+            except ValueError:
+                continue
+            for stream in ((payload.get("data") or {}).get("result") or []):
+                if not isinstance(stream, dict):
+                    continue
+                labels = stream.get("stream") or {}
+                sender = str(labels.get("sender") or "")
+                host = str(labels.get("hostname") or "") or by_ip.get(sender, "")
+                severity = str(labels.get("severity") or "")
+                for pair in stream.get("values") or []:
+                    if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                        continue
+                    try:
+                        at = datetime.fromtimestamp(int(pair[0]) / 1e9, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    except (TypeError, ValueError, OSError):
+                        at = ""
+                    lines.append({"at": at, "severity": severity, "hostname": host, "message": _syslog_text(str(pair[1]))})
+        lines.sort(key=lambda row: row["at"], reverse=True)
+        seen = set()
+        unique = []
+        for row in lines:
+            mark = (row["at"], row["hostname"], row["message"])
+            if mark in seen:
+                continue
+            seen.add(mark)
+            unique.append(row)
+        return unique[:400]
 
     def _project_alerts(self, payload: dict, devices: list[dict]) -> list[dict]:
         by_host = {row["hostname"].lower(): row for row in devices}
@@ -3326,9 +3835,26 @@ class FleetService:
             body["degraded"] = degraded
         return body
 
-    def _ap_snapshot(self, client) -> dict:
+    def _ap_snapshot(self, client, only: str = "") -> dict:
+        wanted = (only or "").strip()
+        safe = prom_escape(wanted) if wanted else ""
+
+        def scoped(expr: str) -> str:
+            if not safe:
+                return expr
+            pieces = []
+            for part in expr.split(" or "):
+                part = part.strip()
+                if not part:
+                    continue
+                # Both labels are used. Keep them as separate series so the
+                # row is built the same way as the full access-point list.
+                pieces.append('%s{ap="%s"}' % (part, safe))
+                pieces.append('%s{ap_name="%s"}' % (part, safe))
+            return " or ".join(pieces)
+
         queries = {
-            key: _wlc_recent(expr) for key, expr in {
+            key: _wlc_recent(scoped(expr)) for key, expr in {
                 "status": "ie_wlc_ap_admin_status or ie_wlc_ap_oper_status or ie_wlc_ap_oper_up",
                 "radio_oper": "ie_wlc_radio_oper_up or ie_wlc_radio_oper_status",
                 "clients": "ie_wlc_ap_clients or ie_wlc_client_radio_clients",
@@ -3476,7 +4002,7 @@ class FleetService:
             value = _sample_value(sample)
             row["uptimeSeconds"] = None if value is None else round(float(value) / 100.0, 1)
         radio_by: dict[tuple, dict] = {}
-        for sample in list(channels) + list(utils) + list(radio_clients) + list(noise) + list(interference) + list(power) + list(width) + list(rssi) + list(snr):
+        for sample in list(channels) + list(utils) + list(radio_clients) + list(noise) + list(interference) + list(power) + list(width) + list(rssi) + list(snr) + list(radio_oper):
             metric = sample.get("metric") or {}
             row = ensure(metric)
             if sample_fresh(sample, now):
@@ -3486,9 +4012,12 @@ class FleetService:
             radio = radio_by.setdefault(key, {
                 "slot": slot, "channel": None, "utilization": None, "clients": None,
                 "noise": None, "interference": None, "txPowerDbm": None, "width": None,
-                "rssiAvg": None, "snrAvg": None, "band": str(metric.get("band") or ""),
-                "owner": row,
+                "rssiAvg": None, "snrAvg": None, "band": "",
+                "operUp": None, "owner": row,
             })
+            band = str(metric.get("band") or "").strip()
+            if band and not radio.get("band"):
+                radio["band"] = band
             value = _sample_value(sample)
             metric_name = str(metric.get("__name__") or "")
             if metric_name.endswith("channel") and "util" not in metric_name:
@@ -3509,6 +4038,10 @@ class FleetService:
                 radio["rssiAvg"] = value
             elif "snr" in metric_name:
                 radio["snrAvg"] = value
+            elif metric_name.endswith("oper_up"):
+                radio["operUp"] = None if value is None else bool(float(value) >= 1)
+            elif metric_name.endswith("oper_status") and radio.get("operUp") is None:
+                radio["operUp"] = None if value is None else bool(float(value) >= 1)
         for sample in info or []:
             metric = sample.get("metric") or {}
             row = ensure(metric)
@@ -3657,7 +4190,7 @@ class FleetService:
                 links = []
                 if "prometheus" not in degraded:
                     degraded.append("prometheus")
-        aps = self._ap_rows()
+            aps = self._monitored_ap_rows(client, {str(row.get("hostname") or "") for row in rows})
         by_host = {str(device.get("hostname") or "").lower(): device for device in devices}
         for ap in aps:
             device = by_host.get(str(ap.get("name") or "").lower())
@@ -3683,6 +4216,65 @@ class FleetService:
             log.warning("topology file_sd could not be written")
         self.cache.put("hierarchy-report", report, ttl=90)
         return report
+
+    def _monitored_ap_rows(self, client, hostnames: set[str]) -> list[dict]:
+        """Uplink and controller for monitored access points only.
+
+        The full radio snapshot is thousands of series and is what the access
+        point page needs. A switch page only needs the access points that are
+        already in NetBox, so their parent link stays the same.
+        """
+        wanted = {name.strip().lower() for name in hostnames if str(name).strip()}
+        if not wanted:
+            return []
+        snap = self.cache.get("ap-snapshot")
+        if isinstance(snap, dict):
+            return [
+                row for row in (snap.get("rows") or [])
+                if str(row.get("name") or "").lower() in wanted
+            ]
+        cached = self.cache.get("monitored-ap-rows")
+        if isinstance(cached, list):
+            return cached
+        try:
+            fetched = self._prom_many(client, {
+                "info": _wlc_recent("ie_wlc_ap_info or ie_wlc_ap_info_info"),
+                "neighbors": _wlc_recent("ie_wlc_neighbor_info"),
+            })
+        except Exception:
+            log.warning("monitored access-point uplinks could not be read")
+            return []
+        if all(value is None for value in fetched.values()):
+            return []
+        by_name: dict[str, dict] = {}
+
+        def touch(metric: dict) -> dict | None:
+            name, _mac, wlc, _site = _ap_identity(metric)
+            key = name.lower()
+            if not key or key not in wanted:
+                return None
+            row = by_name.get(key)
+            if row is None:
+                row = {"name": name, "wlc": wlc or "", "neighborSwitch": "", "neighborPort": ""}
+                by_name[key] = row
+            elif wlc and not row.get("wlc"):
+                row["wlc"] = wlc
+            return row
+
+        for sample in fetched.get("info") or []:
+            touch((sample.get("metric") or {}))
+        for sample in fetched.get("neighbors") or []:
+            metric = sample.get("metric") or {}
+            row = touch(metric)
+            if row is None:
+                continue
+            if metric.get("switch"):
+                row["neighborSwitch"] = str(metric.get("switch"))
+            if metric.get("port"):
+                row["neighborPort"] = str(metric.get("port"))
+        rows = list(by_name.values())
+        self.cache.put("monitored-ap-rows", rows, ttl=90)
+        return rows
 
     def _neighbour_links(self, client) -> list[dict]:
         cached = self.cache.get("neighbour-links")
@@ -4989,10 +5581,22 @@ def mount_fleet(app, user_of) -> None:
         reader(request)
         return fleet().get_device(device_id)
 
+    @app.get("/api/v1/devices/{device_id}/config")
+    def device_config(device_id: str, request: Request):
+        reader(request)
+        response = JSONResponse(fleet().device_config(device_id))
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        return response
+
+    @app.get("/internal/oxidized/nodes")
+    def oxidized_nodes(request: Request):
+        return fleet().oxidized_source(request.headers.get("x-oxidized-token") or "")
+
     @app.get("/api/v1/devices/{device_id}/logs")
     def device_logs(device_id: str, request: Request):
         reader(request)
-        return fleet().device_logs((request.query_params.get("hostname") or "")[:200])
+        return fleet().device_logs(device_id, (request.query_params.get("hostname") or "")[:200])
 
     @app.post("/api/v1/devices/{device_id}/netbox-sync")
     def netbox_sync(device_id: str, request: Request):
@@ -5051,6 +5655,21 @@ def mount_fleet(app, user_of) -> None:
     def site_devices(site_id: str, request: Request):
         reader(request)
         return fleet().site_devices(site_id)
+
+    @app.get("/api/v1/sites/{site_id}/sla")
+    def site_sla(site_id: str, request: Request):
+        reader(request)
+        return fleet().site_wan_sla(site_id)
+
+    @app.get("/api/v1/sites/{site_id}/briefing")
+    def site_briefing(site_id: str, request: Request):
+        reader(request)
+        params = request.query_params
+        return fleet().site_briefing(
+            site_id,
+            (params.get("range") or "24h")[:20],
+            _qint(params.get("custom_min"), 1440, 1, 10080),
+        )
 
     @app.get("/api/v1/alerts")
     def alerts(request: Request):

@@ -200,6 +200,7 @@ export interface DiscoverySuggestion {
   role?: string;
   site?: string;
   platform?: string;
+  tenant?: string;
 }
 
 export interface UnapprovedDevice {
@@ -219,6 +220,7 @@ export interface UnapprovedDevice {
 export interface ApproveBody {
   role: string;
   site: string;
+  tenant?: string;
   name?: string;
   platform?: string;
 }
@@ -250,6 +252,12 @@ export interface DiscoveryRoleChoice {
   slug: string;
 }
 
+export interface DiscoveryTenant {
+  name: string;
+  slug: string;
+  group: string;
+}
+
 export interface DiscoveryCatalog {
   ok?: boolean;
   roles: string[];
@@ -257,6 +265,8 @@ export interface DiscoveryCatalog {
   sites: string[];
   siteChoices?: DiscoveryRoleChoice[];
   platforms: string[];
+  tenantGroups?: DiscoveryRoleChoice[];
+  tenants?: DiscoveryTenant[];
 }
 
 export type ScanTarget = 'prefix' | 'ip';

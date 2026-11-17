@@ -18,6 +18,7 @@ vi.mock('@/lib/apiClient', () => ({
     startScan: vi.fn(),
     setDeviceRoles: vi.fn(),
     setDeviceSites: vi.fn(),
+    setDeviceTenants: vi.fn(),
   },
 }));
 
@@ -58,6 +59,8 @@ describe('NotInNetBoxView device discover', () => {
     vi.mocked(api.setDeviceRoles).mockResolvedValue({ ok: true, role: 'Core switch', updated: ['disc-1'] });
     vi.mocked(api.setDeviceSites).mockReset();
     vi.mocked(api.setDeviceSites).mockResolvedValue({ ok: true, site: 'Lab', updated: ['disc-1'] });
+    vi.mocked(api.setDeviceTenants).mockReset();
+    vi.mocked(api.setDeviceTenants).mockResolvedValue({ ok: true, tenant: '', updated: [] });
     vi.mocked(api.discoveryCatalog).mockResolvedValue({ roles: [], sites: [], platforms: [] });
     vi.mocked(api.listScans).mockResolvedValue([]);
     vi.mocked(api.listDiscovered).mockResolvedValue([]);
@@ -159,5 +162,29 @@ describe('NotInNetBoxView device discover', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Site for selected devices' }), 'Lab');
     await user.click(screen.getByRole('button', { name: 'Set site for selected' }));
     expect(api.setDeviceSites).toHaveBeenCalledWith(['disc-1'], 'Lab');
+  });
+
+  it('saves a tenant after the tenant group is chosen', async () => {
+    vi.mocked(api.discoveryCatalog).mockResolvedValue({
+      roles: ['Access switch'],
+      sites: ['Lab'],
+      platforms: [],
+      tenantGroups: [{ name: 'Retail', slug: 'retail' }],
+      tenants: [
+        { name: 'Pick n Pay', slug: 'pick-n-pay', group: 'Retail' },
+        { name: 'Other', slug: 'other', group: 'Wholesale' },
+      ],
+    });
+    vi.mocked(api.setDeviceTenants).mockResolvedValue({ ok: true, tenant: 'Pick n Pay', updated: ['disc-1'] });
+    vi.mocked(api.listDiscovered).mockResolvedValue([foundDevice()]);
+    const user = userEvent.setup();
+    render(<NotInNetBoxView />);
+    const group = await screen.findByRole('combobox', { name: 'Tenant group for sw-new' });
+    expect(screen.getByRole('combobox', { name: 'Tenant for sw-new' })).toBeDisabled();
+    await user.selectOptions(group, 'Retail');
+    const tenant = screen.getByRole('combobox', { name: 'Tenant for sw-new' });
+    expect(tenant).toBeEnabled();
+    await user.selectOptions(tenant, 'Pick n Pay');
+    expect(api.setDeviceTenants).toHaveBeenCalledWith(['disc-1'], 'Pick n Pay');
   });
 });

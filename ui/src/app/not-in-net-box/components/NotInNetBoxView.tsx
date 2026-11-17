@@ -52,6 +52,30 @@ function siteValue(catalog: DiscoveryCatalog, current?: string): string {
   return hit?.name || current;
 }
 
+const NO_GROUP = 'No group';
+
+function tenantGroups(catalog: DiscoveryCatalog): string[] {
+  const names = (catalog.tenantGroups ?? []).map((group) => group.name).filter(Boolean);
+  for (const tenant of catalog.tenants ?? []) {
+    if (tenant.group && !names.includes(tenant.group)) names.push(tenant.group);
+  }
+  const ungrouped = (catalog.tenants ?? []).some((tenant) => !tenant.group);
+  return ungrouped ? [...names, NO_GROUP] : names;
+}
+
+function groupFor(catalog: DiscoveryCatalog, tenant?: string): string {
+  if (!tenant) return '';
+  const hit = (catalog.tenants ?? []).find((row) => row.name === tenant || row.slug === tenant);
+  if (!hit) return '';
+  return hit.group || NO_GROUP;
+}
+
+function tenantsIn(catalog: DiscoveryCatalog, group: string): string[] {
+  if (!group) return [];
+  const want = group === NO_GROUP ? '' : group;
+  return (catalog.tenants ?? []).filter((tenant) => (tenant.group || '') === want).map((tenant) => tenant.name);
+}
+
 const EMPTY_CATALOG: DiscoveryCatalog = { roles: [], sites: [], platforms: [] };
 
 function stamp(value: string): string {
@@ -69,6 +93,9 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
   const [pageSize, setPageSize] = useState(25);
   const [bulkRole, setBulkRole] = useState('');
   const [bulkSite, setBulkSite] = useState('');
+  const [bulkGroup, setBulkGroup] = useState('');
+  const [bulkTenant, setBulkTenant] = useState('');
+  const [groupPick, setGroupPick] = useState<Record<string, string>>({});
   const [scans, setScans] = useState<DiscoveryScan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -76,7 +103,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
   const [confirm, setConfirm] = useState<{ ids: string[]; mode: 'approve' | 'reject' } | null>(
     null
   );
-  const [form, setForm] = useState({ role: '', site: '', name: '', platform: '' });
+  const [form, setForm] = useState({ role: '', site: '', tenant: '', tenantGroup: '', name: '', platform: '' });
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   const [catalog, setCatalog] = useState<DiscoveryCatalog>(EMPTY_CATALOG);
@@ -130,8 +157,12 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
         if (!cancelled) {
           setCatalog({
             roles: data.roles ?? [],
+            roleChoices: data.roleChoices,
             sites: data.sites ?? [],
+            siteChoices: data.siteChoices,
             platforms: data.platforms ?? [],
+            tenantGroups: data.tenantGroups ?? [],
+            tenants: data.tenants ?? [],
           });
         }
       })
@@ -175,6 +206,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
         device.model,
         device.suggested.site,
         device.suggested.role,
+        device.suggested.tenant,
       ]
         .filter(Boolean)
         .join(' ')
@@ -218,6 +250,22 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
     }
   };
 
+  const saveTenant = async (ids: string[], tenant: string) => {
+    const chosen = tenant.trim();
+    if (ids.length === 0) return;
+    setItems((current) =>
+      current?.map((device) =>
+        ids.includes(device.id) ? { ...device, suggested: { ...device.suggested, tenant: chosen } } : device
+      ) ?? current
+    );
+    try {
+      await api.setDeviceTenants(ids, chosen);
+    } catch (cause) {
+      toast.error(isApiError(cause) ? cause.message : 'The tenant was not saved.');
+      setReload((value) => value + 1);
+    }
+  };
+
   const allOn = !!rows && rows.length > 0 && rows.every((row) => selected.includes(row.id));
 
   const ask = (ids: string[], mode: 'approve' | 'reject') => {
@@ -226,6 +274,8 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
       setForm({
         role: device?.suggested.role ?? '',
         site: device?.suggested.site ?? '',
+        tenant: device?.suggested.tenant ?? '',
+        tenantGroup: groupFor(catalog, device?.suggested.tenant),
         name: device?.sysName || device?.hostname || '',
         platform: device?.suggested.platform ?? device?.platform ?? '',
       });
@@ -241,25 +291,26 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
       if (mode === 'reject') {
         await Promise.all(ids.map((id) => api.rejectDevice(id)));
       } else if (ids.length === 1) {
-        if (!form.role.trim() || !form.site.trim()) {
-          toast.error('Role and site are required to create the device in NetBox.');
+        if (!form.role.trim() || !form.site.trim() || !form.tenant.trim()) {
+          toast.error('Role, site, and tenant are required to create the device in NetBox.');
           setBusy(false);
           return;
         }
         await api.approveDevice(ids[0], {
           role: form.role.trim(),
           site: form.site.trim(),
+          tenant: form.tenant.trim(),
           name: form.name.trim() || undefined,
           platform: form.platform.trim() || undefined,
         });
       } else {
         const missing = ids.filter((id) => {
           const device = items?.find((item) => item.id === id);
-          return !device?.suggested.role || !device.suggested.site;
+          return !device?.suggested.role || !device.suggested.site || !device.suggested.tenant;
         });
         if (missing.length) {
           toast.error(
-            'Some selected devices have no suggested role or site. Approve those one at a time.'
+            'Some selected devices have no suggested role, site, or tenant. Approve those one at a time.'
           );
           setBusy(false);
           return;
@@ -270,6 +321,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
             return api.approveDevice(id, {
               role: device?.suggested.role ?? '',
               site: device?.suggested.site ?? '',
+              tenant: device?.suggested.tenant ?? '',
               name: device?.sysName,
               platform: device?.suggested.platform,
             });
@@ -524,6 +576,49 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                 Set site for selected
               </button>
             </label>
+            <label className="flex items-center gap-2 text-xs">
+              <span>Tenant group</span>
+              <select
+                aria-label="Tenant group for selected devices"
+                value={bulkGroup}
+                onChange={(event) => {
+                  setBulkGroup(event.target.value);
+                  setBulkTenant('');
+                }}
+                className="h-7 rounded-md border border-navy-3 bg-navy-2 px-2 text-primary-foreground"
+              >
+                <option value="">Choose a group</option>
+                {tenantGroups(catalog).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <span>Tenant</span>
+              <select
+                aria-label="Tenant for selected devices"
+                value={bulkTenant}
+                disabled={!bulkGroup}
+                onChange={(event) => setBulkTenant(event.target.value)}
+                className="h-7 rounded-md border border-navy-3 bg-navy-2 px-2 text-primary-foreground disabled:opacity-60"
+              >
+                <option value="">{bulkGroup ? 'Choose a tenant' : 'Choose a group first'}</option>
+                {tenantsIn(catalog, bulkGroup).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => saveTenant(selected, bulkTenant)}
+                className="rounded-md bg-cyan px-2 py-1 font-semibold text-navy"
+              >
+                Set tenant for selected
+              </button>
+            </label>
             <button
               type="button"
               onClick={() => setSelected([])}
@@ -570,7 +665,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
           />
         ) : (
           <div className="scroll-thin overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-sm">
+            <table className="w-full min-w-[1400px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="w-10 px-4 py-2.5">
@@ -588,6 +683,8 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                   <th className="px-3 py-2.5">Platform</th>
                   <th className="px-3 py-2.5">Suggested site</th>
                   <th className="px-3 py-2.5">Suggested role</th>
+                  <th className="px-3 py-2.5">Tenant group</th>
+                  <th className="px-3 py-2.5">Tenant</th>
                   <th className="px-3 py-2.5">Last seen</th>
                   <th className="px-3 py-2.5 text-right">Actions</th>
                 </tr>
@@ -597,6 +694,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                   const on = selected.includes(device.id);
                   const fresh = highlightIp === device.ip;
                   const name = labelFor(device);
+                  const group = groupPick[device.id] || groupFor(catalog, device.suggested.tenant);
                   return (
                     <tr
                       key={device.id}
@@ -676,6 +774,43 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                           ))}
                         </select>
                       </td>
+                      <td className="px-3 py-2.5">
+                        <select
+                          aria-label={`Tenant group for ${name}`}
+                          value={group}
+                          disabled={!canWrite}
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            setGroupPick((current) => ({ ...current, [device.id]: next }));
+                            const kept = tenantsIn(catalog, next).includes(device.suggested.tenant || '');
+                            if (device.suggested.tenant && !kept) saveTenant([device.id], '');
+                          }}
+                          className="h-8 max-w-[14rem] rounded-md border border-input bg-card px-2 text-sm disabled:opacity-60"
+                        >
+                          <option value="">Select a group</option>
+                          {tenantGroups(catalog).map((option) => (
+                            <option key={`${device.id}-group-${option}`} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <select
+                          aria-label={`Tenant for ${name}`}
+                          value={tenantsIn(catalog, group).includes(device.suggested.tenant || '') ? device.suggested.tenant : ''}
+                          disabled={!canWrite || !group}
+                          onChange={(event) => saveTenant([device.id], event.target.value)}
+                          className="h-8 max-w-[14rem] rounded-md border border-input bg-card px-2 text-sm disabled:opacity-60"
+                        >
+                          <option value="">{group ? 'Select a tenant' : 'Select a group first'}</option>
+                          {tenantsIn(catalog, group).map((option) => (
+                            <option key={`${device.id}-tenant-${option}`} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="px-3 py-2.5 font-mono-data text-xs text-muted-foreground">
                         {stamp(device.lastSeen)}
                       </td>
@@ -736,7 +871,7 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
         }
         description={
           confirm?.mode === 'approve'
-            ? 'NetBox gets the role, site, name, and platform you confirm.'
+            ? 'NetBox gets the role, site, tenant, name, and platform you confirm.'
             : 'Rejected devices are hidden until discovery sees them again.'
         }
         width={confirm?.mode === 'approve' && confirm.ids.length === 1 ? 'max-w-lg' : 'max-w-md'}
@@ -778,6 +913,43 @@ export default function NotInNetBoxView({ embedded = false }: { embedded?: boole
                 <option value="">Select a role</option>
                 {roleNames(catalog, form.role).map((option) => (
                   <option key={`form-role-${option}`} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              Tenant group
+              <select
+                aria-label="Tenant group"
+                value={form.tenantGroup}
+                onChange={(event) => {
+                  const tenantGroup = event.target.value;
+                  const kept = tenantsIn(catalog, tenantGroup).includes(form.tenant);
+                  setForm({ ...form, tenantGroup, tenant: kept ? form.tenant : '' });
+                }}
+                className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2"
+              >
+                <option value="">Select a group</option>
+                {tenantGroups(catalog).map((option) => (
+                  <option key={`form-group-${option}`} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              Tenant
+              <select
+                aria-label="Tenant"
+                value={tenantsIn(catalog, form.tenantGroup).includes(form.tenant) ? form.tenant : ''}
+                disabled={!form.tenantGroup}
+                onChange={(event) => setForm({ ...form, tenant: event.target.value })}
+                className="mt-1 h-9 w-full rounded-md border border-input bg-card px-2 disabled:opacity-60"
+              >
+                <option value="">{form.tenantGroup ? 'Select a tenant' : 'Select a group first'}</option>
+                {tenantsIn(catalog, form.tenantGroup).map((option) => (
+                  <option key={`form-tenant-${option}`} value={option}>
                     {option}
                   </option>
                 ))}

@@ -78,6 +78,9 @@ class NetBoxHandler(BaseHTTPRequestHandler):
         if method == "GET" and parsed.path.startswith("/api/dcim/device-types/") and "model" in parsed.query and "PA-820" in parsed.query:
             self._json(200, {"results": [{"id": 9, "slug": "pa-820", "model": "PA-820"}]})
             return
+        if method == "GET" and parsed.path.startswith("/api/tenancy/tenants/") and getattr(self.server, "tenants", None) is not None:
+            self._json(200, {"results": self.server.tenants, "next": None})
+            return
         if method == "GET":
             self._json(200, {"results": [{"id": 1, "name": "existing", "slug": "existing"}], "next": None})
             return
@@ -745,3 +748,37 @@ def test_scheduler_runs_scan_once_before_prefixes(tmp_path):
     assert broken.returncode == 0, broken.stderr
     assert "netdisco-do discover failed for 10.7.7.7" in broken.stderr
     assert (work / "scan-done" / "9").read_text(encoding="utf-8").splitlines()[1] == "failed"
+
+
+def test_set_tenants_is_remembered_for_approval(tmp_path):
+    settings = _settings(tmp_path, "http://127.0.0.1:9")
+    factory, _engine = make_session_factory(settings.database_url)
+    discovery = Discovery(settings, factory, settings.config_root)
+    with factory() as db:
+        db.add(DiscoveryCandidate(ip="10.1.1.9", name="sw1", status="pending", role_slug="Access switch", site_slug="Lab"))
+        db.commit()
+        cid = db.scalars(select(DiscoveryCandidate)).one().id
+    saved = discovery.set_tenants([cid], "Pick n Pay")
+    assert saved["updated"] == [str(cid)]
+    row = discovery.list_unapproved()[0]
+    assert row["tenant"] == "Pick n Pay"
+
+
+def test_approve_assigns_the_selected_tenant(tmp_path):
+    server = _server()
+    server.tenants = [{"id": 44, "name": "Pick n Pay", "slug": "pick-n-pay"}]
+    try:
+        base = "http://127.0.0.1:%s" % server.server_address[1]
+        writer = NetBoxWriter(base, {"Authorization": "Bearer nbt_citoken12345.secret"})
+        writer.approve_device(
+            {"ip": "10.1.1.9", "name": "sw1", "vendor": "Cisco", "model": "C9300", "site": "Lab", "tenant": "Pick n Pay"},
+            {"role": "Access switch"},
+            {},
+        )
+        posted = [
+            json.loads(call[3]) for call in server.calls
+            if call[0] == "POST" and call[1].startswith("/api/dcim/devices")
+        ]
+        assert posted[0]["tenant"] == 44
+    finally:
+        server.shutdown()

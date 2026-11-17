@@ -10,7 +10,8 @@ import { isMockMode } from '@/lib/apiMode';
 import { allowOperate } from '@/lib/settings/access';
 import { useKnownRole } from '@/lib/useSession';
 import { describeLoadError, redirectIfSignedOut } from '@/lib/loadError';
-import type { DeviceHealth, DeviceRow } from '@/lib/types';
+import { HealthBadge } from '@/components/ui/Badge';
+import type { DeviceHealth, DeviceRow, SiteRow } from '@/lib/types';
 import HealthStrip from './HealthStrip';
 import DeviceFilters from './DeviceFilters';
 import DeviceTable from './DeviceTable';
@@ -27,9 +28,11 @@ export default function DeviceListView() {
     sortKey: 'hostname',
     sortDir: 'asc',
   });
-  const [rows, setRows] = useState<DeviceRow[] | null>(null);
+  const [sites, setSites] = useState<SiteRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [foundSites, setFoundSites] = useState<SiteRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -49,16 +52,15 @@ export default function DeviceListView() {
     setError(null);
     setSignedOut(false);
     api
-      .listDevices(query)
+      .listSites({ page: query.page, pageSize: query.pageSize, search: query.search, health: query.health, region: 'all' })
       .then((res) => {
         if (cancelled) return;
-        setRows(res.rows);
+        setSites(res.rows);
         setTotal(res.total);
-        if (res.roles) setRoles(res.roles);
       })
       .catch((cause) => {
         if (cancelled) return;
-        const failure = describeLoadError(cause, 'devices');
+        const failure = describeLoadError(cause, 'sites');
         redirectIfSignedOut(failure);
         setSignedOut(failure.signedOut);
         setError(failure.text);
@@ -70,6 +72,64 @@ export default function DeviceListView() {
       cancelled = true;
     };
   }, [query, reload]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listDevices({ page: 1, pageSize: 1, search: '', health: 'all', role: 'all', sortKey: 'hostname', sortDir: 'asc' })
+      .then((res) => {
+        if (!cancelled && res.roles) setRoles(res.roles);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [reload]);
+
+  useEffect(() => {
+    if (!query.search && query.role === 'all') {
+      setFoundSites([]);
+      return undefined;
+    }
+    let cancelled = false;
+    api
+      .listDevices({ ...query, page: 1, pageSize: 200 })
+      .then((res) => {
+        if (cancelled) return;
+        const grouped = new Map<string, SiteRow>();
+        for (const row of res.rows) {
+          if (!row.siteId || grouped.has(row.siteId)) continue;
+          const members = res.rows.filter((item) => item.siteId === row.siteId);
+          grouped.set(row.siteId, {
+            id: row.siteId,
+            name: row.site || 'Site',
+            region: '',
+            city: '',
+            deviceCount: members.length,
+            health: members.some((item) => item.health === 'critical') ? 'critical' : members.some((item) => item.health === 'warning') ? 'warning' : row.health,
+            alerts: 0,
+            lastDiscovery: '',
+          });
+        }
+        setFoundSites([...grouped.values()]);
+      })
+      .catch(() => {
+        if (!cancelled) setFoundSites([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [query, reload]);
+
+  const shownSites = useMemo(() => {
+    if (!sites) return null;
+    if (!query.search && query.role === 'all') return sites;
+    const byId = new Map(sites.map((site) => [site.id, site]));
+    for (const site of foundSites) {
+      if (!byId.has(site.id)) byId.set(site.id, site);
+    }
+    return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name));
+  }, [sites, foundSites, query.search, query.role]);
 
   const patch = useCallback((p: Partial<DeviceQuery>) => {
     setSelected([]);
@@ -92,7 +152,7 @@ export default function DeviceListView() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Devices</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Fleet health across ~2,000 sites. Open a device to see its faceplate and port graphs.
+            Sites from NetBox. A new site shows here as soon as it exists. Expand it to see the devices added to that site.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -118,7 +178,7 @@ export default function DeviceListView() {
 
       <HealthStrip activeHealth={query.health} onPick={healthFilter} />
 
-      <section className={`rounded-none border-x-0 border-y border-border bg-card shadow-card ${loading && rows ? 'opacity-70' : ''}`} aria-label="Device table" aria-busy={loading}>
+      <section className={`rounded-none border-x-0 border-y border-border bg-card shadow-card ${loading && sites ? 'opacity-70' : ''}`} aria-label="Sites" aria-busy={loading}>
         <div className="flex flex-col gap-3 border-b border-border p-4">
           <div className="flex flex-wrap items-center gap-2">
             <DeviceFilters query={query} onChange={patch} roles={roles} />
@@ -161,16 +221,17 @@ export default function DeviceListView() {
             You are signed out - <Link href="/login-screen" className="font-semibold underline">sign in</Link>
           </div>
         ) : (
-        <DeviceTable
-          rows={rows}
+        <SiteList
+          sites={shownSites}
           error={error}
-          onRetry={() => setReload((n) => n + 1)}
+          open={open}
+          onToggle={(id) => setOpen((current) => ({ ...current, [id]: !current[id] }))}
+          query={query}
           visible={visible}
           selected={selected}
           onSelect={setSelected}
-          sortKey={query.sortKey}
-          sortDir={query.sortDir}
           onSort={(k) => patch({ sortKey: k, sortDir: query.sortKey === k && query.sortDir === 'asc' ? 'desc' : 'asc', page: 1 })}
+          onRetry={() => setReload((n) => n + 1)}
           onClear={() => patch({ search: '', health: 'all', role: 'all' })}
         />
         )}
@@ -179,11 +240,168 @@ export default function DeviceListView() {
           page={query.page}
           pageSize={query.pageSize}
           total={total}
-          noun="devices"
+          noun="sites"
           onPage={(p) => setQuery((q) => ({ ...q, page: p }))}
           onPageSize={(n) => setQuery((q) => ({ ...q, pageSize: n, page: 1 }))}
         />
       </section>
     </div>
+  );
+}
+
+function matchesDevice(row: DeviceRow, query: DeviceQuery, siteMatched: boolean): boolean {
+  if (query.health !== 'all' && row.health !== query.health) return false;
+  if (query.role !== 'all' && row.role.toLowerCase() !== query.role.toLowerCase()) return false;
+  const needle = query.search.trim().toLowerCase();
+  if (!needle || siteMatched) return true;
+  return row.hostname.toLowerCase().includes(needle) || row.mgmtIp.toLowerCase().includes(needle) || row.site.toLowerCase().includes(needle);
+}
+
+function SiteList({
+  sites,
+  error,
+  open,
+  onToggle,
+  query,
+  visible,
+  selected,
+  onSelect,
+  onSort,
+  onRetry,
+  onClear,
+}: {
+  sites: SiteRow[] | null;
+  error: string | null;
+  open: Record<string, boolean>;
+  onToggle: (id: string) => void;
+  query: DeviceQuery;
+  visible: ColumnKey[];
+  selected: string[];
+  onSelect: (ids: string[]) => void;
+  onSort: (key: keyof DeviceRow) => void;
+  onRetry: () => void;
+  onClear: () => void;
+}) {
+  if (error) {
+    return (
+      <div role="alert" className="m-4 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <span>{error}</span>
+        <button type="button" onClick={onRetry} className="rounded-md border border-destructive/40 px-3 py-1 text-xs font-semibold">Retry</button>
+      </div>
+    );
+  }
+  if (sites === null) return <p className="px-4 py-6 text-sm text-muted-foreground">Loading sites…</p>;
+  if (sites.length === 0) {
+    return <p className="px-4 py-6 text-sm text-muted-foreground">No NetBox sites match these filters.</p>;
+  }
+  return (
+    <div>
+      {sites.map((site) => (
+        <SitePanel
+          key={site.id}
+          site={site}
+          expanded={!!open[site.id]}
+          onToggle={() => onToggle(site.id)}
+          query={query}
+          visible={visible}
+          selected={selected}
+          onSelect={onSelect}
+          onSort={onSort}
+          onClear={onClear}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SitePanel({
+  site,
+  expanded,
+  onToggle,
+  query,
+  visible,
+  selected,
+  onSelect,
+  onSort,
+  onClear,
+}: {
+  site: SiteRow;
+  expanded: boolean;
+  onToggle: () => void;
+  query: DeviceQuery;
+  visible: ColumnKey[];
+  selected: string[];
+  onSelect: (ids: string[]) => void;
+  onSort: (key: keyof DeviceRow) => void;
+  onClear: () => void;
+}) {
+  const [rows, setRows] = useState<DeviceRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (!expanded) return undefined;
+    let cancelled = false;
+    setError(null);
+    api
+      .listSiteDevices(site.id)
+      .then((devices) => {
+        if (!cancelled) setRows(devices);
+      })
+      .catch((cause) => {
+        if (cancelled) return;
+        setRows([]);
+        setError(describeLoadError(cause, 'devices').text);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, site.id, retry]);
+  const place = [site.region, site.city].filter(Boolean).join(' · ');
+  const needle = query.search.trim().toLowerCase();
+  const siteMatched = !needle || site.name.toLowerCase().includes(needle) || site.city.toLowerCase().includes(needle) || site.region.toLowerCase().includes(needle);
+  const shown = (rows || []).filter((row) => matchesDevice(row, query, siteMatched));
+  return (
+    <article className="border-b border-border">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${site.name}`}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
+      >
+        <Icon name={expanded ? 'ChevronDownIcon' : 'ChevronRightIcon'} size={18} className="shrink-0" />
+        <span className="min-w-0">
+          <span className="block text-base font-semibold">{site.name}</span>
+          {place ? <span className="block text-xs text-muted-foreground">{place}</span> : null}
+        </span>
+        <span className="ml-auto text-sm text-muted-foreground">{site.deviceCount} {site.deviceCount === 1 ? 'device' : 'devices'}</span>
+        <HealthBadge health={site.health} />
+      </button>
+      {expanded ? (
+        <div className="border-t border-border bg-muted/20">
+          {rows === null && !error ? <p className="px-4 py-4 text-sm text-muted-foreground">Loading devices…</p> : null}
+          {rows !== null && shown.length === 0 && !error ? (
+            <p className="px-4 py-4 text-sm text-muted-foreground">{site.deviceCount === 0 ? 'No devices in this site yet.' : 'No devices in this site match these filters.'}</p>
+          ) : null}
+          {rows !== null && (shown.length > 0 || error) ? (
+            <DeviceTable
+              rows={error ? null : shown}
+              error={error}
+              onRetry={() => {
+                setRows(null);
+                setRetry((value) => value + 1);
+              }}
+              visible={visible.filter((column) => column !== 'site')}
+              selected={selected}
+              onSelect={onSelect}
+              sortKey={query.sortKey}
+              sortDir={query.sortDir}
+              onSort={onSort}
+              onClear={onClear}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </article>
   );
 }
