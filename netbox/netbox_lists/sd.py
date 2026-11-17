@@ -61,6 +61,8 @@ def choose_module(role: str, manufacturer: str, platform: str, custom_module: st
         modules = mapping.get("default_module") or "if_mib"
         auth = custom_auth or default_auth
         return modules if isinstance(modules, str) else ",".join(modules), auth
+    if isinstance(chosen, dict) and chosen.get("skip_snmp"):
+        return "skip", custom_auth or chosen.get("auth") or default_auth
     return _join_modules(chosen, mapping, custom_auth)
 
 
@@ -80,6 +82,12 @@ def default_auth_map_path() -> str:
     return os.environ.get("IE_SNMP_AUTH_MAP", "/etc/ie/snmp/auth-by-ip.yml")
 
 
+def _catalyst_9800(platform: str, device_type: str) -> bool:
+    text = "%s %s" % (platform or "", device_type or "")
+    text = text.lower()
+    return "ios-xe" in text or "iosxe" in text or "9800" in text
+
+
 def target_for(device: dict, mapping: dict, auth_by_ip: dict | None = None) -> dict | None:
     """device is a plain dict (tests) or the fields the view extracts from a NetBox Device."""
     ip = (device.get("primary_ip4") or "").split("/")[0]
@@ -88,7 +96,12 @@ def target_for(device: dict, mapping: dict, auth_by_ip: dict | None = None) -> d
     role = _slug(device.get("role"))
     manufacturer = _slug(device.get("manufacturer"))
     platform = _slug(device.get("platform"))
+    device_type = _slug(device.get("device_type"))
     module, auth = choose_module(role, manufacturer, platform, _slug(device.get("snmp_module")), _slug(device.get("snmp_auth")), mapping)
+    # A 9800 with an empty platform still matches the AireOS role default.
+    # The model name is enough to keep it off snmp-exporter.
+    if role == "wireless-controller" and _catalyst_9800(platform, device_type):
+        module = "skip"
     resolved = (auth_by_ip or {}).get(ip)
     if resolved:
         auth = resolved

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Render Telegraf inputs for wireless controllers.
 
-Catalyst 9800 (IOS-XE) per-AP and per-client data comes from model-driven
-telemetry (inputs.cisco_telemetry_mdt, gRPC dial-out). This renderer does not
-emit SNMP table walks for a 9800 unless IE_WLC_LEGACY_SNMP=1. snmp-exporter
-still collects 9800 chassis health and cLApGlobalAPConnectCount.
+Catalyst 9800 (IOS-XE) metrics come from model-driven telemetry
+(inputs.cisco_telemetry_mdt, gRPC dial-out). This renderer emits no
+inputs.snmp for a 9800. Chassis health, joined APs, radios and clients
+are MDT.
 
 AireOS has no MDT. It stays on SNMP: bsnAPTable, radio and RRM counters,
 CDP neighbours, WLAN client counts, and a rogue-AP count. Individual client
@@ -45,51 +45,6 @@ for _text in reversed(_catalog_dirs):
         sys.path.insert(0, _text)
 import catalog  # noqa: E402
 
-# Columns only. Full-table walks are intentionally not used.
-IOSXE = {
-    "status": {
-        "measurement": "ie_wlc_ap",
-        "interval": "5m",
-        "offset": "0s",
-        "timeout": "180s",
-        "fields": [
-            ("ap_name", "1.3.6.1.4.1.9.9.513.1.1.1.1.5", True),
-            ("admin_status", "1.3.6.1.4.1.9.9.513.1.1.1.1.38", False),
-            ("uptime_centiseconds", "1.3.6.1.4.1.9.9.513.1.1.1.1.6", False),
-        ],
-    },
-    "clients": {
-        "measurement": "ie_wlc_ap",
-        "interval": "5m",
-        "offset": "180s",
-        "timeout": "180s",
-        "fields": [
-            ("ap_name", "1.3.6.1.4.1.9.9.513.1.1.1.1.5", True),
-            ("clients", "1.3.6.1.4.1.9.9.513.1.1.1.1.72", False),
-        ],
-    },
-    "radio": {
-        "measurement": "ie_wlc_radio",
-        "interval": "10m",
-        "offset": "360s",
-        "timeout": "240s",
-        "fields": [
-            ("radio_type", "1.3.6.1.4.1.9.9.513.1.2.1.1.2", False),
-        ],
-    },
-    "channel": {
-        # cLApIfLoadChannelUtilization is notify-only. 9800 still serves the
-        # AireOS load table for the readable channel and utilization numbers.
-        "measurement": "ie_wlc_radio",
-        "interval": "10m",
-        "offset": "480s",
-        "timeout": "240s",
-        "fields": [
-            ("channel", "1.3.6.1.4.1.14179.2.2.2.1.4", False),
-            ("channel_util", "1.3.6.1.4.1.14179.2.2.13.1.3", False),
-        ],
-    },
-}
 
 def _gnmi_subs():
     rows = []
@@ -109,8 +64,8 @@ def _toml(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def platform_kind(platform: str, role: str) -> str:
-    text = "%s %s" % (platform or "", role or "")
+def platform_kind(platform: str, role: str, device_type: str = "") -> str:
+    text = "%s %s %s" % (platform or "", role or "", device_type or "")
     text = text.lower()
     if "ios-xe" in text or "iosxe" in text or "9800" in text:
         return "iosxe"
@@ -237,7 +192,6 @@ def _gnmi(agent: str, tags: dict, env: dict) -> str:
 def render(targets: list[dict], env: dict) -> str:
     table = (env.get("IE_WLC_TABLE") or "all").strip().lower()
     transport = (env.get("IE_WLC_MDT_TRANSPORT") or "grpc").strip().lower()
-    legacy = _truthy(env.get("IE_WLC_LEGACY_SNMP") or "")
     # Per-client MDT series are on unless this is explicitly turned off.
     # SNMP never walks clients, so the flag does not change AireOS tables.
     raw_store = env.get("IE_WLC_STORE_CLIENTS")
@@ -252,7 +206,7 @@ def render(targets: list[dict], env: dict) -> str:
         count, index = 1, 0
     chunks = [
         "# Generated from NetBox. Do not commit this file.",
-        "# 9800 per-AP data is MDT unless IE_WLC_LEGACY_SNMP=1.",
+        "# Catalyst 9800 metrics are MDT. This file emits no inputs.snmp for a 9800.",
         "# AireOS stays on SNMP. Client tables are not walked; counts only.",
         "# 9800 client RSSI/SNR/rates are MDT and are stored unless IE_WLC_STORE_CLIENTS=0.",
         "",
@@ -269,8 +223,24 @@ def render(targets: list[dict], env: dict) -> str:
             continue
         platform = str(labels.get("__meta_netbox_platform") or "")
         role = str(labels.get("__meta_netbox_role") or "")
-        kind = platform_kind(platform, role)
-        tables = IOSXE if kind == "iosxe" else catalog.AIREOS_TABLES
+        device_type = str(labels.get("__meta_netbox_device_type") or "")
+        kind = platform_kind(platform, role, device_type)
+        if kind == "iosxe" and transport == "gnmi":
+            chunks.append(_gnmi("%s:9339" % ip, {
+                "wlc": str(labels.get("__meta_netbox_name") or ip),
+                "site": str(labels.get("__meta_netbox_site_name") or ""),
+                "platform": platform or kind,
+                "role": role or "wireless-controller",
+                "store_clients": store,
+            }, env))
+            continue
+        if kind == "iosxe":
+            chunks.append(
+                "# %s (%s): Catalyst 9800 metrics are MDT. No inputs.snmp.\n"
+                % (str(labels.get("__meta_netbox_name") or ip), ip)
+            )
+            continue
+        tables = catalog.AIREOS_TABLES
         if table in ("", "all"):
             wanted = list(tables)
         elif table == "stations":
@@ -278,11 +248,11 @@ def render(targets: list[dict], env: dict) -> str:
                 "# %s: per-client SNMP walks are not collected.\n" % ip
             )
             continue
-        elif table == "status" and kind != "iosxe":
+        elif table == "status":
             wanted = ["inventory"]
-        elif table == "clients" and kind != "iosxe":
+        elif table == "clients":
             wanted = ["rf", "wlan"]
-        elif table == "channel" and kind != "iosxe":
+        elif table == "channel":
             wanted = ["radio", "rf"]
         else:
             wanted = [table]
@@ -294,16 +264,6 @@ def render(targets: list[dict], env: dict) -> str:
             "platform": platform or kind,
             "role": role or "wireless-controller",
         }
-        if kind == "iosxe" and transport == "gnmi":
-            chunks.append(_gnmi("%s:9339" % ip, dict(tags, store_clients=store), env))
-            continue
-        if kind == "iosxe" and not legacy:
-            chunks.append(
-                "# %s (%s): MDT supersedes SNMP AP tables. "
-                "Chassis health and AP count stay on snmp-exporter.\n"
-                % (tags["wlc"], ip)
-            )
-            continue
         if auth["version"] == 2 and not auth.get("community"):
             continue
         if auth["version"] == 3 and not auth.get("user"):

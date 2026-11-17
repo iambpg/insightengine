@@ -6,7 +6,7 @@ XPaths were checked against YangModels `vendor/cisco/xe/17151` (IOS-XE 17.15.1).
 
 ## Clients
 
-SNMP does not walk individual clients. `bsnMobileStationTable` and `bsnMobileStationStatsTable` are not rendered for AireOS or for a 9800. SNMP collects client **counts**: per radio (`bsnAPIfLoadNumOfClients`, `bsnApIfNoOfUsers`), per WLAN (`bsnDot11EssNumberOfMobileStations`), and the controller total (`bsnGlobalDot11SystemMobileStations` on AireOS, `cLMobilityExtMCTotalClientCount` on 9800).
+SNMP does not walk individual clients. `bsnMobileStationTable` and `bsnMobileStationStatsTable` are not rendered. AireOS SNMP collects client **counts**: per radio (`bsnAPIfLoadNumOfClients`, `bsnApIfNoOfUsers`), per WLAN (`bsnDot11EssNumberOfMobileStations`), and the controller total (`bsnGlobalDot11SystemMobileStations`). A Catalyst 9800 is not polled by SNMP. Its client total is the MDT rollup `ie_wlc_client_radio_clients`.
 
 9800 MDT collects the client detail that exists in `Cisco-IOS-XE-wireless-client-oper`: AP, slot, SSID, band, protocol, VLAN, mobility role, RSSI, SNR, rates, retries and bytes. Telegraf stores one Prometheus series per numeric field per client **by default**. Set `IE_WLC_STORE_CLIENTS=0` to drop those series and keep the per-AP/per-radio rollup (`ie_wlc_client_radio_*`) and the per-SSID count (`ie_wlc_ssid_clients`). The controller still pushes the client subscriptions until those blocks are removed from the paste config. Rollups and alerts (`WifiRssiLow`, `WifiSnrLow`) use the rollup, so they keep working when per-client series are off.
 
@@ -32,9 +32,13 @@ Assumption for the estimate: 2 radios per AP, 8 SSIDs per radio, 15 clients per 
 |---|---|---|
 | 5,000 APs, per-client MDT stored (default) | 890040 | 4.95 Mbit/s |
 | 5,000 APs, `IE_WLC_STORE_CLIENTS=0` | 290040 | 4.95 Mbit/s (dial-out unchanged) |
-| 8,500 APs across the fleet, per-client stored | 1513040 | about 8.3 Mbit/s if every controller pushed like the peak | 
+| 8,500 APs across the fleet, per-client stored | 1513040 | about 8.3 Mbit/s if every controller pushed like the peak |
+| Extra series, 5,000 APs, clients stored | 1465080 | passthrough fields on top of the 890040 |
+| Extra series, 5,000 APs, `IE_WLC_STORE_CLIENTS=0` | 340080 | radio and controller passthrough only | 
 
-Per-client series are 8 numeric fields (RSSI, SNR, bytes in, bytes out, tx retries, RTS retries, current rate, and the same rate when only `speed` is present it shares `current_rate`). Labels are client, AP, radio, SSID, band, protocol, VLAN and mobility. A mobility or VLAN change starts a new series until the old one expires (Telegraf expiration is 20 minutes).
+Per-client series are 8 named numeric fields (RSSI, SNR, bytes in, bytes out, tx retries, RTS retries, current rate, and `speed`). `current-rate` in IOS-XE 17.15 is a string such as `72.2`; an MCS token such as `m9` does not parse, and the uint32 `speed` leaf is used instead. Every other numeric leaf on the same client record is kept (15 further traffic-stats leaves: packet counts, MIC errors, spatial streams, drops). Labels are client, AP, radio, SSID, band, protocol, VLAN and mobility. A mobility or VLAN change starts a new series until the old one expires (Telegraf expiration is 20 minutes).
+
+On a 5,000-AP controller that is 1,125,000 extra per-client series, plus 340,000 extra radio series (26 `radio-oper-stats` counters and about 8 per-channel noise fields on each of 10,000 radios), plus about 80 controller series for environment, interfaces and hardware. `IE_WLC_STORE_CLIENTS=0` drops the per-client extras and leaves the 340,080 radio and controller extras. Radio noise dBm comes from `noise/noise/noise-data` (one leaf per scanned channel) or from `noise-floor` on `radio-oper-stats`. `load/rx-noise-channel-utilization` is a percent and is stored under its own name.
 
 Default export for one 5,000-AP controller is about 890040 series, of which 600000 are per client, 50000 are radio rollups and 80000 are per-SSID counts.
 
@@ -76,18 +80,16 @@ Default export for one 5,000-AP controller is about 890040 series, of which 6000
 | MDT | `/environment-ios-xe-oper:environment-sensors/environment-sensor` | 60s | Temperature, fan and power sensors |
 | MDT | `/platform-sw-ios-xe-oper:cisco-platform-software/system-usages` | 120s | Platform CPU and memory usage |
 | MDT | `/interfaces-ios-xe-oper:interfaces/interface` | 120s | Controller interface counters |
-| MDT | `/device-hardware-xe-oper:device-hardware-data/device-hardware` | 600s | Chassis hardware inventory |
+| MDT | `/device-hardware-xe-oper:device-hardware-data/device-hardware` | 600s | Chassis hardware, boot time, FRU inventory |
 
-## 9800 and AireOS SNMP scalars (snmp-exporter)
+Joined AP count is `ie_wlc_ap_global_joined_aps`. CPU is `ie_wlc_cpu_busy_percent`. Memory is `ie_wlc_memory_used` and `ie_wlc_memory_free`. Temperature, fans and PSUs are `ie_wlc_env_current_reading` (the sensor `name` and `state` tags). Interface counters are `ie_wlc_interface_in_octets` and `ie_wlc_interface_out_octets`. Chassis uptime is the `boot_time` tag on `ie_wlc_hardware`; IOS-XE 17.15.1 has no separate numeric uptime leaf. Those paths are already in the subscription list above.
 
-Controller CPU, memory, temperature, fans and PSUs on a 9800 also come from the existing modules `cisco_pro`, `cisco_enhanced_mem`, `cisco_entity_sensor`, `cisco_fru` and `cisco_env`. AireOS CPU, memory and the two PSUs are `AIRESPACE-SWITCHING-MIB`. That MIB has no temperature or fan table; fans and temperature appear only when the image answers `cisco_env` (CISCO-ENVMON-MIB). HA is `CISCO-RF-MIB` for both. There is no per-client walk in either module.
+## AireOS SNMP scalars (snmp-exporter)
+
+A Catalyst 9800 has no snmp-exporter modules. A 9800 whose NetBox platform is empty is still skipped when the device-type model contains `9800`. AireOS CPU, memory and the two PSUs are `AIRESPACE-SWITCHING-MIB`. That MIB has no temperature or fan table; fans and temperature appear only when the image answers `cisco_env` (CISCO-ENVMON-MIB). HA for AireOS is `CISCO-RF-MIB` (`cRFStatusUnitState`). 9800 HA is `ie_wlc_ha_active`. There is no per-client walk.
 
 | Source | OID | Name | Shows |
 |---|---|---|---|
-| SNMP 9800 | `1.3.6.1.4.1.9.9.513.1.3.35` | `cLApGlobalAPConnectCount` | Joined AP count |
-| SNMP 9800 | `1.3.6.1.4.1.9.9.846.1.1.4.13` | `cLMobilityExtMCTotalClientCount` | Total clients on the controller |
-| SNMP 9800 | `1.3.6.1.4.1.9.9.176.1.1.2` | `cRFStatusUnitState` | HA unit state (active is 7) |
-| SNMP 9800 | `1.3.6.1.4.1.9.9.176.1.1.4` | `cRFStatusPeerUnitState` | HA peer unit state |
 | SNMP aireos | `1.3.6.1.4.1.14179.1.1.5.1` | `agentCurrentCPUUtilization` | Controller CPU percent |
 | SNMP aireos | `1.3.6.1.4.1.14179.1.1.5.2` | `agentTotalMemory` | Controller RAM total, kilobytes |
 | SNMP aireos | `1.3.6.1.4.1.14179.1.1.5.3` | `agentFreeMemory` | Controller RAM free, kilobytes |

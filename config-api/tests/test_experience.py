@@ -55,17 +55,19 @@ def _target(platform: str, name: str = "wlc-a") -> dict:
 def test_9800_snmp_tables_are_not_rendered():
     text = _render().render([_target("ios-xe", "wlc-9800")], {"SNMP_V2_COMMUNITY": "public"})
     assert "[[inputs.snmp]]" not in text
-    assert "MDT supersedes" in text
+    assert "No inputs.snmp" in text
     assert "wlc-9800" in text
-
-
-def test_legacy_flag_restores_9800_snmp_tables():
-    text = _render().render(
+    legacy = _render().render(
         [_target("ios-xe")],
         {"SNMP_V2_COMMUNITY": "public", "IE_WLC_LEGACY_SNMP": "1", "IE_WLC_TABLE": "status"},
     )
-    assert "[[inputs.snmp]]" in text
-    assert "1.3.6.1.4.1.9.9.513.1.1.1.1.5" in text
+    assert "[[inputs.snmp]]" not in legacy
+    assert "1.3.6.1.4.1.9.9.513" not in legacy
+    blank = _target("", "wlc-unlabelled")
+    blank["labels"]["__meta_netbox_device_type"] = "Catalyst 9800-80-K9"
+    unlabelled = _render().render([blank], {"SNMP_V2_COMMUNITY": "public"})
+    assert "[[inputs.snmp]]" not in unlabelled
+    assert "No inputs.snmp" in unlabelled
 
 
 def test_aireos_snmp_is_inventory_and_counts_not_clients():
@@ -203,7 +205,7 @@ def test_module_map_adds_rttmon_and_cedge_bfd_without_touching_fortigate():
     assert "cisco_sdwan_bfd" not in forti.split(",")
     assert "fortinet_health" in forti.split(",")
     wlc, _ = choose("wireless-controller", "cisco", "ios-xe", "", "", mapping)
-    assert "cisco_wlc_iosxe" in wlc.split(",")
+    assert wlc == "skip"
     assert "cisco_rttmon" not in wlc.split(",")
     ios, _ = choose("router", "cisco", "ios", "", "", mapping)
     assert "cisco_rttmon" in ios.split(",")

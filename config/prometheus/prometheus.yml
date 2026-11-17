@@ -310,8 +310,9 @@ scrape_configs:
     sample_limit: 500000
     metrics_path: /snmp
     params:
-      # System stats only. Per-AP tables are Telegraf. __meta_netbox_snmp_module
-      # replaces this list: aireos vs ios-xe (Catalyst 9800) from the module map.
+      # AireOS only. A Catalyst 9800 (platform ios-xe, or a 9800 model with
+      # no platform) is __meta_netbox_snmp_module=skip and is dropped below.
+      # This list is the AireOS default when the platform label is aireos.
       module: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro, uptime]
       auth: [ie_wlc_v2]
     http_sd_configs:

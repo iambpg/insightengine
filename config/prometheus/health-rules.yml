@@ -43,6 +43,16 @@ groups:
           )
           or
           (1 - (agentFreeMemory / clamp_min(agentTotalMemory, 1)))
+          or
+          (
+            sum by (wlc, site, platform) (ie_wlc_memory_used)
+            /
+            clamp_min(
+              sum by (wlc, site, platform) (ie_wlc_memory_used)
+              +
+              sum by (wlc, site, platform) (ie_wlc_memory_free)
+            , 1)
+          )
 
       # 1 = ok or warning, 0 = failed. notPresent is left out.
       - record: ie:device_fan_ok
@@ -75,6 +85,12 @@ groups:
               ((entPhySensorOperStatus == 3) * 0)
               and on (instance, entPhysicalIndex) (entPhySensorType == 10)
             )
+          )
+          or
+          (
+            (ie_wlc_env_current_reading{name=~"(?i).*fan.*", state=~"(?i)^(ok|normal|good|up)$"} * 0 + 1)
+            or
+            (ie_wlc_env_current_reading{name=~"(?i).*fan.*", state=~"(?i).*(fail|fault|down|critical|notfunctioning).*"} * 0)
           )
 
       - record: ie:device_psu_ok
@@ -119,6 +135,12 @@ groups:
             or
             ((fgHwSensorEntAlarmStatus{fgHwSensorEntName=~"(?i).*(psu|power supply|power).*"} == 1) * 0)
           )
+          or
+          (
+            (ie_wlc_env_current_reading{name=~"(?i).*(psu|power supply|pem).*", state=~"(?i)^(ok|normal|good|up)$"} * 0 + 1)
+            or
+            (ie_wlc_env_current_reading{name=~"(?i).*(psu|power supply|pem).*", state=~"(?i).*(fail|fault|down|critical|notfunctioning).*"} * 0)
+          )
 
       - record: ie:device_temperature_celsius
         expr: |
@@ -139,6 +161,8 @@ groups:
           )
           or
           fgHwSensorEntValueNumber{fgHwSensorEntName=~"(?i).*temp.*"}
+          or
+          ie_wlc_env_current_reading{name=~"(?i).*temp.*", sensor_units=~"(?i).*celsius.*|.*deg.?c.*"}
 
       # Max of inbound and outbound, as a fraction of ifHighSpeed.
       - record: ie:interface_utilization_ratio
@@ -151,6 +175,18 @@ groups:
             or
             label_replace(
               rate(ifHCOutOctets[5m]) * 8 / clamp_min(ifHighSpeed * 1000000, 1),
+              "ie_dir", "out", "", ""
+            )
+          )
+          or
+          max without (ie_dir) (
+            label_replace(
+              rate(ie_wlc_interface_in_octets[5m]) * 8 / clamp_min(ie_wlc_interface_speed, 1),
+              "ie_dir", "in", "", ""
+            )
+            or
+            label_replace(
+              rate(ie_wlc_interface_out_octets[5m]) * 8 / clamp_min(ie_wlc_interface_speed, 1),
               "ie_dir", "out", "", ""
             )
           )
@@ -174,11 +210,12 @@ groups:
             or ifHCInOctets{ifName=~"(?i).*uplink.*"}
           ) * 0 + 1
 
-      # WLC summaries. 9800 joined-AP count is one scalar. AireOS client count
-      # is one scalar. Per-AP series below are Telegraf, not snmp-exporter.
+      # WLC summaries. 9800 joined-AP count is MDT ie_wlc_ap_global_joined_aps.
+      # AireOS client count is one SNMP scalar. Per-AP series are Telegraf.
       - record: ie:wlc_aps_joined
         expr: |
-          max by (instance, hostname, device_role, site, job) (cLApGlobalAPConnectCount)
+          max by (wlc, site, platform) (ie_wlc_ap_global_joined_aps)
+          or count by (wlc, site, platform) (ie_wlc_ap_oper_up == 1)
           or count by (agent_host, wlc, site, platform) (ie_wlc_ap_oper_status)
           or count by (agent_host, wlc, site, platform) (ie_wlc_ap_admin_status)
 

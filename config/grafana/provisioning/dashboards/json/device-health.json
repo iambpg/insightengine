@@ -113,7 +113,7 @@
       "gridPos": {"h": 6, "w": 24, "x": 0, "y": 23},
       "options": {
         "mode": "markdown",
-        "content": "A Catalyst 9800 with about 5000 APs is polled by Telegraf in four staggered SNMP tables (status, clients, radio, channel). snmp-exporter only reads the controller scalar `cLApGlobalAPConnectCount` plus IOS-XE health MIBs. If a walk stays above two minutes, move that controller to gNMI. See docs/health-metrics.md."
+        "content": "A Catalyst 9800 is not polled by SNMP. Joined APs, CPU, memory, sensors, interfaces and boot time come from Telegraf MDT (`ie_wlc_ap_global_joined_aps`, `ie_wlc_cpu`, `ie_wlc_memory`, `ie_wlc_env`, `ie_wlc_interface`, `ie_wlc_hardware`). AireOS stays on SNMP. See docs/wlc-9800-full.md."
       }
     }
   ]

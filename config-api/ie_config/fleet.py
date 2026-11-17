@@ -1224,6 +1224,8 @@ def _enum_label(metric: dict, key: str):
     name = str(metric.get("__name__") or "")
     if name.endswith("_info") and key in metric:
         return str(metric.get(key) or "")
+    if name.startswith("ie_wlc_env_") and key == "state" and metric.get("state"):
+        return str(metric.get("state"))
     return None
 
 
@@ -2912,8 +2914,8 @@ class FleetService:
             device.get("model") or "",
         )
         mem = cached.get("mem")
-        fan_states = [_env_state(sample, "ciscoEnvMonFanState") or _env_state(sample, "cefcFanTrayOperStatus") for sample in cached.get("fans") or []]
-        psu_states = [_env_state(sample, "ciscoEnvMonSupplyState") or _env_state(sample, "cefcFRUPowerOperStatus") for sample in cached.get("psus") or []]
+        fan_states = [_env_state(sample, "ciscoEnvMonFanState") or _env_state(sample, "cefcFanTrayOperStatus") or _env_state(sample, "state") for sample in cached.get("fans") or []]
+        psu_states = [_env_state(sample, "ciscoEnvMonSupplyState") or _env_state(sample, "cefcFRUPowerOperStatus") or _env_state(sample, "state") for sample in cached.get("psus") or []]
         psu_states.extend(aireos_psu_states(cached.get("aireos_psu") or []))
         fan_clean = [item for item in fan_states if item]
         psu_clean = [item for item in psu_states if item]
@@ -3009,18 +3011,19 @@ class FleetService:
             "errors": "rate(ifInErrors%s[5m])" % selector,
             "discards_in": "rate(ifInDiscards%s[5m])" % selector,
             "discards_out": "rate(ifOutDiscards%s[5m])" % selector,
-            "cpu": "avg(cpmCPUTotal5minRev%s) or avg(fgSysCpuUsage%s)" % (selector, selector),
+            "cpu": 'avg(cpmCPUTotal5minRev%s) or avg(fgSysCpuUsage%s) or avg(ie_wlc_cpu_busy_percent{wlc="%s"})' % (selector, selector, safe_host),
             "mem": (
                 "(sum(ciscoMemoryPoolUsed%(s)s) / clamp_min(sum(ciscoMemoryPoolUsed%(s)s) + sum(ciscoMemoryPoolFree%(s)s), 1)) * 100 "
-                "or avg(fgSysMemUsage%(s)s)"
-            ) % {"s": selector},
-            "temp": "max(ciscoEnvMonTemperatureStatusValue%s)" % selector,
-            "fans": "ciscoEnvMonFanState_info%s or ciscoEnvMonFanState%s" % (selector, selector),
-            "psus": "ciscoEnvMonSupplyState_info%s or ciscoEnvMonSupplyState%s" % (selector, selector),
+                "or avg(fgSysMemUsage%(s)s) "
+                'or (sum(ie_wlc_memory_used{wlc="%(w)s"}) / clamp_min(sum(ie_wlc_memory_used{wlc="%(w)s"}) + sum(ie_wlc_memory_free{wlc="%(w)s"}), 1)) * 100'
+            ) % {"s": selector, "w": safe_host},
+            "temp": 'max(ciscoEnvMonTemperatureStatusValue%s) or max(ie_wlc_env_current_reading{wlc="%s",name=~"(?i).*temp.*"})' % (selector, safe_host),
+            "fans": 'ciscoEnvMonFanState_info%s or ciscoEnvMonFanState%s or ie_wlc_env_current_reading{wlc="%s",name=~"(?i).*fan.*"}' % (selector, selector, safe_host),
+            "psus": 'ciscoEnvMonSupplyState_info%s or ciscoEnvMonSupplyState%s or ie_wlc_env_current_reading{wlc="%s",name=~"(?i).*(psu|power supply|pem).*"}' % (selector, selector, safe_host),
             "rtt": "avg(probe_duration_seconds%s)" % selector,
             "joined_aps": (
-                'max(cLApGlobalAPConnectCount%s) or count(ie_wlc_ap_admin_status{wlc="%s"}) or count(ie_wlc_ap_oper_status{wlc="%s"})'
-                % (selector, safe_host, safe_host)
+                'max(ie_wlc_ap_global_joined_aps{wlc="%s"}) or count(ie_wlc_ap_oper_up{wlc="%s"} == 1) or count(ie_wlc_ap_admin_status{wlc="%s"}) or count(ie_wlc_ap_oper_status{wlc="%s"})'
+                % (safe_host, safe_host, safe_host, safe_host)
             ),
             "wlc_clients": (
                 'max(bsnGlobalDot11SystemMobileStations%s) or sum(ie_wlc_ap_clients{wlc="%s"}) or sum(ie_wlc_radio_clients{wlc="%s"})'
@@ -5333,7 +5336,7 @@ def _checks_and_hardware(row: dict, bundle: dict, now: datetime):
             "result": "fail" if bad else "warn" if warn else "pass",
             "detail": "%d supply samples, %d failed" % (len(psus), len(bad)),
         })
-    fans = [_env_state(sample, "ciscoEnvMonFanState") for sample in bundle.get("fans") or []] if show_env else []
+    fans = [_env_state(sample, "ciscoEnvMonFanState") or _env_state(sample, "state") for sample in bundle.get("fans") or []] if show_env else []
     fans = [state for state in fans if state and state != "notPresent"]
     if fans:
         bad = [state for state in fans if state in ("critical", "shutdown", "notFunctioning")]

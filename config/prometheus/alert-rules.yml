@@ -314,7 +314,7 @@ groups:
 - name: AccessPoint_Down_or_Degraded
   rules:
       - alert: AccessPoint_Status
-        expr: bsnAPOperationStatus{job="snmp-cisco-wlc"} == 0
+        expr: (ie_wlc_ap_oper_up == 0) or (bsnAPOperationStatus{job="snmp-cisco-wlc"} == 0)
         for: 5m
         labels:
           parent: "{{ $labels.hostname }}"

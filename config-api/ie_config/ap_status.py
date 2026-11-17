@@ -145,7 +145,8 @@ def explicit_status(metric: dict, value) -> str | None:
         if number is not None:
             return "down"
     if "oper_status" in name and "radio" not in name and number is not None:
-        # AireOS bsnAPOperationStatus: associated(1) is joined.
+        # AireOS SNMP only. bsnAPOperationStatus associated(1) is joined.
+        # A Catalyst 9800 reports ie_wlc_ap_oper_up from MDT, handled below.
         return "up" if number == 1 else "down"
     if name.endswith("oper_up"):
         if number == 1:

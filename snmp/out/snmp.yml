@@ -7227,30 +7227,6 @@ modules:
       oid: 1.3.6.1.4.1.9.9.176.1.1.4
       type: gauge
       help: CISCO-RF-MIB HA peer unit state. - 1.3.6.1.4.1.9.9.176.1.1.4
-  cisco_wlc_iosxe:
-    get:
-    - 1.3.6.1.4.1.9.9.176.1.1.2.0
-    - 1.3.6.1.4.1.9.9.176.1.1.4.0
-    - 1.3.6.1.4.1.9.9.513.1.3.35.0
-    - 1.3.6.1.4.1.9.9.846.1.1.4.13.0
-    metrics:
-    - name: cLApGlobalAPConnectCount
-      oid: 1.3.6.1.4.1.9.9.513.1.3.35
-      type: gauge
-      help: This object represents the Count of AP's that are connected to the Controller.
-        - 1.3.6.1.4.1.9.9.513.1.3.35
-    - name: cLMobilityExtMCTotalClientCount
-      oid: 1.3.6.1.4.1.9.9.846.1.1.4.13
-      type: gauge
-      help: Total clients on the mobility controller. Not a per-client walk. - 1.3.6.1.4.1.9.9.846.1.1.4.13
-    - name: cRFStatusUnitState
-      oid: 1.3.6.1.4.1.9.9.176.1.1.2
-      type: gauge
-      help: CISCO-RF-MIB HA unit state. active(7). - 1.3.6.1.4.1.9.9.176.1.1.2
-    - name: cRFStatusPeerUnitState
-      oid: 1.3.6.1.4.1.9.9.176.1.1.4
-      type: gauge
-      help: CISCO-RF-MIB HA peer unit state. - 1.3.6.1.4.1.9.9.176.1.1.4
   fortinet_health:
     walk:
     - 1.3.6.1.4.1.12356.101.4.3.2.1.2

@@ -42,7 +42,7 @@
       "title": "Clients",
       "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "sum(ie_wlc_client_radio_clients{wlc=~\"$wlc\"}) or sum(bsnGlobalDot11SystemMobileStations) or sum(cLMobilityExtMCTotalClientCount) or vector(0)"}]
+      "targets": [{"refId": "A", "expr": "sum(ie_wlc_client_radio_clients{wlc=~\"$wlc\"}) or sum(bsnGlobalDot11SystemMobileStations) or vector(0)"}]
     },
     {
       "id": 4,
@@ -50,7 +50,7 @@
       "title": "HA not active",
       "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"refId": "A", "expr": "count(cRFStatusUnitState != 7) or vector(0)"}]
+      "targets": [{"refId": "A", "expr": "(count(ie_wlc_ha_active{wlc=~\"$wlc\"} == 0) or vector(0)) + (count(cRFStatusUnitState != 7) or vector(0))"}]
     },
     {
       "id": 5,
