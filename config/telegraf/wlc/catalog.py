@@ -101,8 +101,11 @@ MDT_SUBS = (
      "ie_wlc_platform", "periodic", 120, "Platform CPU and memory usage"),
     (36, "/interfaces-ios-xe-oper:interfaces/interface",
      "ie_wlc_interface", "periodic", 120, "Controller interface counters"),
+    # boot-time on this tree is the chassis uptime anchor. Environment sensors
+    # already carry temperature, fan and PSU readings. Interface counters are
+    # the interfaces subscription above. No separate uptime path exists in 17.15.1.
     (37, "/device-hardware-xe-oper:device-hardware-data/device-hardware",
-     "ie_wlc_hardware", "periodic", 600, "Chassis hardware inventory"),
+     "ie_wlc_hardware", "periodic", 600, "Chassis hardware, boot time, FRU inventory"),
 )
 
 # Not subscribed on purpose.
@@ -308,12 +311,9 @@ AIREOS_TABLES = {
     },
 }
 
-# snmp-exporter scalars. Not per-AP and not per-client.
+# AireOS SNMP scalars only. A Catalyst 9800 does not use snmp-exporter.
+# Joined APs, CPU, memory, environment, interfaces and boot time are MDT.
 SNMP_SCALARS = (
-    ("9800", "cLApGlobalAPConnectCount", "1.3.6.1.4.1.9.9.513.1.3.35", "Joined AP count"),
-    ("9800", "cLMobilityExtMCTotalClientCount", "1.3.6.1.4.1.9.9.846.1.1.4.13", "Total clients on the controller"),
-    ("9800", "cRFStatusUnitState", "1.3.6.1.4.1.9.9.176.1.1.2", "HA unit state (active is 7)"),
-    ("9800", "cRFStatusPeerUnitState", "1.3.6.1.4.1.9.9.176.1.1.4", "HA peer unit state"),
     ("aireos", "agentCurrentCPUUtilization", "1.3.6.1.4.1.14179.1.1.5.1", "Controller CPU percent"),
     ("aireos", "agentTotalMemory", "1.3.6.1.4.1.14179.1.1.5.2", "Controller RAM total, kilobytes"),
     ("aireos", "agentFreeMemory", "1.3.6.1.4.1.14179.1.1.5.3", "Controller RAM free, kilobytes"),
@@ -346,7 +346,16 @@ def estimate_series(aps: int = 5000, radios_per_ap: int = 2, ssids_per_radio: in
     radios = aps * radios_per_ap
     clients = aps * clients_per_ap
     client_fields = 8  # rssi, snr, bytes_rx, bytes_tx, tx_retries, rts_retries, current_rate, speed
+    # Other numeric leaves normalize.star now keeps. traffic-stats has 15
+    # beyond the 8 named fields (packets, MIC errors, spatial streams, drops).
+    # radio-oper-stats adds 26 counters. rrm noise-data is about 8 channels.
+    extra_client_fields = 15
+    extra_radio_fields = 26 + 8
+    extra_controller = 80
     per_client = clients * client_fields if store_clients else 0
+    extra_client = clients * extra_client_fields if store_clients else 0
+    extra_radio = radios * extra_radio_fields
+    extra = extra_client + extra_radio + extra_controller
     rollup = radios * 5
     ssid = radios * ssids_per_radio
     ap_series = aps * 5  # info, oper_up, admin, uptime, disconnects
@@ -366,6 +375,9 @@ def estimate_series(aps: int = 5000, radios_per_ap: int = 2, ssids_per_radio: in
         "clients": clients,
         "store_clients": store_clients,
         "per_client_series": per_client,
+        "extra_series": extra,
+        "extra_client_series": extra_client,
+        "extra_radio_series": extra_radio,
         "rollup_series": rollup,
         "ssid_series": ssid,
         "series": total,
@@ -510,8 +522,9 @@ def _sample_keys(path: str) -> list[tuple[str, str]]:
 
 def _sample_content(path: str) -> list[tuple[str, str]]:
     if path.endswith("traffic-stats"):
+        # current-rate is a string (Mbps). speed is the uint32 fallback.
         return [("most-recent-rssi", "-62"), ("most-recent-snr", "28"), ("bytes-rx", "1000"),
-                ("bytes-tx", "2000"), ("tx-retries", "3"), ("current-rate", "144"), ("speed", "144")]
+                ("bytes-tx", "2000"), ("tx-retries", "3"), ("current-rate", "72.2"), ("speed", "144")]
     if path.endswith("common-oper-data"):
         return [("ap-name", "AP-1"), ("ms-ap-slot-id", "1"), ("wlan-id", "1")]
     if path.endswith("dot11-oper-data"):
@@ -564,8 +577,24 @@ def _sample_content(path: str) -> list[tuple[str, str]]:
                 ("curr-freq", "36"), ("chan-width", "40"), ("current-tx-power-level", "1"),
                 ("curr-tx-power-in-dbm", "18"), ("antenna-gain", "4")]
     if path.endswith("rrm-measurement"):
-        return [("cca-util-percentage", "55"), ("rx-noise-channel-utilization", "12"),
-                ("non-wifi-inter", "8"), ("stations", "4")]
+        # Noise dBm is nested: noise/noise/noise-data/{chan,noise}. The load
+        # leaf rx-noise-channel-utilization is a percent, not the noise floor.
+        return [
+            ("load", [
+                ("cca-util-percentage", "55"),
+                ("rx-noise-channel-utilization", "12"),
+                ("non-wifi-inter", "8"),
+                ("stations", "4"),
+            ]),
+            ("noise", [
+                ("noise", [
+                    ("noise-data", [
+                        ("chan", "36"),
+                        ("noise", "-90"),
+                    ]),
+                ]),
+            ]),
+        ]
     if path.endswith("radio-slot"):
         return [("rogue-20-count", "1"), ("chan-width", "40")]
     if path.endswith("ssid-counters"):
@@ -620,8 +649,6 @@ def snmprec_fixture() -> str:
         ("1.3.6.1.4.1.14179.2.3.5.1.1.0", "2", "4"),
         ("1.3.6.1.4.1.14179.1.1.5.1.0", "2", "11"),
         ("1.3.6.1.4.1.14179.1.1.5.3.0", "2", "500000"),
-        ("1.3.6.1.4.1.9.9.513.1.3.35.0", "65", "1"),
-        ("1.3.6.1.4.1.9.9.846.1.1.4.13.0", "65", "4"),
         ("1.3.6.1.4.1.9.9.176.1.1.2.0", "2", "7"),
         ("1.3.6.1.4.1.9.9.623.1.3.1.1.2.1", "4", "ap-1"),
         ("1.3.6.1.4.1.9.9.623.1.3.1.1.6.1", "4", "sw-edge"),

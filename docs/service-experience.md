@@ -32,7 +32,7 @@ A site with no `vbs_server_ip` is not pinged and its routers show **not configur
 
 ## Catalyst 9800 telemetry
 
-SNMP on a 9800 does not give useful per-client RSSI/SNR or per-radio noise and interference, and the per-AP walks in the health work are the wrong tool at 5,000 APs. Those Telegraf SNMP tables are no longer rendered for IOS-XE controllers. snmp-exporter still polls chassis health and `cLApGlobalAPConnectCount` (`cisco_wlc_iosxe`). `IE_WLC_LEGACY_SNMP=1` restores the old AP tables for a comparison; leave it unset in production.
+A Catalyst 9800 is not polled by SNMP. Per-client RSSI/SNR, per-radio noise and chassis health come from MDT. `render_wlc.py` emits no `inputs.snmp` for a 9800. AireOS stays on its SNMP tables.
 
 `telegraf-wlc` listens for gRPC dial-out on port **57500** (`inputs.cisco_telemetry_mdt`, `service_address = ":${IE_MDT_PORT}"`). `IE_MDT_PORT` and `PORT_MDT` default to 57500 and can be changed together. Set `IE_MDT_RECEIVER` to an address the controller can route to. The generated line is `receiver ip address <server> 57500`.
 

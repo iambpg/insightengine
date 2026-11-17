@@ -223,12 +223,21 @@ def test_module_map_picks_wlc_platform_and_skips_aps():
     mapping = yaml.safe_load((ROOT / "config" / "discovery" / "module-map.yml").read_text())
     choose = _sd().choose_module
     iosxe, auth = choose("wireless-controller", "cisco", "ios-xe", "", "", mapping)
-    assert "cisco_wlc_iosxe" in iosxe.split(",")
-    assert "cisco_wlc_universal" not in iosxe.split(",")
-    assert "cisco_entity_sensor" in iosxe.split(",")
+    assert iosxe == "skip"
     assert auth == "ie_wlc_v2"
     aireos, _auth = choose("wireless-controller", "cisco", "aireos", "", "", mapping)
     assert "cisco_wlc_aireos" in aireos.split(",")
+    sd = _sd()
+    unlabelled = sd.target_for({
+        "name": "wlc-9800",
+        "primary_ip4": "10.1.1.8",
+        "role": "wireless-controller",
+        "platform": "",
+        "device_type": "Catalyst 9800-80-K9",
+        "manufacturer": "cisco",
+        "site": "bree",
+    }, mapping)
+    assert unlabelled["labels"]["__meta_netbox_snmp_module"] == "skip"
     assert "cisco_wlc_universal" not in aireos.split(",")
     assert choose("access-point", "cisco", "ios-xe", "", "", mapping)[0] == "skip"
     # Unlabelled access switches keep the existing module list.

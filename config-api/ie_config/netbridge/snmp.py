@@ -1,9 +1,11 @@
 """Walk Cisco WLC access-point tables.
 
-AireOS uses AIRESPACE-WIRELESS-MIB bsnAPTable. Catalyst 9800 uses
-CISCO-LWAPP-AP-MIB cLApName plus the same AireOS table when the controller
-still serves it. CDP neighbours come from CISCO-LWAPP-CDP-MIB. GetBulk keeps
-a controller with thousands of APs to a few hundred UDP exchanges.
+AireOS uses AIRESPACE-WIRELESS-MIB bsnAPTable. CDP neighbours come from
+CISCO-LWAPP-CDP-MIB. GetBulk keeps a controller with thousands of APs to a
+few hundred UDP exchanges.
+
+A Catalyst 9800 is not walked. Its AP names, model, serial and neighbours
+are Telegraf MDT (`ie_wlc_ap`, `ie_wlc_neighbor`), not SNMP.
 """
 
 from __future__ import annotations
@@ -185,7 +187,20 @@ def merge_aps(aire: list[dict], xe: list[dict]) -> tuple[list[dict], str]:
     return list(by_name.values()), platform
 
 
-def scan_wlc(host: str, port: int, community: str, *, exchange=None, limit: int = ROW_CAP, timeout: float = 3.0) -> dict:
+def iosxe_controller(platform: str) -> bool:
+    text = (platform or "").lower()
+    return "ios-xe" in text or "iosxe" in text or "9800" in text or "c9800" in text or "cw9800" in text
+
+
+def scan_wlc(host: str, port: int, community: str, *, exchange=None, limit: int = ROW_CAP, timeout: float = 3.0, platform: str = "") -> dict:
+    if iosxe_controller(platform):
+        return {
+            "ok": False,
+            "skipped": True,
+            "message": "Catalyst 9800 is MDT-only. AP inventory is ie_wlc_ap, not an SNMP walk.",
+            "aps": [],
+            "platform": "ios-xe",
+        }
     if not community or community == "unset-placeholder":
         return {"ok": False, "message": "SNMPv2c community is not configured for this controller", "aps": [], "platform": ""}
     kwargs = {"exchange": exchange, "limit": limit, "timeout": timeout}

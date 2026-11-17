@@ -129,20 +129,24 @@ def test_series_estimate_for_the_large_controller():
     quiet = _catalog().estimate_series(aps=5000, store_clients=False)
     assert quiet["per_client_series"] == 0
     assert quiet["series"] < est["series"]
+    assert est["extra_client_series"] == 5000 * 15 * 15
+    assert est["extra_radio_series"] == 5000 * 2 * 34
+    assert est["extra_series"] == est["extra_client_series"] + est["extra_radio_series"] + 80
+    assert quiet["extra_client_series"] == 0
+    assert quiet["extra_series"] == est["extra_radio_series"] + 80
 
 
 def test_exporter_scalars_are_counts_not_client_rows():
     document = yaml.safe_load((ROOT / "snmp" / "out" / "snmp.yml").read_text())
-    iosxe = {metric["name"]: metric["oid"] for metric in document["modules"]["cisco_wlc_iosxe"]["metrics"]}
+    assert "cisco_wlc_iosxe" not in document["modules"]
     aire = {metric["name"]: metric["oid"] for metric in document["modules"]["cisco_wlc_aireos"]["metrics"]}
-    assert iosxe["cLMobilityExtMCTotalClientCount"] == "1.3.6.1.4.1.9.9.846.1.1.4.13"
-    assert iosxe["cRFStatusUnitState"] == "1.3.6.1.4.1.9.9.176.1.1.2"
     assert aire["bsnGlobalDot11SystemMobileStations"] == "1.3.6.1.4.1.14179.2.3.5.1.1"
     assert aire["cRFStatusPeerUnitState"] == "1.3.6.1.4.1.9.9.176.1.1.4"
     assert aire["agentApAssociateDisassociateTrapCount"] == "1.3.6.1.4.1.14179.1.1.2.6"
-    blob = "\n".join(iosxe.values()) + "\n" + "\n".join(aire.values())
+    blob = "\n".join(aire.values())
     assert "1.3.6.1.4.1.14179.2.1.4" not in blob
     assert "1.3.6.1.4.1.14179.2.1.6" not in blob
+    assert "cLApGlobalAPConnectCount" not in (ROOT / "snmp" / "out" / "snmp.yml").read_text()
 
 
 def test_snmprec_fixture_is_sorted_and_has_no_client_rows():
@@ -151,7 +155,7 @@ def test_snmprec_fixture_is_sorted_and_has_no_client_rows():
     oids = [line.split("|", 1)[0] for line in text.splitlines() if line]
     assert oids == sorted(oids, key=lambda oid: tuple(int(part) for part in oid.split(".")))
     assert "1.3.6.1.4.1.14179.2.3.5.1.1.0" in text
-    assert "1.3.6.1.4.1.9.9.513.1.3.35.0" in text
+    assert "1.3.6.1.4.1.9.9.513.1.3.35.0" not in text
 
 
 def test_netbox_site_matches_ap_name_then_cdp_switch():

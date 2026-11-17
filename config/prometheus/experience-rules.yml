@@ -26,10 +26,46 @@ groups:
         expr: count by (wlc, site) (ie_wlc_ap_oper_up == 0)
 
       - record: ie:wlc_clients
-        expr: sum by (wlc) (ie_wlc_client_radio_clients) or max by (wlc) (bsnGlobalDot11SystemMobileStations) or max by (wlc) (cLMobilityExtMCTotalClientCount)
+        expr: sum by (wlc) (ie_wlc_client_radio_clients) or max by (wlc) (bsnGlobalDot11SystemMobileStations)
 
+      # 9800 SSO is ie_wlc_ha_active (1 when the chassis is active). cRFStatusUnitState is AireOS SNMP.
       - record: ie:wlc_ha_state
-        expr: cRFStatusUnitState
+        expr: ie_wlc_ha_active or cRFStatusUnitState
+
+      # retry-count / tx-frame-count from radio-oper-stats. Both are counters of successful MSDUs;
+      # the ratio is the share of those frames that needed at least one retry.
+      - record: ie:wlc_radio_retry_rate
+        expr: |
+          sum by (wlc, site, ap, radio) (rate(ie_wlc_radio_retry_count[5m]))
+          /
+          clamp_min(sum by (wlc, site, ap, radio) (rate(ie_wlc_radio_tx_frame_count[5m])), 1e-9)
+
+      # FCS errors over received fragments plus the errors themselves.
+      - record: ie:wlc_radio_fcs_error_rate
+        expr: |
+          sum by (wlc, site, ap, radio) (rate(ie_wlc_radio_fcs_error_count[5m]))
+          /
+          clamp_min(
+            sum by (wlc, site, ap, radio) (rate(ie_wlc_radio_fcs_error_count[5m]))
+            +
+            sum by (wlc, site, ap, radio) (rate(ie_wlc_radio_rx_fragment_count[5m]))
+          , 1e-9)
+
+      - record: ie:wlc_ap_clients
+        expr: sum by (wlc, site, ap) (ie_wlc_client_radio_clients)
+
+      - record: ie:wlc_ap_load_ratio
+        expr: ie:wlc_ap_clients / clamp_min(avg by (wlc, site) (ie:wlc_ap_clients), 1)
+
+      # 1 when this AP has more than twice the site's average client count.
+      - record: ie:wlc_ap_load_imbalance
+        expr: ie:wlc_ap_load_ratio > bool 2
+
+      - record: ie:wlc_ap_5ghz_client_share
+        expr: |
+          sum by (wlc, site, ap) (ie_wlc_client_radio_clients{band=~"(?i).*5\\s?ghz.*|.*802\\.?11a.*|.*dot11a.*|^5$|radio-80211a"})
+          /
+          clamp_min(sum by (wlc, site, ap) (ie_wlc_client_radio_clients), 1)
 
       - record: ie:sdwan_tunnel_loss_ratio
         expr: ie_sdwan_tunnel_loss_ratio

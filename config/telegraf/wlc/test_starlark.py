@@ -286,6 +286,10 @@ class StarlarkDialectTests(unittest.TestCase):
                     "ie_wlc_rogue_raw,index=aabb,wlc=lab value=1i",
                     'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",wtp_mac="00:11:22:33:44:55",device_detail/static_info/ap_models/model="C9120AXI-B",device_detail/static_info/board_data/wtp_serial_num="FGL2417ABC1",device_detail/wtp_version/sw_version="17.15.1.4",wtp_ip="10.8.0.10",ap_location/location="floor-1",ap_mode_data/wtp_mode="local",tag_info/site_tag/site_tag_name="site-a",tag_info/policy_tag_info/policy_tag_name="pol-a",tag_info/rf_tag/rf_tag_name="rf-a",ap_state/ap_operation_state="ewlc-ap-state-registered"',
                     'ie_wlc_radio_mdt,wlc=lab,site=hq,path=radio-oper-data wtp_mac="00:11:22:33:44:55",radio_slot_id="1",oper_state="run",current_channel=36i',
+                    'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-9,ms_mac_address=aabbccddeef0,store_clients=1 current_rate="72.2",speed=144i,most_recent_rssi=-60i,most_recent_snr=30i,policy_errs=2i',
+                    'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-8,ms_mac_address=aabbccddeef1,store_clients=0 current_rate="m9",speed=54i,most_recent_rssi=-61i,most_recent_snr=22i',
+                    'ie_wlc_rrm,wlc=lab,site=hq,ap_name=AP-7,radio_slot_id=1,path=rrm-measurement current_channel=36i,load/cca_util_percentage=40i,load/rx_noise_channel_utilization=3i,noise/noise/noise_data/0/chan=36i,noise/noise/noise_data/0/noise=-91i,noise/noise/noise_data/1/chan=40i,noise/noise/noise_data/1/noise=-70i,mystery_counter=5i',
+                    'ie_wlc_radio_stats,wlc=lab,site=hq,ap_name=AP-6,radio_slot_id=0,path=radio-oper-stats odd_counter=9i',
                     "",
                 ]),
                 encoding="utf-8",
@@ -336,6 +340,18 @@ class StarlarkDialectTests(unittest.TestCase):
         self.assertIn("ap_name=AP-1", text)
         self.assertIn("mac=00:11:22:33:44:55", text)
         self.assertIn("oper_up=1", text)
+        self.assertIn("current_rate=72.2", text)
+        self.assertIn("speed=144", text)
+        self.assertIn("policy_errs=2", text)
+        self.assertNotIn("client=aabbccddeef1", text)
+        self.assertIn("noise=-91", text)
+        self.assertIn("noise_36=-91", text)
+        self.assertIn("noise_40=-70", text)
+        self.assertIn("rx_noise_channel_utilization=3", text)
+        self.assertIn("mystery_counter=5", text)
+        self.assertIn("odd_counter=9", text)
+        self.assertNotIn("noise=3", text)
+        self.assertNotIn("noise=-70", text)
 
     def test_host_api_and_syslog_configs_parse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

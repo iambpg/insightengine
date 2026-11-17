@@ -3,20 +3,24 @@
 # __meta_netbox_snmp_module and __meta_netbox_snmp_auth. Prometheus relabel
 # copies those onto the snmp_exporter query. A custom field snmp_module wins.
 #
-# by_role_platform is checked first (wireless-controller/ios-xe is a 9800,
-# wireless-controller/aireos is AireOS). Then platform, manufacturer, role.
-# Access points set skip_snmp: Prometheus drops them. Telegraf polls the WLC.
+# by_role_platform is checked first. wireless-controller/aireos is AireOS
+# and stays on SNMP. wireless-controller/ios-xe is a Catalyst 9800: no SNMP
+# modules, Prometheus drops it, and Telegraf MDT is the only source.
+# A 9800 whose platform is empty is still skipped when the device-type
+# model contains 9800 (see netbox_lists.sd.target_for).
+# Access points set skip_snmp. Telegraf polls the WLC.
 default_module: [if_mib, uptime]
 default_auth: ntt_snmpv3_auth
 by_role_platform:
+  # AireOS only. A 9800 must be platform ios-xe so it is not given this list.
   wireless-controller/aireos:
     modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro, uptime]
     auth: ie_wlc_v2
   wireless-controller/ios-xe:
-    modules: [if_mib, cisco_wlc_iosxe, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_env, cisco_mem, uptime]
+    skip_snmp: true
     auth: ie_wlc_v2
   wireless-controller/iosxe:
-    modules: [if_mib, cisco_wlc_iosxe, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_env, cisco_mem, uptime]
+    skip_snmp: true
     auth: ie_wlc_v2
   cedge/ios-xe:
     modules: [if_mib, cisco_enhanced_mem, cisco_entity_sensor, cisco_fru, cisco_pro, cisco_cdp, lldp, cisco_env, cisco_mem, cisco_rttmon, cisco_sdwan_bfd, uptime]
@@ -52,6 +56,8 @@ by_role:
   core-firewall:
     modules: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortigate_est_bandwidth, fortinet_health]
     auth: ntt_snmpv3_auth
+  # AireOS-only default when the platform label is missing and the model
+  # is not a Catalyst 9800. A labelled 9800 is skip_snmp above.
   wireless-controller:
     modules: [if_mib, cisco_wlc_aireos, cisco_env, cisco_mem, cisco_pro, uptime]
     auth: ie_wlc_v2

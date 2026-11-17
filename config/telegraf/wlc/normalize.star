@@ -21,6 +21,32 @@ RADIO_NAMES = ("ie_wlc_rrm", "ie_wlc_rrm_slot", "ie_wlc_radio_mdt", "ie_wlc_radi
 AP_NAMES_IN = ("ie_wlc_ap_mdt", "ie_wlc_ap_name_map", "ie_wlc_ap_join", "ie_wlc_ap_history", "ie_wlc_ap_image_prepare", "ie_wlc_ap_image_predownload")
 SDWAN_NAMES = ("ie_sdwan_bfd", "ie_sdwan_approute")
 
+# Source leaf -> canonical field. Skipped on passthrough only when that
+# canonical field was actually written, so a second counter is not dropped.
+ALIAS_OF = {
+    "most_recent_rssi": "rssi",
+    "most_recent_snr": "snr",
+    "cca_util_percentage": "channel_util",
+    "rx_util_percentage": "channel_util",
+    "bss_chan_util": "channel_util",
+    "curr_freq": "channel",
+    "current_channel": "channel",
+    "curr_tx_power_in_dbm": "tx_power_dbm",
+    "current_tx_power_level": "tx_power_level",
+    "chan_width": "width",
+    "channel_width": "width",
+    "rogue_20_count": "rogue_neighbors",
+    "five_minutes": "busy_percent",
+    "noise_floor": "noise",
+    "non_wifi_inter": "interference",
+    "num_assoc_clients": "clients",
+    "stations": "clients",
+    "joined_aps_count": "joined_aps",
+    "total_count": "aps",
+    "malicious_count": "malicious",
+    "friendly_count": "friendly",
+}
+
 
 def apply(metric):
     name = metric.name
@@ -173,7 +199,9 @@ def client_metric(metric, blob):
     bytes_tx = num(tag_or_field(metric, ("bytes_tx", "bytes-tx")))
     tx_retries = num(tag_or_field(metric, ("tx_retries", "tx-retries", "data_retries", "data-retries")))
     rts_retries = num(tag_or_field(metric, ("rts_retries", "rts-retries")))
-    current_rate = num(tag_or_field(metric, ("current_rate", "current-rate", "speed")))
+    # current-rate is a string (Mbps, often "72.2"; sometimes an MCS token
+    # such as "m9"). num() only accepts a pure number, then speed (uint32).
+    current_rate = first_num(metric, ("current_rate", "current-rate", "speed"))
     site = metric.tags["site"] if "site" in metric.tags else ""
     key = wlc + "|" + site + "|" + str(ap) + "|" + str(radio)
     if key not in buckets():
@@ -187,13 +215,13 @@ def client_metric(metric, blob):
     if snr == None:
         snr = prev[1]
     detail_only = rssi == None and snr == None and bytes_rx == None and bytes_tx == None
-    if "common-oper" in blob and detail_only:
+    identity_only = detail_only and ("common-oper" in blob or "policy-data" in blob or ("mobility-oper-data" in blob and "wireless-client" in blob))
+    if identity_only:
         bucket[ident] = (prev[0], prev[1], now)
-        return None
-    if "policy-data" in blob and detail_only:
-        return None
-    if "mobility-oper-data" in blob and "wireless-client" in blob and detail_only and not store_clients(metric):
-        return None
+        # IE_WLC_STORE_CLIENTS=0 still drops the per-client series.
+        if not store_clients(metric) or not mac:
+            return None
+        return emit_client(metric, ap, radio, mac, ssid, band, protocol, vlan, mobility, rssi, snr, bytes_rx, bytes_tx, tx_retries, rts_retries, current_rate, now)
     bucket[ident] = (rssi, snr, now)
     drop_old(bucket, now)
     agg = Metric("ie_wlc_client_radio")
@@ -259,6 +287,7 @@ def client_metric(metric, blob):
         if current_rate != None:
             raw.fields["current_rate"] = current_rate
         raw.time = now
+        finish(metric, raw)
         out.append(raw)
     if len(out) == 1:
         return out[0]
@@ -283,11 +312,10 @@ def radio_metric(metric, blob):
         if band:
             out.tags["band"] = str(band)
         clients = num(tag_or_field(metric, ("num_assoc_clients", "num-assoc-clients", "clients")))
-        if clients == None:
-            return None
-        out.fields["clients"] = clients
+        if clients != None:
+            out.fields["clients"] = clients
         out.time = metric.time
-        return out
+        return finish(metric, out)
     if "ethernet" in blob:
         out = Metric("ie_wlc_ethernet")
         copy_place(metric, out)
@@ -301,10 +329,8 @@ def radio_metric(metric, blob):
             out.fields["rx_pkts"] = rx
         if tx != None:
             out.fields["tx_pkts"] = tx
-        if rx == None and tx == None:
-            return None
         out.time = metric.time
-        return out
+        return finish(metric, out)
     out = Metric("ie_wlc_radio")
     copy_place(metric, out)
     out.tags["ap"] = str(ap)
@@ -313,7 +339,8 @@ def radio_metric(metric, blob):
         out.tags["band"] = str(band)
     wrote = False
     util = num(tag_or_field(metric, ("cca_util_percentage", "channel_util", "rx_util_percentage", "cca-util-percentage", "bss_chan_util", "bss-chan-util")))
-    noise = num(tag_or_field(metric, ("noise", "noise_floor", "noise-floor", "rx_noise_channel_utilization", "rx-noise-channel-utilization")))
+    # dBm only. load/rx-noise-channel-utilization is a percent and stays its own field.
+    noise = noise_dbm(metric)
     inter = num(tag_or_field(metric, ("interference", "non_wifi_inter", "non-wifi-inter", "cca_interference")))
     clients = num(tag_or_field(metric, ("num_assoc_clients", "stations", "clients", "num-assoc-clients")))
     channel = num(tag_or_field(metric, ("channel", "curr_freq", "curr-freq", "current_channel", "current-channel")))
@@ -354,10 +381,8 @@ def radio_metric(metric, blob):
     if radio_up != None:
         out.fields["oper_up"] = radio_up
         wrote = True
-    if not wrote:
-        return None
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def ap_metric(metric):
@@ -385,6 +410,7 @@ def ap_metric(metric):
     if disconnects != None:
         out.fields["disconnects"] = disconnects
     out.time = metric.time
+    finish(metric, out)
     remember_named(metric, str(ap))
     info = ap_info(metric, str(ap))
     if info == None:
@@ -448,8 +474,6 @@ def neighbor_metric(metric):
         ap = "unknown"
     switch = tag_or_field(metric, ("neighbor_switch", "cdp_cache_device_id", "system_name", "system-name"))
     port = tag_or_field(metric, ("neighbor_port", "cdp_cache_device_port", "cdp-cache-device-port", "port_id", "port-id"))
-    if not switch and not port:
-        return None
     out = Metric("ie_wlc_neighbor")
     copy_place(metric, out)
     out.tags["ap"] = str(ap)
@@ -457,17 +481,16 @@ def neighbor_metric(metric):
         out.tags["switch"] = str(switch)
     if port:
         out.tags["port"] = str(port)
-    out.fields["info"] = 1
+    if switch or port:
+        out.fields["info"] = 1
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def rogue_mdt(metric):
     total = num(tag_or_field(metric, ("total_count", "total-count")))
     malicious = num(tag_or_field(metric, ("malicious_count", "malicious-count")))
     friendly = num(tag_or_field(metric, ("friendly_count", "friendly-count")))
-    if total == None and malicious == None:
-        return None
     out = Metric("ie_wlc_rogue")
     copy_place(metric, out)
     if total != None:
@@ -477,7 +500,7 @@ def rogue_mdt(metric):
     if friendly != None:
         out.fields["friendly"] = friendly
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def ha_metric(metric):
@@ -494,26 +517,23 @@ def ha_metric(metric):
         active = 1
     out.fields["active"] = active
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def cpu_metric(metric):
-    value = num(tag_or_field(metric, ("five_minutes", "five-minutes", "five_seconds", "five-seconds")))
-    if value == None:
-        return None
+    value = first_num(metric, ("five_minutes", "five-minutes", "five_seconds", "five-seconds"))
     out = Metric("ie_wlc_cpu")
     copy_place(metric, out)
-    out.fields["busy_percent"] = value
+    if value != None:
+        out.fields["busy_percent"] = value
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def memory_metric(metric):
     used = num(tag_or_field(metric, ("used_memory", "used-memory")))
     free = num(tag_or_field(metric, ("free_memory", "free-memory")))
     total = num(tag_or_field(metric, ("total_memory", "total-memory")))
-    if used == None and free == None and total == None:
-        return None
     out = Metric("ie_wlc_memory")
     copy_place(metric, out)
     pool = tag_or_field(metric, ("name",))
@@ -526,7 +546,7 @@ def memory_metric(metric):
     if total != None:
         out.fields["total"] = total
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def wlan_metric(metric):
@@ -536,22 +556,21 @@ def wlan_metric(metric):
     copy_place(metric, out)
     if ssid:
         out.tags["ssid"] = str(ssid)
-    if clients == None:
-        return None
-    out.fields["clients"] = clients
+    if clients != None:
+        out.fields["clients"] = clients
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def controller_passthrough(metric):
     joined = num(tag_or_field(metric, ("joined_aps_count", "joined-aps-count")))
-    if joined == None:
-        return metric
-    out = Metric("ie_wlc_ap_global")
+    name = "ie_wlc_ap_global" if joined != None else metric.name
+    out = Metric(name)
     copy_place(metric, out)
-    out.fields["joined_aps"] = joined
+    if joined != None:
+        out.fields["joined_aps"] = joined
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def snmp_ap(metric):
@@ -735,10 +754,8 @@ def sdwan_metric(metric, blob):
     if up != None:
         out.fields["up"] = up
         wrote = True
-    if not wrote:
-        return None
     out.time = metric.time
-    return out
+    return finish(metric, out)
 
 
 def remember_ap(metric):
@@ -841,7 +858,206 @@ def num(value):
     kind = type(value)
     if kind == "int" or kind == "float":
         return value
+    if kind != "string":
+        return None
+    text = value.strip()
+    if len(text) >= 4 and text[len(text) - 4:].lower() == "mbps":
+        text = text[:len(text) - 4].strip()
+    if not _numeric_text(text):
+        return None
+    if "." in text:
+        return float(text)
+    if text[0] == "+":
+        text = text[1:]
+    return int(text)
+
+
+def _numeric_text(text):
+    n = len(text)
+    if n == 0:
+        return False
+    start = 0
+    if text[0] == "-" or text[0] == "+":
+        start = 1
+    if start >= n:
+        return False
+    dot = False
+    digits = False
+    for i in range(start, n):
+        ch = text[i]
+        if ch == ".":
+            if dot:
+                return False
+            dot = True
+        elif ch < "0" or ch > "9":
+            return False
+        else:
+            digits = True
+    return digits
+
+
+def first_num(metric, names):
+    for name in names:
+        value = num(tag_or_field(metric, (name,)))
+        if value != None:
+            return value
     return None
+
+
+def snake(key):
+    leaf = key
+    slash = key.rfind("/")
+    if slash >= 0:
+        leaf = key[slash + 1:]
+    return leaf.replace("-", "_")
+
+
+def chan_beside(metric, key):
+    slash = key.rfind("/")
+    if slash < 0:
+        return None
+    prefix = key[:slash]
+    for suffix in ("/chan", "/channel"):
+        sibling = prefix + suffix
+        if sibling in metric.fields:
+            return num(metric.fields[sibling])
+        if sibling in metric.tags:
+            return num(metric.tags[sibling])
+    return None
+
+
+def noise_dbm(metric):
+    # radio-oper-stats publishes noise-floor. rrm-measurement publishes dBm
+    # under noise/noise/noise-data/<n>/noise, one leaf per scanned channel.
+    # The shortest key ending in /noise is often a non-numeric container, so
+    # every numeric noise leaf is considered. The operating channel wins;
+    # otherwise the worst (least negative) dBm is kept.
+    floor = first_num(metric, ("noise_floor", "noise-floor"))
+    operating = first_num(metric, ("channel", "curr_freq", "curr-freq", "current_channel", "current-channel"))
+    chosen = None
+    worst = None
+    for key in metric.fields:
+        if snake(key) != "noise":
+            continue
+        if "utilization" in key:
+            continue
+        value = num(metric.fields[key])
+        if value == None:
+            continue
+        chan = chan_beside(metric, key)
+        if operating != None and chan != None and chan == operating:
+            chosen = value
+        if worst == None or value > worst:
+            worst = value
+    if chosen != None:
+        return chosen
+    if worst != None:
+        return worst
+    return floor
+
+
+def attach_channel_noise(metric, out):
+    for key in metric.fields:
+        if snake(key) != "noise" or "noise_data" not in key:
+            continue
+        value = num(metric.fields[key])
+        if value == None:
+            continue
+        chan = chan_beside(metric, key)
+        if chan == None:
+            continue
+        label = str(chan)
+        if len(label) > 2 and label[len(label) - 2:] == ".0":
+            label = label[:len(label) - 2]
+        name = "noise_" + label
+        if name not in out.fields:
+            out.fields[name] = value
+
+
+def low_card(key, value):
+    if type(value) != "string":
+        return False
+    text = value.strip()
+    if text == "" or len(text) > 64 or _mac_text(text):
+        return False
+    leaf = snake(key)
+    if "mac" in leaf or "addr" in leaf or "serial" in leaf or "uuid" in leaf or "user" in leaf or "time" in leaf or "description" in leaf:
+        return False
+    if leaf == "ip" or leaf.endswith("_ip"):
+        return False
+    for hint in ("state", "mode", "status", "name", "type", "band", "role", "reason", "profile", "protocol", "country"):
+        if leaf == hint or leaf.endswith("_" + hint):
+            return True
+    return False
+
+
+def attach_extra(metric, out):
+    for key in metric.fields:
+        leaf = snake(key)
+        if leaf == "":
+            continue
+        target = leaf
+        if leaf in ALIAS_OF:
+            target = ALIAS_OF[leaf]
+        if target in out.fields or leaf in out.fields:
+            continue
+        value = metric.fields[key]
+        kind = type(value)
+        if kind == "int" or kind == "float":
+            out.fields[leaf] = value
+        elif kind == "bool":
+            out.fields[leaf] = 1 if value else 0
+        elif low_card(key, value) and leaf not in out.tags:
+            out.tags[leaf] = str(value).strip()
+
+
+def has_field(fields):
+    for key in fields:
+        return True
+    return False
+
+
+def finish(metric, out):
+    attach_channel_noise(metric, out)
+    attach_extra(metric, out)
+    if not has_field(out.fields):
+        out.fields["present"] = 1
+    out.time = metric.time
+    return out
+
+
+def emit_client(metric, ap, radio, mac, ssid, band, protocol, vlan, mobility, rssi, snr, bytes_rx, bytes_tx, tx_retries, rts_retries, current_rate, now):
+    raw = Metric("ie_wlc_client")
+    copy_place(metric, raw)
+    raw.tags["ap"] = str(ap)
+    raw.tags["radio"] = str(radio)
+    raw.tags["client"] = str(mac)
+    if ssid:
+        raw.tags["ssid"] = str(ssid)
+    if band:
+        raw.tags["band"] = str(band)
+    if protocol:
+        raw.tags["protocol"] = str(protocol)
+    if vlan != None and str(vlan) != "":
+        raw.tags["vlan"] = str(vlan)
+    if mobility:
+        raw.tags["mobility"] = str(mobility)
+    if rssi != None:
+        raw.fields["rssi"] = rssi
+    if snr != None:
+        raw.fields["snr"] = snr
+    if bytes_rx != None:
+        raw.fields["bytes_rx"] = bytes_rx
+    if bytes_tx != None:
+        raw.fields["bytes_tx"] = bytes_tx
+    if tx_retries != None:
+        raw.fields["tx_retries"] = tx_retries
+    if rts_retries != None:
+        raw.fields["rts_retries"] = rts_retries
+    if current_rate != None:
+        raw.fields["current_rate"] = current_rate
+    raw.time = now
+    return finish(metric, raw)
 
 
 def _mac_text(value):

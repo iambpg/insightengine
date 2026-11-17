@@ -313,15 +313,24 @@ class NetBridge:
             if wanted and wanted not in (name or "").lower() and wanted != ip:
                 continue
             seen.add(ip)
-            chosen.append({"ip": ip, "name": name})
+            chosen.append({
+                "ip": ip,
+                "name": name,
+                "platform": " ".join(str(target.get(key) or "") for key in ("platform", "model", "device_type")),
+            })
         if not chosen:
             self.record("ap-scan", actor, "failed", {"controllers": 0}, ["no wireless controllers to scan"])
             return {"ok": False, "message": "No wireless controllers to scan. Add them in NetBox, Netdisco, or config/discovery/wlc-targets.yml.", "controllers": 0, "aps": 0}
         total = 0
+        skipped = 0
         errors = []
         for target in chosen:
             community = sources.community_for(self.settings, target["ip"])
-            result = self.walk_wlc(target["ip"], 161, community)
+            result = self.walk_wlc(target["ip"], 161, community, target.get("platform") or "")
+            if result.get("skipped"):
+                skipped += 1
+                errors.append("%s: %s" % (target["name"], result.get("message") or "MDT only"))
+                continue
             if not result.get("ok"):
                 errors.append("%s: %s" % (target["name"], result.get("message") or "walk failed"))
                 continue
@@ -329,12 +338,12 @@ class NetBridge:
             total += len(result.get("aps") or [])
             if result.get("capped"):
                 errors.append("%s: walk stopped at the row cap" % target["name"])
-        status = "done" if total or not errors else "failed"
+        status = "done" if total or skipped or not errors else "failed"
         self.record("ap-scan", actor, status, {"controllers": len(chosen), "aps": total}, errors)
         return {"ok": bool(total) or not errors, "message": errors[0] if errors and not total else "Scanned %d access points on %d controllers." % (total, len(chosen)), "controllers": len(chosen), "aps": total, "errors": errors}
 
-    def walk_wlc(self, host: str, port: int, community: str) -> dict:
-        return scan_wlc(host, port, community)
+    def walk_wlc(self, host: str, port: int, community: str, platform: str = "") -> dict:
+        return scan_wlc(host, port, community, platform=platform)
 
     def _replace_aps(self, wlc: str, platform: str, aps: list[dict]) -> None:
         with self.sf() as db:
