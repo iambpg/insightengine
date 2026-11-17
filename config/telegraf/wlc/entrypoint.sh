@@ -5,6 +5,32 @@
 # not open the dial-out port.
 set -eu
 umask 077
+# Go's default GC target sits above a 2g cgroup and the OOM killer wins.
+# 85% of IE_TELEGRAF_WLC_MEM leaves headroom for the scrape and the stacks.
+mem_limit="${IE_TELEGRAF_WLC_MEM:-6g}"
+if [ -z "${GOMEMLIMIT:-}" ]; then
+  gomem="$(python3 -c '
+import sys
+text = sys.argv[1].strip().lower()
+units = (
+    ("gib", 1024 ** 3), ("gb", 1000 ** 3), ("g", 1024 ** 3),
+    ("mib", 1024 ** 2), ("mb", 1000 ** 2), ("m", 1024 ** 2),
+    ("kib", 1024), ("kb", 1000), ("k", 1024), ("b", 1),
+)
+number = text
+mult = 1
+for suffix, size in units:
+    if text.endswith(suffix):
+        number = text[: -len(suffix)]
+        mult = size
+        break
+limit = int(float(number) * mult)
+print("%dMiB" % int(limit * 85 / 100 / (1024 * 1024)))
+' "$mem_limit" 2>/dev/null || true)"
+  if [ -n "$gomem" ]; then
+    export GOMEMLIMIT="$gomem"
+  fi
+fi
 # The host NetBox token is often root:root mode 0600. Stage a 0400 copy for
 # uid 10001, then continue this script as that user. Telegraf is not root.
 if [ "$(id -u)" -eq 0 ]; then

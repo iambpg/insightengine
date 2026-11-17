@@ -911,6 +911,9 @@ services:
       IE_GNMI_USER: ${IE_GNMI_USER:-}
       IE_GNMI_PASSWORD: ${IE_GNMI_PASSWORD:-}
       IE_MDT_PORT: ${IE_MDT_PORT:-57500}
+      # cgroup limit. entrypoint.sh sets GOMEMLIMIT to about 85% of this so
+      # the Go GC runs before the kernel OOM killer.
+      IE_TELEGRAF_WLC_MEM: ${IE_TELEGRAF_WLC_MEM:-6g}
       # render_wlc.py imports catalog from the image and from the checkout mount.
       PYTHONPATH: /usr/local/bin:/etc/telegraf
     ports:
@@ -935,7 +938,7 @@ services:
       start_period: 40s
     deploy:
       resources:
-        limits: {memory: "${TELEGRAF_WLC_MEM:-2g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
+        limits: {memory: "${IE_TELEGRAF_WLC_MEM:-6g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
         reservations: {memory: 256m}
 
   telegraf-host:
