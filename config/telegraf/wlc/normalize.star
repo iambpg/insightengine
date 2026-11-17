@@ -49,6 +49,9 @@ ALIAS_OF = {
 
 
 def apply(metric):
+    # One pass decides which history-list index is newest. Lookups and
+    # passthrough both skip the older copies.
+    state["history_keep"] = history_keep(metric)
     name = metric.name
     path = ""
     if "path" in metric.tags:
@@ -828,6 +831,8 @@ def _lookup(metric, name, nested):
     for key in metric.tags:
         if metric.tags[key] == "":
             continue
+        if not _history_kept(key):
+            continue
         if (not nested and key == name) or (nested and _suffix(key, leaf)):
             if best == None or len(key) < best_len:
                 best = metric.tags[key]
@@ -835,6 +840,8 @@ def _lookup(metric, name, nested):
     for key in metric.fields:
         value = metric.fields[key]
         if value == "":
+            continue
+        if not _history_kept(key):
             continue
         if (not nested and (key == name or key == leaf)) or (nested and _suffix(key, leaf)):
             if best == None or len(key) < best_len:
@@ -974,26 +981,201 @@ def attach_channel_noise(metric, out):
             out.fields[name] = value
 
 
+# Extra tags that are not the AP identity. Past this many distinct values
+# the tag is dropped so a free-form reason cannot mint a series per AP event.
+TAG_VALUE_CAP = 128
+
+
+def _digits(text):
+    if text == "":
+        return False
+    for i in range(len(text)):
+        ch = text[i]
+        if ch < "0" or ch > "9":
+            return False
+    return True
+
+
+def _ends(text, suffix):
+    if len(text) < len(suffix):
+        return False
+    return text[len(text) - len(suffix):] == suffix
+
+
+def _history_parent(token):
+    parent = token.lower()
+    if "history" in parent:
+        return True
+    return _ends(parent, "ptr")
+
+
+def history_group(key):
+    # Repeated YANG lists arrive as .../ewlc-ap-state-ptr/12/uptime or as
+    # ewlc_ap_state_ptr_12_uptime. The index is not part of the metric name.
+    if "/" in key:
+        parts = key.split("/")
+        found = None
+        for i in range(len(parts)):
+            if not _digits(parts[i]):
+                continue
+            parent = ""
+            if i > 0:
+                parent = parts[i - 1]
+            if _history_parent(parent):
+                found = ("/".join(parts[:i]), int(parts[i]))
+        return found
+    parts = key.split("_")
+    for i in range(len(parts) - 1):
+        if _history_parent(parts[i]) and _digits(parts[i + 1]):
+            return ("_".join(parts[:i + 1]), int(parts[i + 1]))
+    return None
+
+
+def _timestamp_text(text):
+    if len(text) < 19:
+        return False
+    if text[4] != "-" or text[7] != "-":
+        return False
+    for i in range(4):
+        ch = text[i]
+        if ch < "0" or ch > "9":
+            return False
+    return True
+
+
+def _time_rank(key, value):
+    leaf = snake(key)
+    if "time" not in leaf and "date" not in leaf and "timestamp" not in leaf:
+        return None
+    if type(value) == "string":
+        text = value.strip()
+        if _timestamp_text(text):
+            return text
+        return None
+    if type(value) == "int" or type(value) == "float":
+        if value >= 1000000000 and value < 100000000000000:
+            return value
+    return None
+
+
+def _rank_newer(rank, previous):
+    if type(rank) != type(previous):
+        return type(rank) == "string"
+    return rank > previous
+
+
+def history_keep(metric):
+    # group -> index -> timestamp rank. No rank means the highest index wins.
+    classified = {}
+    indexes = {}
+    ranks = {}
+    for key in metric.fields:
+        info = history_group(key)
+        if info == None:
+            continue
+        classified[key] = info
+        group = info[0]
+        index = info[1]
+        if group not in indexes:
+            indexes[group] = {}
+        indexes[group][index] = True
+        rank = _time_rank(key, metric.fields[key])
+        if rank == None:
+            continue
+        if group not in ranks:
+            ranks[group] = {}
+        previous = ranks[group][index] if index in ranks[group] else None
+        if previous == None or _rank_newer(rank, previous):
+            ranks[group][index] = rank
+    keep = {}
+    for group in indexes:
+        best_index = None
+        best_rank = None
+        for index in indexes[group]:
+            rank = None
+            if group in ranks and index in ranks[group]:
+                rank = ranks[group][index]
+            if best_index == None:
+                best_index = index
+                best_rank = rank
+                continue
+            if rank != None and (best_rank == None or _rank_newer(rank, best_rank)):
+                best_index = index
+                best_rank = rank
+            elif rank == None and best_rank == None and index > best_index:
+                best_index = index
+        keep[group] = best_index
+    # Lookups walk every field. Remember the dropped keys so that walk stays a dict check.
+    dropped = {}
+    for key in classified:
+        info = classified[key]
+        group = info[0]
+        if group in keep and keep[group] != info[1]:
+            dropped[key] = True
+    state["history_drop"] = dropped
+    return keep
+
+
+def _history_kept(key):
+    if "history_drop" not in state:
+        return True
+    return key not in state["history_drop"]
+
+
+def field_name(key):
+    info = history_group(key)
+    if info == None or "/" in key:
+        return snake(key)
+    parts = key.split("_")
+    for i in range(len(parts) - 1):
+        if _history_parent(parts[i]) and _digits(parts[i + 1]):
+            return "_".join(parts[i + 2:])
+    return snake(key)
+
+
 def low_card(key, value):
     if type(value) != "string":
         return False
     text = value.strip()
-    if text == "" or len(text) > 64 or _mac_text(text):
+    if text == "" or len(text) > 64 or _mac_text(text) or _timestamp_text(text):
         return False
-    leaf = snake(key)
+    # Enums are hyphenated tokens. A space is a sentence or a note.
+    if " " in text:
+        return False
+    leaf = field_name(key)
     if "mac" in leaf or "addr" in leaf or "serial" in leaf or "uuid" in leaf or "user" in leaf or "time" in leaf or "description" in leaf:
         return False
-    if leaf == "ip" or leaf.endswith("_ip"):
+    if leaf == "ip" or _ends(leaf, "_ip"):
         return False
     for hint in ("state", "mode", "status", "name", "type", "band", "role", "reason", "profile", "protocol", "country"):
-        if leaf == hint or leaf.endswith("_" + hint):
+        if leaf == hint or _ends(leaf, "_" + hint):
             return True
     return False
 
 
+def _tag_room(leaf, text):
+    if "tag_card" not in state:
+        state["tag_card"] = {}
+    card = state["tag_card"]
+    if leaf not in card:
+        card[leaf] = {}
+    seen = card[leaf]
+    if text in seen:
+        return True
+    count = 0
+    for _seen in seen:
+        count = count + 1
+    if count >= TAG_VALUE_CAP:
+        return False
+    seen[text] = True
+    return True
+
+
 def attach_extra(metric, out):
     for key in metric.fields:
-        leaf = snake(key)
+        if not _history_kept(key):
+            continue
+        leaf = field_name(key)
         if leaf == "":
             continue
         target = leaf
@@ -1007,7 +1189,7 @@ def attach_extra(metric, out):
             out.fields[leaf] = value
         elif kind == "bool":
             out.fields[leaf] = 1 if value else 0
-        elif low_card(key, value) and leaf not in out.tags:
+        elif low_card(key, value) and leaf not in out.tags and _tag_room(leaf, str(value).strip()):
             out.tags[leaf] = str(value).strip()
 
 

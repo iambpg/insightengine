@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 
 # 2x the 600s capwap period, and the same window Telegraf uses before it
-# expires a series (expiration_interval 20m). Radio-oper is inside this too.
+# expires a series (expiration_interval 1200s). Radio-oper is inside this too.
 AP_FRESH_SECONDS = 20 * 60
 
 _COLON_MAC = re.compile(r"^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$")

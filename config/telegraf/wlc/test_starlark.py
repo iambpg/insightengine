@@ -123,12 +123,16 @@ class CatalogPackagingTests(unittest.TestCase):
         self.assertIn("./config/telegraf/wlc:/etc/telegraf:ro", block)
         self.assertIn("./config/telegraf/wlc/catalog.py:/usr/local/bin/catalog.py:ro", block)
         self.assertIn('user: "0:0"', block)
+        self.assertIn("IE_TELEGRAF_WLC_MEM: ${IE_TELEGRAF_WLC_MEM:-6g}", block)
+        self.assertIn('memory: "${IE_TELEGRAF_WLC_MEM:-6g}"', block)
 
     def test_entrypoint_puts_both_directories_on_pythonpath(self) -> None:
         text = (WLC / "entrypoint.sh").read_text(encoding="utf-8")
         self.assertIn('PYTHONPATH="/usr/local/bin:/etc/telegraf', text)
         self.assertIn("/usr/local/bin/drop-priv.sh", text)
         self.assertIn("IE_WLC_REFRESH_SECONDS:-300", text)
+        self.assertIn("IE_TELEGRAF_WLC_MEM:-6g", text)
+        self.assertIn("GOMEMLIMIT", text)
         self.assertIn("reloaded WLC poller", text)
         self.assertNotIn("--watch-config", text)
 
@@ -352,6 +356,100 @@ class StarlarkDialectTests(unittest.TestCase):
         self.assertIn("odd_counter=9", text)
         self.assertNotIn("noise=3", text)
         self.assertNotIn("noise=-70", text)
+
+    def test_large_ap_oper_record_keeps_newest_history_only(self) -> None:
+        entries = 40
+        newest = entries // 2
+        history = []
+        for index in range(entries):
+            stamp = "2026-11-17T21:00:00Z" if index == newest else "2020-01-01T00:00:00Z"
+            history.append('ap_state/ewlc-ap-state-ptr/%d/join-time="%s"' % (index, stamp))
+            history.append("ap_state/ewlc-ap-state-ptr/%d/uptime=%di" % (index, index))
+            history.append(
+                'ap_state/ewlc-ap-state-ptr/%d/note="free text join %d happened after a reboot"' % (index, index)
+            )
+            history.append('ewlc_ap_state_ptr_%d_join_time="%s"' % (index, stamp))
+            history.append("ewlc_ap_state_ptr_%d_bytes=%di" % (index, 100 + index))
+        ap_fields = ",".join(history + [
+            'name="AP-1"',
+            'wtp_mac="00:11:22:33:44:55"',
+            "mystery_counter=5i",
+            "noise/noise/noise_data/0/chan=36i",
+            "noise/noise/noise_data/0/noise=-91i",
+            "noise/noise/noise_data/1/chan=40i",
+            "noise/noise/noise_data/1/noise=-70i",
+        ])
+        reasons = []
+        for index in range(200):
+            reasons.append(
+                'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-reason-%d",odd_reason="reason-%d"'
+                % (index, index)
+            )
+        sample_text = "\n".join([
+            "ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data " + ap_fields,
+        ] + reasons + [""])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.influx"
+            sample.write_text(sample_text, encoding="utf-8")
+            emit = root / "emit.sh"
+            emit.write_text("#!/bin/sh\ncat %s\n" % sample, encoding="utf-8")
+            emit.chmod(0o755)
+            config = root / "telegraf.conf"
+            config.write_text(
+                "\n".join([
+                    "[agent]",
+                    '  interval = "10s"',
+                    "  omit_hostname = true",
+                    "[[inputs.exec]]",
+                    '  commands = ["%s"]' % emit,
+                    '  data_format = "influx"',
+                    '  timeout = "20s"',
+                    "[[processors.starlark]]",
+                    '  script = "%s"' % (WLC / "normalize.star"),
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+            proc = _run_telegraf(self.binary, config, timeout=60)
+        text = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 0, text[-4000:])
+        ap_line = ""
+        for raw in text.splitlines():
+            line = raw[2:] if raw.startswith("> ") else raw
+            if line.startswith("ie_wlc_ap,") and "ap=AP-1" in line.split(" ", 1)[0]:
+                ap_line = line
+                break
+        self.assertNotEqual(ap_line, "", text[-4000:])
+        fields = ap_line.split(" ", 1)[1].split(",")
+        self.assertLess(len(fields), 30, ap_line)
+        self.assertIn("uptime=%di" % newest, ap_line)
+        self.assertIn("bytes=%di" % (100 + newest), ap_line)
+        self.assertIn("mystery_counter=5", ap_line)
+        self.assertIn("noise=-91", ap_line)
+        self.assertIn("noise_36=-91", ap_line)
+        self.assertIn("noise_40=-70", ap_line)
+        self.assertNotIn("uptime=0i", ap_line)
+        self.assertNotIn("uptime=39i", ap_line)
+        self.assertNotIn("ewlc_ap_state_ptr_", ap_line)
+        metrics = "\n".join(
+            (raw[2:] if raw.startswith("> ") else raw)
+            for raw in text.splitlines()
+            if raw.startswith("> ")
+        )
+        self.assertNotIn("free text", metrics)
+        self.assertNotIn("2020-01-01", metrics)
+        self.assertNotIn("2026-11-17", metrics)
+        seen = set()
+        for raw in text.splitlines():
+            line = raw[2:] if raw.startswith("> ") else raw
+            marker = "odd_reason="
+            if marker not in line:
+                continue
+            for part in line.replace(",", " ").split():
+                if part.startswith(marker):
+                    seen.add(part)
+        self.assertEqual(len(seen), 128, sorted(seen)[:5])
 
     def test_host_api_and_syslog_configs_parse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
