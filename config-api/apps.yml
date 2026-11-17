@@ -91,14 +91,15 @@ apps:
     group: metrics
     sensitive: false
     container: "telegraf-api-${CLIENT_SLUG}"
-    containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}", "telegraf-wlc-${CLIENT_SLUG}"]
+    containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}", "telegraf-wlc-${CLIENT_SLUG}", "telegraf-wlc-clients-${CLIENT_SLUG}"]
     version: "${TELEGRAF_IMAGE}"
     files:
       - {id: api.conf, path: config/telegraf/api/telegraf.conf, label: API collector, language: toml, editable: true, validator: telegraf}
       - {id: host.conf, path: config/telegraf/host/telegraf.conf, label: Host metrics, language: toml, editable: true, validator: telegraf}
       - {id: wlc.conf, path: config/telegraf/wlc/telegraf.conf, label: WLC access-point collector, language: toml, editable: true, validator: telegraf}
+      - {id: wlc-clients.conf, path: config/telegraf/wlc/telegraf-clients.conf, label: WLC client collector, language: toml, editable: true, validator: telegraf}
     actions:
-      - {id: restart, label: Restart Telegraf, kind: restart, dangerous: true, roles: [Administrator], containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}", "telegraf-wlc-${CLIENT_SLUG}"]}
+      - {id: restart, label: Restart Telegraf, kind: restart, dangerous: true, roles: [Administrator], containers: ["telegraf-api-${CLIENT_SLUG}", "telegraf-host-${CLIENT_SLUG}", "telegraf-wlc-${CLIENT_SLUG}", "telegraf-wlc-clients-${CLIENT_SLUG}"]}
       - {id: validate-all, label: Validate Telegraf files, kind: validate, dangerous: false, roles: [Administrator, Engineer]}
 
   - id: grafana

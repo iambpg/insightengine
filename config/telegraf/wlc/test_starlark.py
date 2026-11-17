@@ -118,13 +118,18 @@ class CatalogPackagingTests(unittest.TestCase):
         self.assertNotIn("USER 10001", text)
 
     def test_compose_mounts_catalog_and_sets_pythonpath(self) -> None:
-        block = _service_block("telegraf-wlc", "telegraf-host")
+        block = _service_block("telegraf-wlc", "telegraf-wlc-clients")
+        clients = _service_block("telegraf-wlc-clients", "telegraf-host")
         self.assertIn("PYTHONPATH: /usr/local/bin:/etc/telegraf", block)
         self.assertIn("./config/telegraf/wlc:/etc/telegraf:ro", block)
         self.assertIn("./config/telegraf/wlc/catalog.py:/usr/local/bin/catalog.py:ro", block)
         self.assertIn('user: "0:0"', block)
         self.assertIn("IE_TELEGRAF_WLC_MEM: ${IE_TELEGRAF_WLC_MEM:-6g}", block)
         self.assertIn('memory: "${IE_TELEGRAF_WLC_MEM:-6g}"', block)
+        self.assertIn("IE_WLC_ROLE: clients", clients)
+        self.assertIn("IE_TELEGRAF_WLC_CLIENTS_MEM: ${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}", clients)
+        self.assertIn('memory: "${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}"', clients)
+        self.assertIn("${PORT_MDT_CLIENTS:-57502}:${IE_MDT_CLIENTS_PORT:-57502}", clients)
 
     def test_entrypoint_puts_both_directories_on_pythonpath(self) -> None:
         text = (WLC / "entrypoint.sh").read_text(encoding="utf-8")
@@ -132,6 +137,8 @@ class CatalogPackagingTests(unittest.TestCase):
         self.assertIn("/usr/local/bin/drop-priv.sh", text)
         self.assertIn("IE_WLC_REFRESH_SECONDS:-300", text)
         self.assertIn("IE_TELEGRAF_WLC_MEM:-6g", text)
+        self.assertIn("IE_TELEGRAF_WLC_CLIENTS_MEM:-4g", text)
+        self.assertIn("mdt-clients.conf", text)
         self.assertIn("GOMEMLIMIT", text)
         self.assertIn("reloaded WLC poller", text)
         self.assertNotIn("--watch-config", text)
@@ -290,7 +297,8 @@ class StarlarkDialectTests(unittest.TestCase):
                     "ie_wlc_rogue_raw,index=aabb,wlc=lab value=1i",
                     'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",wtp_mac="00:11:22:33:44:55",device_detail/static_info/ap_models/model="C9120AXI-B",device_detail/static_info/board_data/wtp_serial_num="FGL2417ABC1",device_detail/wtp_version/sw_version="17.15.1.4",wtp_ip="10.8.0.10",ap_location/location="floor-1",ap_mode_data/wtp_mode="local",tag_info/site_tag/site_tag_name="site-a",tag_info/policy_tag_info/policy_tag_name="pol-a",tag_info/rf_tag/rf_tag_name="rf-a",ap_state/ap_operation_state="ewlc-ap-state-registered"',
                     'ie_wlc_radio_mdt,wlc=lab,site=hq,path=radio-oper-data wtp_mac="00:11:22:33:44:55",radio_slot_id="1",oper_state="run",current_channel=36i',
-                    'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-9,ms_mac_address=aabbccddeef0,store_clients=1 current_rate="72.2",speed=144i,most_recent_rssi=-60i,most_recent_snr=30i,policy_errs=2i',
+                    'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-9,ms_mac_address=aabbccddeef0,store_clients=1,ssid=corp,band=5 current_rate="72.2",speed=144i,most_recent_rssi=-60i,most_recent_snr=30i,policy_errs=2i,vlan_name="user vlan",mobility="local",username="alice from floor 2"',
+                    'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-3,ms_mac_address=aabbccddeef2,wlc_role=ap,store_clients=1 most_recent_rssi=-55i',
                     'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-8,ms_mac_address=aabbccddeef1,store_clients=0 current_rate="m9",speed=54i,most_recent_rssi=-61i,most_recent_snr=22i',
                     'ie_wlc_rrm,wlc=lab,site=hq,ap_name=AP-7,radio_slot_id=1,path=rrm-measurement current_channel=36i,load/cca_util_percentage=40i,load/rx_noise_channel_utilization=3i,noise/noise/noise_data/0/chan=36i,noise/noise/noise_data/0/noise=-91i,noise/noise/noise_data/1/chan=40i,noise/noise/noise_data/1/noise=-70i,mystery_counter=5i',
                     'ie_wlc_radio_stats,wlc=lab,site=hq,ap_name=AP-6,radio_slot_id=0,path=radio-oper-stats odd_counter=9i',
@@ -348,6 +356,21 @@ class StarlarkDialectTests(unittest.TestCase):
         self.assertIn("speed=144", text)
         self.assertIn("policy_errs=2", text)
         self.assertNotIn("client=aabbccddeef1", text)
+        self.assertNotIn("client=aabbccddeef2", text)
+        client_line = ""
+        for raw in text.splitlines():
+            line = raw[2:] if raw.startswith("> ") else raw
+            if line.startswith("ie_wlc_client,") and "client=aabbccddeef0" in line:
+                client_line = line
+                break
+        self.assertNotEqual(client_line, "", text[-2000:])
+        tags = client_line.split(" ", 1)[0]
+        for label in ("wlc=lab", "ap=AP-9", "ssid=corp", "band=5", "client=aabbccddeef0"):
+            self.assertIn(label, tags)
+        for label in ("radio=", "site=", "vlan", "mobility=", "protocol=", "username="):
+            self.assertNotIn(label, tags)
+        self.assertNotIn("alice from floor", client_line)
+        self.assertNotIn("user vlan", client_line)
         self.assertIn("noise=-91", text)
         self.assertIn("noise_36=-91", text)
         self.assertIn("noise_40=-70", text)

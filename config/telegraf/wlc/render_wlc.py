@@ -46,10 +46,15 @@ for _text in reversed(_catalog_dirs):
 import catalog  # noqa: E402
 
 
-def _gnmi_subs():
+def _gnmi_subs(role: str):
     rows = []
     seen = set()
     for _offset, xpath, alias, policy, seconds, _shows in catalog.MDT_SUBS:
+        client = catalog.is_client_subscription(xpath)
+        if role == "clients" and not client:
+            continue
+        if role != "clients" and client:
+            continue
         mode = "on_change" if policy == "on-change" else "sample"
         interval = "%ds" % (seconds or 60)
         key = (alias, xpath, mode)
@@ -159,7 +164,7 @@ def auth_for(name: str, env: dict) -> dict:
     return {"version": 2, "community": env.get("SNMP_V2_COMMUNITY") or ""}
 
 
-def _gnmi(agent: str, tags: dict, env: dict) -> str:
+def _gnmi(agent: str, tags: dict, env: dict, collector: str) -> str:
     user = env.get("IE_GNMI_USER") or ""
     password = env.get("IE_GNMI_PASSWORD") or ""
     if not user or not password:
@@ -177,7 +182,7 @@ def _gnmi(agent: str, tags: dict, env: dict) -> str:
         "    device_role = %s" % _toml(tags["role"]),
         "    store_clients = %s" % _toml(tags.get("store_clients") or "1"),
     ]
-    for name, path, mode, interval in _gnmi_subs():
+    for name, path, mode, interval in _gnmi_subs(collector):
         lines.extend([
             "  [[inputs.gnmi.subscription]]",
             "    name = %s" % _toml(name),
@@ -192,6 +197,7 @@ def _gnmi(agent: str, tags: dict, env: dict) -> str:
 def render(targets: list[dict], env: dict) -> str:
     table = (env.get("IE_WLC_TABLE") or "all").strip().lower()
     transport = (env.get("IE_WLC_MDT_TRANSPORT") or "grpc").strip().lower()
+    collector = (env.get("IE_WLC_ROLE") or "ap").strip().lower() or "ap"
     # Per-client MDT series are on unless this is explicitly turned off.
     # SNMP never walks clients, so the flag does not change AireOS tables.
     raw_store = env.get("IE_WLC_STORE_CLIENTS")
@@ -225,6 +231,8 @@ def render(targets: list[dict], env: dict) -> str:
         role = str(labels.get("__meta_netbox_role") or "")
         device_type = str(labels.get("__meta_netbox_device_type") or "")
         kind = platform_kind(platform, role, device_type)
+        if collector == "clients" and kind != "iosxe":
+            continue
         if kind == "iosxe" and transport == "gnmi":
             chunks.append(_gnmi("%s:9339" % ip, {
                 "wlc": str(labels.get("__meta_netbox_name") or ip),
@@ -232,7 +240,7 @@ def render(targets: list[dict], env: dict) -> str:
                 "platform": platform or kind,
                 "role": role or "wireless-controller",
                 "store_clients": store,
-            }, env))
+            }, env, collector))
             continue
         if kind == "iosxe":
             chunks.append(

@@ -8,7 +8,9 @@ XPaths were checked against YangModels `vendor/cisco/xe/17151` (IOS-XE 17.15.1).
 
 SNMP does not walk individual clients. `bsnMobileStationTable` and `bsnMobileStationStatsTable` are not rendered. AireOS SNMP collects client **counts**: per radio (`bsnAPIfLoadNumOfClients`, `bsnApIfNoOfUsers`), per WLAN (`bsnDot11EssNumberOfMobileStations`), and the controller total (`bsnGlobalDot11SystemMobileStations`). A Catalyst 9800 is not polled by SNMP. Its client total is the MDT rollup `ie_wlc_client_radio_clients`.
 
-9800 MDT collects the client detail that exists in `Cisco-IOS-XE-wireless-client-oper`: AP, slot, SSID, band, protocol, VLAN, mobility role, RSSI, SNR, rates, retries and bytes. Telegraf stores one Prometheus series per numeric field per client **by default**. Set `IE_WLC_STORE_CLIENTS=0` to drop those series and keep the per-AP/per-radio rollup (`ie_wlc_client_radio_*`) and the per-SSID count (`ie_wlc_ssid_clients`). The controller still pushes the client subscriptions until those blocks are removed from the paste config. Rollups and alerts (`WifiRssiLow`, `WifiSnrLow`) use the rollup, so they keep working when per-client series are off.
+9800 MDT collects the client detail that exists in `Cisco-IOS-XE-wireless-client-oper`: AP, slot, SSID, band, protocol, VLAN, mobility role, RSSI, SNR, rates, retries and bytes. Those subscriptions dial `telegraf-wlc-clients` (host port `PORT_MDT_CLIENTS`, default 57502). AP, radio and controller subscriptions stay on `telegraf-wlc` (port 57500), so a client flood cannot fill that process or stop its `/metrics` scrape.
+
+Every numeric client leaf is stored, one series per field per client. Labels on `ie_wlc_client` are only `wlc`, `ap`, `ssid`, `band` and the client MAC. Protocol, VLAN, mobility, radio slot and free text are not labels, so a roam does not mint a new series. The client collector expires a series after 300s. Set `IE_WLC_STORE_CLIENTS=0` to drop the per-client series and keep the per-AP/per-radio rollup (`ie_wlc_client_radio_*`). The rollup is produced in `telegraf-wlc-clients`. Alerts (`WifiRssiLow`, `WifiSnrLow`) read it from that Prometheus job. The controller still pushes client-oper until those blocks are removed from the paste config.
 
 AireOS has no per-client RSSI or SNR over SNMP under this rule. `bsnAPIfPoorSNRClients` is a count of clients the controller already marked as poor SNR. `WifiPoorSnrClients` uses that count. Average RSSI and SNR alerts apply where MDT has filled `ie_wlc_client_radio_*`.
 
@@ -36,9 +38,23 @@ Assumption for the estimate: 2 radios per AP, 8 SSIDs per radio, 15 clients per 
 | Extra series, 5,000 APs, clients stored | 1465080 | passthrough fields on top of the 890040 |
 | Extra series, 5,000 APs, `IE_WLC_STORE_CLIENTS=0` | 340080 | radio and controller passthrough only | 
 
-Per-client series are 8 named numeric fields (RSSI, SNR, bytes in, bytes out, tx retries, RTS retries, current rate, and `speed`). `current-rate` in IOS-XE 17.15 is a string such as `72.2`; an MCS token such as `m9` does not parse, and the uint32 `speed` leaf is used instead. Every other numeric leaf on the same client record is kept (15 further traffic-stats leaves: packet counts, MIC errors, spatial streams, drops). Labels are client, AP, radio, SSID, band, protocol, VLAN and mobility. A mobility or VLAN change starts a new series until the old one expires (Telegraf expiration is 20 minutes).
+Per-client series are 8 named numeric fields (RSSI, SNR, bytes in, bytes out, tx retries, RTS retries, current rate, and `speed`). `current-rate` in IOS-XE 17.15 is a string such as `72.2`; an MCS token such as `m9` does not parse, and the uint32 `speed` leaf is used instead. Every other numeric leaf on the same client record is kept (15 further traffic-stats leaves: packet counts, MIC errors, spatial streams, drops). Labels are `wlc`, `ap`, `ssid`, `band` and the client MAC. A VLAN or mobility change does not start a new series. `telegraf-wlc-clients` expires a client series after 300s. `telegraf-wlc` still expires AP and radio series after 1200s.
 
 On a 5,000-AP controller that is 1,125,000 extra per-client series, plus 340,000 extra radio series (26 `radio-oper-stats` counters and about 8 per-channel noise fields on each of 10,000 radios), plus about 80 controller series for environment, interfaces and hardware. `IE_WLC_STORE_CLIENTS=0` drops the per-client extras and leaves the 340,080 radio and controller extras. Radio noise dBm comes from `noise/noise/noise-data` (one leaf per scanned channel) or from `noise-floor` on `radio-oper-stats`. `load/rx-noise-channel-utilization` is a percent and is stored under its own name.
+
+## Client collector memory
+
+A replay of 9,000 clients (the size that pushed the combined collector past 5 GiB on a 4,616-AP controller) through Telegraf 1.38.3, with 24 numeric fields each and free-text, VLAN and mobility strings on the same records. Prometheus kept 216,000 `ie_wlc_client_*` series and no string labels. Peak RSS was 645,764 kB (631 MiB). RSS once the series count stopped growing was 572,336 kB.
+
+The table scales that replay linearly (24 series and about 72 KiB peak per client). The default `IE_TELEGRAF_WLC_CLIENTS_MEM` is 4g. Raise it when the 15-clients-per-AP planning case is real. AP and radio series are not in this process.
+
+| APs | Clients | Assumption | `ie_wlc_client_*` series | Peak RSS |
+|---|---:|---|---:|---:|
+| 4,616 | 9,000 | measured, about 2 clients per AP | 216,000 | 631 MiB |
+| 5,000 | 10,000 | 2 clients per AP | 240,000 | 701 MiB |
+| 5,000 | 75,000 | 15 clients per AP | 1,800,000 | 5.3 GiB |
+| 10,000 | 20,000 | 2 clients per AP | 480,000 | 1.4 GiB |
+| 10,000 | 150,000 | 15 clients per AP | 3,600,000 | 10.5 GiB |
 
 Default export for one 5,000-AP controller is about 890040 series, of which 600000 are per client, 50000 are radio rollups and 80000 are per-SSID counts.
 
