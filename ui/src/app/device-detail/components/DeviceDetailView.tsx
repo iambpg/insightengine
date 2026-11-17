@@ -9,6 +9,8 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate from '@/components/faceplate/Faceplate';
+import { FACEPLATE_HEIGHT } from '@/components/faceplate/size';
+import { namesMatch } from '@/components/faceplate/library/ifname';
 import { portNameLine } from '@/components/faceplate/portText';
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
@@ -21,7 +23,7 @@ import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
-import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo } from '@/lib/types';
+import type { AccessPointRadio, DeviceDetailData, DeviceParentLink, HealthCause, InventorySide, PortInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
 import HealthChecks from './HealthChecks';
@@ -124,9 +126,14 @@ export default function DeviceDetailView() {
   const [detailTab, setDetailTab] = useState<DetailTab>('inventory');
   const [stageLocked, setStageLocked] = useState(false);
   const [addAp, setAddAp] = useState(false);
+  const [cable, setCable] = useState<{ remotePort: string; localPort: string; plate: HTMLElement } | null>(null);
   const healthApplied = useRef('');
   const stageRef = useRef<HTMLDivElement>(null);
   const detailScroll = useRef<HTMLDivElement>(null);
+  const localPlateRef = useRef<HTMLDivElement>(null);
+  const greyRef = useRef<HTMLDivElement>(null);
+  const plateRefs = useRef(new Map<string, HTMLDivElement>());
+  const plateBinders = useRef(new Map<string, (el: HTMLDivElement | null) => void>());
   const discoveryJob = usePolledDeviceDiscovery(postedDiscovery, {
     onError: (job) => toast.error(job.message || 'Rediscover failed.'),
     onDone: () => toast.success('Rediscover finished.'),
@@ -137,10 +144,42 @@ export default function DeviceDetailView() {
   const canLoad = ready && (!live || Boolean(id));
   const loaded = useKeyedLoad<DeviceDetailData>(deviceKey, canLoad, attempt, 'this device', (key) => api.getDevice(key));
   const device = loaded.data;
+  const kin = useMemo(() => {
+    const rows: { id: string; localPort: string; remotePort: string }[] = [];
+    if (device?.parent) {
+      rows.push({ id: device.parent.id, localPort: device.parent.uplinkInterface, remotePort: device.parent.parentInterface });
+    }
+    for (const child of device?.children ?? []) {
+      rows.push({ id: child.id, localPort: child.parentInterface, remotePort: child.uplinkInterface });
+    }
+    return rows;
+  }, [device]);
+  const plateBinder = (relationId: string) => {
+    let binder = plateBinders.current.get(relationId);
+    if (!binder) {
+      binder = (el: HTMLDivElement | null) => {
+        if (el) plateRefs.current.set(relationId, el);
+        else plateRefs.current.delete(relationId);
+      };
+      plateBinders.current.set(relationId, binder);
+    }
+    return binder;
+  };
 
   useEffect(() => {
     setSelected(null);
+    setCable(null);
   }, [deviceKey]);
+
+  useEffect(() => {
+    if (!selected) {
+      setCable(null);
+      return;
+    }
+    const hit = kin.find((row) => portIs(selected, row.localPort));
+    const plate = hit ? plateRefs.current.get(hit.id) ?? document.querySelector<HTMLElement>(`[data-relation-id="${hit.id}"]`) : null;
+    setCable(hit && plate ? { remotePort: hit.remotePort, localPort: selected.name, plate } : null);
+  }, [selected, kin, device?.id]);
 
   useEffect(() => {
     if (!ready || !live || id) {
@@ -425,8 +464,31 @@ export default function DeviceDetailView() {
                 })}
               </div>
             ) : null}
-            <div className="relative w-full overflow-hidden rounded-md bg-gradient-to-b from-secondary to-background p-1">
-              <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} caption={false} />
+            <div ref={greyRef} className={`relative rounded-md bg-gradient-to-b from-secondary to-background p-1 ${kin.length > 0 ? '' : 'overflow-x-auto'}`}>
+              <div className={`flex items-center gap-6 ${kin.length > 0 ? 'w-max max-w-full' : ''}`}>
+                <div ref={localPlateRef} className={kin.length > 0 ? 'min-w-0 overflow-x-auto' : 'w-full shrink-0'}>
+                  <div
+                    className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex w-max min-w-full items-center'}
+                    style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
+                  >
+                    <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} caption={false} />
+                  </div>
+                </div>
+                {kin.length > 0 ? (
+                  <div className="flex w-max min-w-0 max-w-[50%] shrink-0 items-center gap-3 overflow-hidden">
+                    {device.parent ? <RelationFaceplate link={device.parent} label="Parent" plateRef={plateBinder(device.parent.id)} className="w-40 min-w-[5.5rem] shrink-[0.2]" /> : null}
+                    {(device.children ?? []).length > 0 ? (
+                      <div className="flex min-w-0 shrink items-center gap-2">
+                        {(device.children ?? []).map((child) => (
+                          <RelationFaceplate key={child.id} link={child} label="Child" plateRef={plateBinder(child.id)} className="w-40 min-w-0 max-w-40 shrink" />
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <ParentBlock device={device} />
+              {cable ? <UplinkCable localRef={localPlateRef} greyRef={greyRef} remote={cable.plate} localPortName={cable.localPort} remotePortName={cable.remotePort} /> : null}
             </div>
             {device.faceplate.form_factor === 'ceiling-ap' ? <ApRadioBoards device={device} /> : null}
           </section>
@@ -752,6 +814,12 @@ function asPercent(value: number | null | undefined): number | null {
   return Math.abs(number) <= 1 ? number * 100 : number;
 }
 
+function parseDbm(value?: string): number | null {
+  if (!value) return null;
+  const found = value.match(/-?\d+(\.\d+)?/);
+  return found ? Number(found[0]) : null;
+}
+
 type Tone = 'good' | 'fair' | 'poor' | 'none';
 
 function toneColor(tone: Tone): string {
@@ -798,25 +866,43 @@ function worstTone(tones: Tone[]): Tone {
 
 function ApRadioBoards({ device }: { device: DeviceDetailData }) {
   const live = device.healthPanel?.accessPoint?.radios ?? [];
-  const boards = live.map((radio, index) => {
-    const snr = radio.snrAvg ?? null;
-    const rssi = radio.rssiAvg ?? null;
-    const interference = asPercent(radio.interference);
-    const fromSnr = snr == null ? null : Math.max(0, Math.min(100, (snr / 40) * 100));
-    const fromRssi = rssi == null ? null : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100));
-    return {
-      id: `${radio.slot || index}`,
-      slot: radio.slot || String(index),
-      title: bandName(radio),
-      channel: radio.channel ?? '—',
-      clients: radio.clients ?? null,
-      operUp: radio.operUp ?? null,
-      snr,
-      rssi,
-      signal: fromSnr ?? fromRssi,
-      interference,
-    };
-  }).sort((left, right) => bandRank(left.title) - bandRank(right.title) || left.title.localeCompare(right.title));
+  const drawn = device.faceplate.radios ?? [];
+  const boards = (live.length
+    ? live.map((radio, index) => {
+        const snr = radio.snrAvg ?? null;
+        const rssi = radio.rssiAvg ?? null;
+        const interference = asPercent(radio.interference);
+        const fromSnr = snr == null ? null : Math.max(0, Math.min(100, (snr / 40) * 100));
+        const fromRssi = rssi == null ? null : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100));
+        return {
+          id: `${radio.slot || index}`,
+          slot: radio.slot || String(index),
+          title: bandName(radio),
+          channel: radio.channel ?? '—',
+          clients: radio.clients ?? null,
+          operUp: radio.operUp ?? null,
+          snr,
+          rssi,
+          signal: fromSnr ?? fromRssi,
+          interference,
+        };
+      })
+    : drawn.map((radio) => {
+        const rssi = parseDbm(radio.avgRssi);
+        return {
+          id: radio.id,
+          slot: radio.id,
+          title: radio.band,
+          channel: radio.channel,
+          clients: radio.clients,
+          operUp: null as boolean | null,
+          snr: null as number | null,
+          rssi,
+          signal: rssi == null ? null : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100)),
+          interference: null as number | null,
+        };
+      })
+  ).sort((left, right) => bandRank(left.title) - bandRank(right.title) || left.title.localeCompare(right.title));
 
   return (
     <div className="mt-2 grid auto-cols-fr grid-flow-col gap-2" role="region" aria-label="Radio performance">
@@ -824,7 +910,7 @@ function ApRadioBoards({ device }: { device: DeviceDetailData }) {
         <p className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-xs text-muted-foreground">The controller has not returned radio readings for this access point.</p>
       ) : boards.map((board) => {
         const down = board.operUp === false;
-        const missing = down ? 'Radio is down' : 'Not returned for this radio';
+        const missing = down ? 'Radio is down' : live.length ? 'Not returned for this radio' : 'Not sampled';
         const tones = down ? [] : [snrTone(board.snr), rssiTone(board.rssi), signalTone(board.signal), interferenceTone(board.interference)];
         const verdict = down ? 'poor' : worstTone(tones);
         const verdictLabel = down ? 'Down' : verdict === 'good' ? 'Healthy' : verdict === 'fair' ? 'Watch' : verdict === 'poor' ? 'Poor' : 'No sample';
@@ -868,6 +954,148 @@ function shadeColor(shade?: string): string {
   const text = (shade || '').trim();
   if (/^[0-9a-fA-F]{6}$/.test(text)) return `#${text}`;
   return text;
+}
+
+function portIs(port: PortInfo, wanted: string): boolean {
+  return [port.name, port.id, ...(port.names ?? [])].some((value) => namesMatch(value, wanted));
+}
+
+function portMatches(el: Element, wanted: string): boolean {
+  const values = [
+    el.getAttribute('data-port-name') || '',
+    el.getAttribute('data-port-id') || '',
+    ...(el.getAttribute('data-port-aliases') || '').split('|'),
+  ].filter(Boolean);
+  return values.some((value) => namesMatch(value, wanted));
+}
+
+function findPort(root: ParentNode, wanted: string): Element | null {
+  for (const node of root.querySelectorAll('[data-port-name]')) {
+    if (portMatches(node, wanted)) return node;
+  }
+  return null;
+}
+
+function cablePath(points: { x: number; y: number }[]): string {
+  const rounded = points.map((point) => ({ x: Math.round(point.x), y: Math.round(point.y) }));
+  const first = rounded[0];
+  let path = `M ${first.x} ${first.y}`;
+  let current = first;
+  for (const point of rounded.slice(1)) {
+    if (point.x !== current.x) path += ` H ${point.x}`;
+    if (point.y !== current.y) path += ` V ${point.y}`;
+    current = point;
+  }
+  return path;
+}
+
+function outsideCable(port: DOMRect, chassis: DOMRect, remotePort: DOMRect | null, remoteBox: DOMRect, grey: DOMRect): string {
+  const x = port.left + port.width / 2;
+  const y = port.top + port.height / 2;
+  const hug = 2;
+  const above = y <= (chassis.top + chassis.bottom) / 2;
+  const laneY = above ? Math.max(grey.top + hug, chassis.top - hug) : Math.min(grey.bottom - hug, chassis.bottom + hug);
+  const endX = remotePort ? remotePort.left + remotePort.width / 2 : remoteBox.left + remoteBox.width / 2;
+  const rawEndY = remotePort ? remotePort.top + remotePort.height / 2 : remoteBox.top + remoteBox.height / 2;
+  const endY = Math.max(grey.top + hug, Math.min(grey.bottom - hug, rawEndY));
+  return cablePath([
+    { x, y },
+    { x, y: laneY },
+    { x: endX, y: laneY },
+    { x: endX, y: endY },
+  ]);
+}
+
+function UplinkCable({
+  localRef,
+  greyRef,
+  remote,
+  localPortName,
+  remotePortName,
+}: {
+  localRef: React.RefObject<HTMLDivElement | null>;
+  greyRef: React.RefObject<HTMLDivElement | null>;
+  remote: HTMLElement;
+  localPortName: string;
+  remotePortName: string;
+}) {
+  const [path, setPath] = useState('');
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const local = localRef.current;
+    const grey = greyRef.current;
+    if (!local || !grey || !remote) return;
+    const measure = () => {
+      const localPort = findPort(local, localPortName);
+      const remotePort = findPort(remote, remotePortName);
+      if (!localPort) {
+        setPath('');
+        return;
+      }
+      const localBox = local.getBoundingClientRect();
+      const metal = local.querySelector('[data-chassis]');
+      const remoteBox = remote.getBoundingClientRect();
+      setSize({ w: window.innerWidth, h: window.innerHeight });
+      setPath(outsideCable(localPort.getBoundingClientRect(), metal ? metal.getBoundingClientRect() : localBox, remotePort ? remotePort.getBoundingClientRect() : null, remoteBox, grey.getBoundingClientRect()));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(local);
+    observer.observe(grey);
+    observer.observe(remote);
+    document.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [localRef, greyRef, remote, localPortName, remotePortName]);
+  if (!path || size.w <= 0 || typeof document === 'undefined') return null;
+  return createPortal(
+    <svg width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} style={{ position: 'fixed', left: 0, top: 0, zIndex: 80, pointerEvents: 'none' }} aria-hidden="true">
+      <path d={path} fill="none" stroke="#1e293b" strokeWidth={7} strokeLinejoin="miter" strokeLinecap="butt" />
+      <path d={path} fill="none" stroke="#3b82f6" strokeWidth={3} strokeLinejoin="miter" strokeLinecap="butt" />
+    </svg>,
+    document.body,
+  );
+}
+
+function RelationFaceplate({ link, label, plateRef, className }: { link: DeviceParentLink; label: 'Parent' | 'Child'; plateRef: (el: HTMLDivElement | null) => void; className: string }) {
+  const face = link.faceplate ?? null;
+  return (
+    <Link
+      href={devicePath(link.id, link.formFactor || 'generic')}
+      aria-label={`Open ${label.toLowerCase()} ${link.hostname}`}
+      style={{ containerType: 'inline-size' }}
+      className={`relative flex flex-col items-center gap-1 self-center rounded-lg border border-border bg-card p-1.5 shadow-card transition-colors hover:border-primary ${className}`}
+    >
+      <div ref={plateRef} data-relation-id={link.id} className="relative w-full overflow-hidden rounded-md bg-background p-1">
+        <span className="pointer-events-none absolute left-1/2 top-0.5 z-10 -translate-x-1/2 text-[9px] font-bold uppercase leading-none tracking-wide text-foreground">{label}</span>
+        <div className="pointer-events-none">
+          {face ? <Faceplate device={face} compact /> : <div className="h-12" />}
+        </div>
+      </div>
+      <span className="max-w-full truncate font-mono-data text-[clamp(0.5rem,16cqw,0.75rem)] font-medium text-foreground" title={link.hostname}>{link.hostname}</span>
+    </Link>
+  );
+}
+
+function ParentBlock({ device }: { device: DeviceDetailData }) {
+  if (!device.unparented && !device.parentDown && !device.wlc) return null;
+  return (
+    <div className="mt-2 max-w-sm space-y-1.5 text-sm">
+      {device.parentDown ? (
+        <p role="status" className="font-medium text-destructive">Unreachable due to parent</p>
+      ) : null}
+      {device.unparented ? (
+        <p className="text-amber-800">No path to a subnet root. This device has no parent.</p>
+      ) : null}
+      {device.wlc ? (
+        <p>Joined WLC <span className="font-mono-data">{device.wlc}</span></p>
+      ) : null}
+    </div>
+  );
 }
 
 function Meta({ label, value, mono, link, shade }: { label: string; value: string; mono?: boolean; link?: string; shade?: string }) {
