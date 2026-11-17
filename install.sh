@@ -3,6 +3,7 @@
 # InsightEngine installer. NON-INTERACTIVE: it asks NO questions.
 #
 #   ./install.sh [--public-host HOST] [--alt-ports | --default-ports] [--no-start]
+#   ./install.sh --dry-run [--public-host HOST] [--no-start]
 #   ./install.sh --upgrade-env [--no-start] [--dry-run]
 #   ./install.sh --fix-perms     only (re)apply owner/mode on ./secrets
 #   ./install.sh --help
@@ -40,7 +41,12 @@
 # 8086). Any other port, including PORT_HTTPS=57400, is left. PORT_TELEGRAF is
 # removed when it is present and is not added. Telegraf /metrics is not a host
 # port. --dry-run with --upgrade-env prints the plan and writes nothing. A
-# partial or corrupt .env is refused.
+# partial or corrupt .env is refused. --dry-run without --upgrade-env prints
+# the first-install plan (detected PUBLIC_HOST and the secret names that would
+# be generated) and writes nothing. It does not print secret values. The only
+# password an operator is expected to change afterwards is the admin password
+# chosen on /setup/. Device SNMP credentials stay the placeholders in .env
+# until that operator sets them; install.sh does not invent a community.
 #
 # WHICH CLIENT this server is for, and NEW INSTALL vs MOVE FROM THE OLD STACK, are NOT
 # asked here: open the first-run page  https://<PUBLIC_HOST>[:PORT_HTTPS]/setup/
@@ -546,7 +552,36 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ "$DRY_RUN" = 1 ] && [ "$UPGRADE_ENV" != 1 ]; then
-  die "--dry-run is only valid with --upgrade-env"
+  for t in openssl awk sed tr cut mktemp; do command -v "$t" >/dev/null || die "$t is required"; done
+  if [ -e .env ]; then
+    say "dry-run: .env already exists; a first install would refuse to overwrite it"
+    say "dry-run: re-run with --upgrade-env --dry-run to preview a backfill"
+    exit 0
+  fi
+  if [ -z "$PUBLIC_HOST" ]; then
+    PUBLIC_HOST="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+    [ -n "$PUBLIC_HOST" ] || PUBLIC_HOST="$(hostname -f 2>/dev/null || hostname 2>/dev/null || true)"
+    [ -n "$PUBLIC_HOST" ] || die "could not detect this host's address - pass --public-host"
+    say "PUBLIC_HOST not given; would use detected value '$PUBLIC_HOST'"
+  else
+    say "would set PUBLIC_HOST from the flag"
+  fi
+  printf '%s' "$PUBLIC_HOST" | grep -Eq '^[A-Za-z0-9.:-]+$' || die "host must contain only letters, digits, dots, colons or dashes"
+  say "would copy .env.example to .env (mode 600) and set INSTALL_DIR to $ROOT"
+  say "would set CLIENT_NAME and CLIENT_SLUG to unconfigured until /setup/"
+  say "would generate these secrets and not print them:"
+  say "  NETBOX_SUPERUSER_API_KEY NETBOX_SUPERUSER_API_TOKEN NETBOX_SUPERUSER_PASSWORD"
+  say "  NETBOX_DB_PASSWORD NETBOX_REDIS_PASSWORD NETBOX_REDIS_CACHE_PASSWORD"
+  say "  NETBOX_SECRET_KEY NETBOX_API_TOKEN_PEPPER_1"
+  say "  GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY ADMIN_BASIC_PASSWORD ADMIN_BASIC_HASH"
+  say "  AP_ENCRYPTION_KEY AP_JWT_SECRET AP_POSTGRES_PASSWORD AP_REDIS_PASSWORD"
+  say "  NETDISCO_DB_PASSWORD IE_DB_PASSWORD IE_CONFIG_DB_PASSWORD"
+  say "would write secrets/prometheus/netbox.token secrets/oxidized/netbox.token secrets/cust-exporter/netbox.token"
+  say "would write secrets/setup/token and empty oxidized, trap, and telegraf credential files"
+  say "would create certs/ca.key certs/ca.crt certs/server.key certs/server.crt when certs/ca.crt is missing"
+  say "SNMP_V2_COMMUNITY and SNMP_V3_* stay the placeholders from .env.example; install.sh does not invent a community"
+  say "dry-run: nothing was written"
+  exit 0
 fi
 case "$PORTS" in auto|alt|default) ;; *) die "INSTALL_PORTS must be auto, alt or default" ;; esac
 

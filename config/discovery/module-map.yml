@@ -41,6 +41,7 @@ by_role:
   core-switch:
     modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
     auth: ntt_snmpv3_auth
+  # NetBox role slug on the 3560 is plural. Same CPU, memory and environment polls.
   core-switches:
     modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
     auth: ntt_snmpv3_auth

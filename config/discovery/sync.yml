@@ -21,7 +21,9 @@ default_site_slug: discovered
 default_role_slug: access-switch
 # DNS suffixes removed from Netdisco and CDP/LLDP names before they are shown
 # or written to NetBox. Leading dots are optional. HOSTNAME_STRIP_SUFFIXES in
-# the environment overrides this list.
+# the environment overrides this list. Example: ['.pnp.co.za']
+# A new server should set that variable and leave this list empty. The entries
+# below are one network's fallback, used only when the variable is empty.
 hostname_strip_suffixes:
   - .pnp.co.za
   - .verginactive.co.za
