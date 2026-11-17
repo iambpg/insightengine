@@ -11,7 +11,7 @@ Four checks sit next to device health. None of them push configuration onto a ro
 
 The UI page is **Service Experience**. Empty groups say **not configured**. Grafana dashboard **Service Experience** is provisioned from `config/grafana/provisioning/dashboards/json/service-experience.json`. Alerts and recording rules are `config/prometheus/experience-rules.yml`.
 
-9800 client detail from MDT is stored per client by default. `IE_WLC_STORE_CLIENTS=0` drops those series and keeps the per-AP/per-radio rollup. SNMP never walks a client list. The full path, OID and cardinality table is `docs/wlc-9800-full.md`.
+9800 client detail from MDT is stored per client on `telegraf-wlc-clients` (dial-out port 57502). `IE_WLC_STORE_CLIENTS=0` drops those series and keeps the per-AP/per-radio rollup. AP and radio series stay on `telegraf-wlc`. SNMP never walks a client list. The full path, OID and cardinality table is `docs/wlc-9800-full.md`.
 
 ## NetBox fields
 
@@ -34,9 +34,9 @@ A site with no `vbs_server_ip` is not pinged and its routers show **not configur
 
 A Catalyst 9800 is not polled by SNMP. Per-client RSSI/SNR, per-radio noise and chassis health come from MDT. `render_wlc.py` emits no `inputs.snmp` for a 9800. AireOS stays on its SNMP tables.
 
-`telegraf-wlc` listens for gRPC dial-out on port **57500** (`inputs.cisco_telemetry_mdt`, `service_address = ":${IE_MDT_PORT}"`). `IE_MDT_PORT` and `PORT_MDT` default to 57500 and can be changed together. Set `IE_MDT_RECEIVER` to an address the controller can route to. The generated line is `receiver ip address <server> 57500`.
+`telegraf-wlc` listens for gRPC dial-out on port **57500** (`inputs.cisco_telemetry_mdt`, `service_address = ":${IE_MDT_PORT}"`). `telegraf-wlc-clients` listens on **57502**. `IE_MDT_PORT` and `PORT_MDT` default to 57500. `IE_MDT_CLIENTS_PORT` and `PORT_MDT_CLIENTS` default to 57502. Set `IE_MDT_RECEIVER` to an address the controller can route to. AP subscriptions use `receiver ip address <server> 57500`. Client-oper uses port 57502.
 
-Open **TCP 57500** on the collector for that dial-out. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. **57500** is the only Telegraf host port. Telegraf's Prometheus `/metrics` output is not published (it used to be host 57500, then 57501). Prometheus scrapes `telegraf-host:9273` and `telegraf-wlc:9273` on the docker network. gNMI dial-in does not use 57500: Telegraf dials the controller on port 9339.
+Open **TCP 57500** on the collector for AP, radio, controller and cEdge dial-out, and **TCP 57502** (`PORT_MDT_CLIENTS`) for client-oper. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. Telegraf's Prometheus `/metrics` output is not published (it used to be host 57500, then 57501). Prometheus scrapes `telegraf-host:9273`, `telegraf-wlc:9273` and `telegraf-wlc-clients:9273` on the docker network. gNMI dial-in does not use these ports: Telegraf dials the controller on port 9339. The generated client-oper lines use `receiver ip address <server> 57502`.
 
 On the device page, **Controller config** copies the IOS-XE or AireOS CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you. The subscription list, including intervals, is `docs/wlc-9800-full.md`.
 
@@ -44,7 +44,7 @@ The paths below are the original client, RRM and AP set. Inventory is 600s, radi
 
 | Path | Policy | What it is |
 |---|---|---|
-| `/wireless-client-oper:client-oper-data/traffic-stats` | 60s | RSSI, SNR, rates, retries, bytes. Stored per client unless `IE_WLC_STORE_CLIENTS=0` |
+| `/wireless-client-oper:client-oper-data/traffic-stats` | 60s | RSSI, SNR, rates, retries, bytes. Stored per client on `telegraf-wlc-clients` unless `IE_WLC_STORE_CLIENTS=0` |
 | `/wireless-client-oper:client-oper-data/common-oper-data` | 60s | AP name and radio slot, joined to the client row |
 | `/wireless-rrm-oper:rrm-oper-data/rrm-measurement` | 120s | channel utilization (`cca-util-percentage`), noise, interference |
 | `/wireless-access-point-oper:access-point-oper-data/capwap-data` | 600s | AP name, model, serial, IP, location, IOS, mode, tags |

@@ -7,7 +7,12 @@ set -eu
 umask 077
 # Go's default GC target sits above a 2g cgroup and the OOM killer wins.
 # 85% of IE_TELEGRAF_WLC_MEM leaves headroom for the scrape and the stacks.
-mem_limit="${IE_TELEGRAF_WLC_MEM:-6g}"
+role="${IE_WLC_ROLE:-ap}"
+if [ "$role" = "clients" ]; then
+  mem_limit="${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}"
+else
+  mem_limit="${IE_TELEGRAF_WLC_MEM:-6g}"
+fi
 if [ -z "${GOMEMLIMIT:-}" ]; then
   gomem="$(python3 -c '
 import sys
@@ -41,9 +46,12 @@ fi
 # catalog.py is copied next to render_wlc.py and is also on the /etc/telegraf
 # checkout mount (compose and upgrade.sh).
 export PYTHONPATH="/usr/local/bin:/etc/telegraf${PYTHONPATH:+:$PYTHONPATH}"
-# Dial-out port. 57500 is where Telegraf is reached. 57400 is UI HTTPS.
+# Dial-out port. 57500 is where telegraf-wlc is reached. 57400 is UI HTTPS.
+# Client subscriptions use 57502 on telegraf-wlc-clients.
 IE_MDT_PORT="${IE_MDT_PORT:-57500}"
 export IE_MDT_PORT
+IE_MDT_CLIENTS_PORT="${IE_MDT_CLIENTS_PORT:-57502}"
+export IE_MDT_CLIENTS_PORT
 out=/tmp/wlc-generated.conf
 refresh="${IE_WLC_REFRESH_SECONDS:-300}"
 case "$refresh" in
@@ -91,9 +99,16 @@ if [ -z "$enable" ]; then
     enable=0
   fi
 fi
-set -- --config /etc/telegraf/telegraf.conf
-if [ "$transport" != "gnmi" ] && [ "$enable" != "0" ]; then
-  set -- "$@" --config /etc/telegraf/mdt.conf
+if [ "$role" = "clients" ]; then
+  set -- --config /etc/telegraf/telegraf-clients.conf
+  if [ "$transport" != "gnmi" ] && [ "$enable" != "0" ]; then
+    set -- "$@" --config /etc/telegraf/mdt-clients.conf
+  fi
+else
+  set -- --config /etc/telegraf/telegraf.conf
+  if [ "$transport" != "gnmi" ] && [ "$enable" != "0" ]; then
+    set -- "$@" --config /etc/telegraf/mdt.conf
+  fi
 fi
 telegraf "$@" --non-strict-env-handling &
 main_pid=$!

@@ -1,9 +1,12 @@
 # Wireless normalizer.
-# 9800 client detail (RSSI, SNR, rates, retries, bytes, SSID, band, protocol,
-# VLAN, AP, mobility) is stored per client unless the input tag store_clients
-# is "0" (IE_WLC_STORE_CLIENTS=0). Rollups per AP/radio and per SSID are
-# always exported. AireOS SNMP does not include a client list; those inputs
-# are counts, inventory, radios and neighbours.
+# Per-client series are emitted only when the input tag wlc_role is missing
+# or "clients" (telegraf-wlc-clients). telegraf-wlc sets wlc_role=ap and drops
+# the client subscriptions so a client flood cannot fill its registry.
+# Every numeric client leaf is kept. Labels on ie_wlc_client are only wlc,
+# ap, ssid, band and the client MAC. Protocol, VLAN, mobility and free text
+# are not labels. store_clients=0 (IE_WLC_STORE_CLIENTS=0) still drops the
+# per-client series and keeps the per-AP/per-radio rollup.
+# AireOS SNMP does not include a client list.
 #
 # `state` is the one global Telegraf lets the script mutate.
 
@@ -48,17 +51,28 @@ ALIAS_OF = {
 }
 
 
+def _clients_here(metric):
+    # Unset keeps the unit tests on one process. The AP collector sets ap
+    # and must not keep client series.
+    if "wlc_role" not in metric.tags:
+        return True
+    return metric.tags["wlc_role"] == "clients"
+
+
 def apply(metric):
-    # One pass decides which history-list index is newest. Lookups and
-    # passthrough both skip the older copies.
-    state["history_keep"] = history_keep(metric)
     name = metric.name
     path = ""
     if "path" in metric.tags:
         path = metric.tags["path"]
     blob = (name + " " + path).lower()
     if "wireless-client-oper" in blob or name in CLIENT_NAMES or "traffic-stats" in blob or "common-oper-data" in blob or "dot11-oper-data" in blob:
+        if not _clients_here(metric):
+            return None
+        state["history_keep"] = history_keep(metric)
         return client_metric(metric, blob)
+    # One pass decides which history-list index is newest. Lookups and
+    # passthrough both skip the older copies.
+    state["history_keep"] = history_keep(metric)
     if "cdp-cache" in blob or "lldp-neigh" in blob or name in ("ie_wlc_cdp_mdt", "ie_wlc_lldp_mdt", "ie_wlc_cdp"):
         return neighbor_metric(metric)
     if name in RADIO_NAMES or "rrm-oper" in blob or "radio-oper" in blob or "ssid-counter" in blob or "ethernet-if" in blob or "capwap-pkts" in blob:
@@ -153,7 +167,7 @@ def client_metric(metric, blob):
     ap = tag_or_field(metric, ("ap_name", "ap-name"))
     radio = tag_or_field(metric, ("ms_ap_slot_id", "radio_slot_id", "radio", "slot_id", "ms-ap-slot-id", "radio-slot-id"))
     ssid = tag_or_field(metric, ("vap_ssid", "vap-ssid", "ssid", "wlan_profile", "wlan-profile"))
-    band = tag_or_field(metric, ("radio_type", "radio-type", "ms_radio_type", "ms-radio-type", "current_active_band", "radio_band", "radio-band"))
+    band = tag_or_field(metric, ("radio_type", "radio-type", "ms_radio_type", "ms-radio-type", "current_active_band", "radio_band", "radio-band", "band"))
     protocol = tag_or_field(metric, ("ewlc_ms_phy_type", "ewlc-ms-phy-type", "protocol"))
     vlan = tag_or_field(metric, ("res_vlan_id", "res-vlan-id", "res_vlan_name", "res-vlan-name", "vlan"))
     mobility = tag_or_field(metric, ("mm_client_role", "mm-client-role", "mobility_state", "mobility-state"))
@@ -260,38 +274,7 @@ def client_metric(metric, blob):
         ss.time = now
         out.append(ss)
     if store_clients(metric) and mac and not detail_only:
-        raw = Metric("ie_wlc_client")
-        copy_place(metric, raw)
-        raw.tags["ap"] = str(ap)
-        raw.tags["radio"] = str(radio)
-        raw.tags["client"] = str(mac)
-        if ssid:
-            raw.tags["ssid"] = str(ssid)
-        if band:
-            raw.tags["band"] = str(band)
-        if protocol:
-            raw.tags["protocol"] = str(protocol)
-        if vlan != None and str(vlan) != "":
-            raw.tags["vlan"] = str(vlan)
-        if mobility:
-            raw.tags["mobility"] = str(mobility)
-        if rssi != None:
-            raw.fields["rssi"] = rssi
-        if snr != None:
-            raw.fields["snr"] = snr
-        if bytes_rx != None:
-            raw.fields["bytes_rx"] = bytes_rx
-        if bytes_tx != None:
-            raw.fields["bytes_tx"] = bytes_tx
-        if tx_retries != None:
-            raw.fields["tx_retries"] = tx_retries
-        if rts_retries != None:
-            raw.fields["rts_retries"] = rts_retries
-        if current_rate != None:
-            raw.fields["current_rate"] = current_rate
-        raw.time = now
-        finish(metric, raw)
-        out.append(raw)
+        out.append(emit_client(metric, ap, radio, mac, ssid, band, protocol, vlan, mobility, rssi, snr, bytes_rx, bytes_tx, tx_retries, rts_retries, current_rate, now))
     if len(out) == 1:
         return out[0]
     return out
@@ -305,7 +288,7 @@ def radio_metric(metric, blob):
     if not radio:
         radio = "0"
     ssid = tag_or_field(metric, ("vap_ssid", "vap-ssid", "ssid"))
-    band = tag_or_field(metric, ("radio_band", "radio-band", "radio_type", "radio-type", "current_active_band"))
+    band = tag_or_field(metric, ("radio_band", "radio-band", "radio_type", "radio-type", "current_active_band", "band"))
     if ssid:
         out = Metric("ie_wlc_ssid")
         copy_place(metric, out)
@@ -1199,6 +1182,26 @@ def has_field(fields):
     return False
 
 
+def attach_numbers(metric, out):
+    for key in metric.fields:
+        if not _history_kept(key):
+            continue
+        leaf = field_name(key)
+        if leaf == "":
+            continue
+        target = leaf
+        if leaf in ALIAS_OF:
+            target = ALIAS_OF[leaf]
+        if target in out.fields or leaf in out.fields:
+            continue
+        value = metric.fields[key]
+        kind = type(value)
+        if kind == "int" or kind == "float":
+            out.fields[leaf] = value
+        elif kind == "bool":
+            out.fields[leaf] = 1 if value else 0
+
+
 def finish(metric, out):
     attach_channel_noise(metric, out)
     attach_extra(metric, out)
@@ -1208,22 +1211,27 @@ def finish(metric, out):
     return out
 
 
+def finish_client(metric, out):
+    # Numbers only. A string leaf (username, VLAN name, timestamp) is not a label.
+    attach_numbers(metric, out)
+    if not has_field(out.fields):
+        out.fields["present"] = 1
+    out.time = metric.time
+    return out
+
+
 def emit_client(metric, ap, radio, mac, ssid, band, protocol, vlan, mobility, rssi, snr, bytes_rx, bytes_tx, tx_retries, rts_retries, current_rate, now):
+    # radio, protocol, vlan and mobility stay off the series. They change as
+    # a client roams and each value would be a new series until expiration.
     raw = Metric("ie_wlc_client")
-    copy_place(metric, raw)
+    if "wlc" in metric.tags and metric.tags["wlc"] != "":
+        raw.tags["wlc"] = str(metric.tags["wlc"])
     raw.tags["ap"] = str(ap)
-    raw.tags["radio"] = str(radio)
     raw.tags["client"] = str(mac)
     if ssid:
         raw.tags["ssid"] = str(ssid)
     if band:
         raw.tags["band"] = str(band)
-    if protocol:
-        raw.tags["protocol"] = str(protocol)
-    if vlan != None and str(vlan) != "":
-        raw.tags["vlan"] = str(vlan)
-    if mobility:
-        raw.tags["mobility"] = str(mobility)
     if rssi != None:
         raw.fields["rssi"] = rssi
     if snr != None:
@@ -1239,7 +1247,7 @@ def emit_client(metric, ap, radio, mac, ssid, band, protocol, vlan, mobility, rs
     if current_rate != None:
         raw.fields["current_rate"] = current_rate
     raw.time = now
-    return finish(metric, raw)
+    return finish_client(metric, raw)
 
 
 def _mac_text(value):

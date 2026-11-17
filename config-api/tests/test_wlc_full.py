@@ -37,13 +37,23 @@ def _render():
 
 def test_mdt_paths_match_the_listener_and_the_doc():
     catalog = _catalog()
-    conf = (ROOT / "config" / "telegraf" / "wlc" / "mdt.conf").read_text()
+    conf = "\n".join(
+        (ROOT / "config" / "telegraf" / "wlc" / name).read_text()
+        for name in ("mdt.conf", "mdt-clients.conf")
+    )
+    ap_conf = (ROOT / "config" / "telegraf" / "wlc" / "mdt.conf").read_text()
+    client_conf = (ROOT / "config" / "telegraf" / "wlc" / "mdt-clients.conf").read_text()
     doc = (ROOT / "docs" / "wlc-9800-full.md").read_text()
     aliases = catalog.mdt_aliases()
     assert len(aliases) == len({key for key, _path in aliases})
-    for _alias, path in aliases:
+    for alias, path in aliases:
         assert '"' + path + '"' in conf
         assert path.split(":", 1)[1] in doc or path in doc
+        if "client-oper-data" in path:
+            assert '"' + path + '"' in client_conf
+            assert '"' + path + '"' not in ap_conf
+        else:
+            assert '"' + path + '"' in ap_conf
     for _offset, xpath, _alias, _policy, _seconds, _shows in catalog.MDT_SUBS:
         assert xpath in doc
     assert "bsnMobileStation" in doc
@@ -94,6 +104,10 @@ def test_9800_paste_has_every_subscription_and_no_secret():
         if any(path in block for path in ("capwap-data", "radio-oper-data", "ap-join-stats")):
             assert "update-policy on-change" not in block
             assert "update-policy periodic" in block
+        if "client-oper-data" in block:
+            assert "receiver ip address 10.1.1.50 57502 protocol grpc-tcp" in block
+        elif "filter xpath" in block:
+            assert "receiver ip address 10.1.1.50 57500 protocol grpc-tcp" in block
     vrf = telemetry_config(
         {"name": "wlc-9800", "ip": "10.9.0.8", "role": "wireless-controller", "platform": "ios-xe", "mgmt_vrf": "Mgmt-intf"},
         receiver="10.1.1.50",

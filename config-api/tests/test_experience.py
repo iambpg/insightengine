@@ -90,8 +90,12 @@ def test_gnmi_dial_in_is_rendered_for_a_9800_only_when_asked():
     }
     text = _render().render([_target("ios-xe", "wlc-9800")], env)
     assert "[[inputs.gnmi]]" in text
-    assert "traffic-stats" in text
+    assert "capwap-data" in text
+    assert "traffic-stats" not in text
     assert "[[inputs.snmp]]" not in text
+    clients = _render().render([_target("ios-xe", "wlc-9800")], env | {"IE_WLC_ROLE": "clients"})
+    assert "traffic-stats" in clients
+    assert "capwap-data" not in clients
     assert "gnmi-secret" in text
     aire = _render().render([_target("aireos")], env | {"SNMP_V2_COMMUNITY": "public"})
     assert "[[inputs.gnmi]]" not in aire
@@ -113,6 +117,7 @@ def test_telemetry_cli_for_9800_is_paste_only():
     assert "update-policy periodic 6000" in body["config"]
     assert "10.1.1.50" in body["config"]
     assert "receiver ip address 10.1.1.50 57500 protocol grpc-tcp" in body["config"]
+    assert "receiver ip address 10.1.1.50 57502 protocol grpc-tcp" in body["config"]
     assert "57000" not in body["config"]
 
 

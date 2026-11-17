@@ -11,10 +11,10 @@ SNMP never walks a per-client table. bsnMobileStationTable and
 bsnMobileStationStatsTable are not rendered. Client RSSI, SNR, rates,
 retries, bytes, VLAN and mobility come from 9800 MDT only.
 
-Per-client Prometheus series are stored by default. IE_WLC_STORE_CLIENTS=0
-drops those series in Telegraf and keeps the per-AP / per-radio / per-SSID
-rollups. The controller still pushes the client subscriptions until those
-blocks are removed from the paste config.
+Per-client Prometheus series are stored by default on telegraf-wlc-clients.
+IE_WLC_STORE_CLIENTS=0 drops those series and keeps the per-AP / per-radio
+rollup. Client subscriptions dial a second receiver port so the AP collector
+does not parse them.
 """
 
 from __future__ import annotations
@@ -386,7 +386,11 @@ def estimate_series(aps: int = 5000, radios_per_ap: int = 2, ssids_per_radio: in
     }
 
 
-def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str, vrf: str = "") -> str:
+def is_client_subscription(xpath: str) -> bool:
+    return "client-oper-data" in (xpath or "")
+
+
+def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str, vrf: str = "", clients_port: int = 57502) -> str:
     base = wlc_subscription_base(name)
     user = username or "<SNMP_V3_USERNAME>"
     lines = [
@@ -396,7 +400,9 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
         "! wireless-site-oper and wireless-ha-oper are not in that tree.",
         "! Site, policy and RF tags are inside capwap-data. SSO is Cisco-IOS-XE-ha-oper.",
         "! wireless-wlan-cfg is not subscribed (key-management leaves). SSID names are wlan-global-oper.",
-        "! Per-client series are stored unless IE_WLC_STORE_CLIENTS=0 on telegraf-wlc.",
+        "! client-oper subscriptions use receiver port %d (telegraf-wlc-clients)." % clients_port,
+        "! Every other subscription uses port %d (telegraf-wlc)." % port,
+        "! Per-client series are stored unless IE_WLC_STORE_CLIENTS=0.",
         "! That switch does not stop the dial-out. Delete the client-oper blocks to stop the bandwidth.",
         "! SNMP below is names and placeholders. Secrets are not in this text.",
         "! source-vrf %s" % (vrf if vrf else "is omitted. The management address is in the global table."),
@@ -424,10 +430,11 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
         ]
         if vrf:
             block.append(" source-vrf %s" % vrf)
+        dest = clients_port if is_client_subscription(xpath) else port
         block.extend([
             " stream yang-push",
             " update-policy %s" % subscription_policy(policy, seconds),
-            " receiver ip address %s %d protocol grpc-tcp" % (receiver, port),
+            " receiver ip address %s %d protocol grpc-tcp" % (receiver, dest),
         ])
         lines.extend(block)
         lines.append("!")

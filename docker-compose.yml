@@ -941,6 +941,53 @@ services:
         limits: {memory: "${IE_TELEGRAF_WLC_MEM:-6g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
         reservations: {memory: 256m}
 
+  # Per-client MDT. Its own cgroup and Prometheus job so a client flood cannot
+  # stop the AP, radio and controller scrape on telegraf-wlc.
+  telegraf-wlc-clients:
+    build:
+      context: ./config/telegraf/wlc
+      dockerfile: Dockerfile
+    image: insightengine/telegraf-wlc:1.38.3
+    container_name: telegraf-wlc-clients-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    user: "0:0"
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      IE_WLC_ROLE: clients
+      IE_WLC_STORE_CLIENTS: ${IE_WLC_STORE_CLIENTS:-1}
+      IE_WLC_MDT: ${IE_WLC_MDT:-}
+      IE_WLC_MDT_TRANSPORT: ${IE_WLC_MDT_TRANSPORT:-grpc}
+      IE_WLC_SHARD_COUNT: ${IE_WLC_SHARD_COUNT:-1}
+      IE_WLC_SHARD_INDEX: ${IE_WLC_SHARD_INDEX:-0}
+      IE_GNMI_USER: ${IE_GNMI_USER:-}
+      IE_GNMI_PASSWORD: ${IE_GNMI_PASSWORD:-}
+      IE_MDT_CLIENTS_PORT: ${IE_MDT_CLIENTS_PORT:-57502}
+      IE_NETBOX_SD_URL: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
+      IE_NETBOX_CA: /etc/ie-certs/ca.crt
+      IE_TELEGRAF_WLC_CLIENTS_MEM: ${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}
+      PYTHONPATH: /usr/local/bin:/etc/telegraf
+    ports:
+      - "${HOST_BIND:-0.0.0.0}:${PORT_MDT_CLIENTS:-57502}:${IE_MDT_CLIENTS_PORT:-57502}"
+    volumes:
+      - ./config/telegraf/wlc:/etc/telegraf:ro
+      - ./config/telegraf/wlc/catalog.py:/usr/local/bin/catalog.py:ro
+      - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
+    secrets:
+      - source: netbox_token_prometheus
+        target: netbox_token
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9273/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits: {memory: "${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
+        reservations: {memory: 256m}
+
   telegraf-host:
     image: ${TELEGRAF_IMAGE}
     container_name: telegraf-host-${CLIENT_SLUG}
