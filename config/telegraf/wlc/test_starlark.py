@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 import urllib.request
 from pathlib import Path
@@ -129,7 +130,17 @@ class CatalogPackagingTests(unittest.TestCase):
         self.assertIn("IE_WLC_ROLE: clients", clients)
         self.assertIn("IE_TELEGRAF_WLC_CLIENTS_MEM: ${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}", clients)
         self.assertIn('memory: "${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}"', clients)
-        self.assertIn("${PORT_MDT_CLIENTS:-57502}:${IE_MDT_CLIENTS_PORT:-57502}", clients)
+        self.assertNotIn("PORT_MDT_CLIENTS", clients)
+        self.assertNotIn("ports:", clients)
+        wlc_conf = (WLC / "telegraf.conf").read_text(encoding="utf-8")
+        self.assertIn("client_forward.star", wlc_conf)
+        self.assertIn("http://${IE_WLC_CLIENTS_FORWARD:-telegraf-wlc-clients:9276}/telegraf", wlc_conf)
+        self.assertIn("[[outputs.http]]", wlc_conf)
+        self.assertIn("metric_buffer_limit = 20000", wlc_conf)
+        self.assertIn('namedrop = [', wlc_conf)
+        clients_conf = (WLC / "telegraf-clients.conf").read_text(encoding="utf-8")
+        self.assertIn("[[inputs.http_listener_v2]]", clients_conf)
+        self.assertIn('service_address = "tcp://:9276"', clients_conf)
 
     def test_entrypoint_puts_both_directories_on_pythonpath(self) -> None:
         text = (WLC / "entrypoint.sh").read_text(encoding="utf-8")
@@ -138,7 +149,7 @@ class CatalogPackagingTests(unittest.TestCase):
         self.assertIn("IE_WLC_REFRESH_SECONDS:-300", text)
         self.assertIn("IE_TELEGRAF_WLC_MEM:-6g", text)
         self.assertIn("IE_TELEGRAF_WLC_CLIENTS_MEM:-4g", text)
-        self.assertIn("mdt-clients.conf", text)
+        self.assertNotIn("mdt-clients.conf", text)
         self.assertIn("GOMEMLIMIT", text)
         self.assertIn("reloaded WLC poller", text)
         self.assertNotIn("--watch-config", text)
@@ -473,6 +484,135 @@ class StarlarkDialectTests(unittest.TestCase):
                 if part.startswith(marker):
                     seen.add(part)
         self.assertEqual(len(seen), 128, sorted(seen)[:5])
+
+    def test_client_rows_are_forwarded_before_normalize(self) -> None:
+        sample = "\n".join([
+            'ie_wlc_client_raw,wlc=lab,ap_name=AP-9,ms_mac_address=aabbccddeef9,store_clients=1,ssid=corp,band=5,wlc_role=ap most_recent_rssi=-60i,username="alice from floor 2"',
+            'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",wtp_mac="00:11:22:33:44:55",ap_state/ap_operation_state="ewlc-ap-state-registered"',
+            "",
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "sample.influx").write_text(sample, encoding="utf-8")
+            emit = root / "emit.sh"
+            emit.write_text("#!/bin/sh\ncat %s\n" % (root / "sample.influx"), encoding="utf-8")
+            emit.chmod(0o755)
+            (root / "clients.conf").write_text(
+                "\n".join([
+                    "[agent]",
+                    '  interval = "1s"',
+                    "  round_interval = false",
+                    "  omit_hostname = true",
+                    "  quiet = true",
+                    "  metric_buffer_limit = 1000",
+                    "[[outputs.prometheus_client]]",
+                    '  listen = "127.0.0.1:19374"',
+                    "  metric_version = 2",
+                    '  expiration_interval = "300s"',
+                    "  string_as_label = true",
+                    "[[inputs.http_listener_v2]]",
+                    '  service_address = "tcp://127.0.0.1:19376"',
+                    '  paths = ["/telegraf"]',
+                    '  data_format = "influx"',
+                    "  [inputs.http_listener_v2.tags]",
+                    '    wlc_role = "clients"',
+                    "[[processors.starlark]]",
+                    '  script = "%s"' % (WLC / "normalize.star"),
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+            (root / "wlc.conf").write_text(
+                "\n".join([
+                    "[agent]",
+                    '  interval = "1s"',
+                    "  round_interval = false",
+                    "  omit_hostname = true",
+                    "  quiet = true",
+                    "  metric_batch_size = 100",
+                    "  metric_buffer_limit = 1000",
+                    '  flush_interval = "1s"',
+                    "[[outputs.http]]",
+                    '  url = "http://127.0.0.1:19376/telegraf"',
+                    '  data_format = "influx"',
+                    '  method = "POST"',
+                    '  timeout = "5s"',
+                    "  metric_batch_size = 100",
+                    "  metric_buffer_limit = 50",
+                    '  namepass = ["ie_wlc_client_raw"]',
+                    "[[outputs.prometheus_client]]",
+                    '  listen = "127.0.0.1:19373"',
+                    "  metric_version = 2",
+                    '  expiration_interval = "1200s"',
+                    "  string_as_label = true",
+                    '  namedrop = ["ie_wlc_client_raw"]',
+                    "[[inputs.exec]]",
+                    '  commands = ["%s"]' % emit,
+                    '  data_format = "influx"',
+                    '  timeout = "10s"',
+                    '  interval = "1s"',
+                    "[[processors.starlark]]",
+                    '  namepass = ["ie_wlc_client_raw"]',
+                    '  script = "%s"' % (WLC / "client_forward.star"),
+                    "[[processors.starlark]]",
+                    '  namedrop = ["ie_wlc_client_raw"]',
+                    '  script = "%s"' % (WLC / "normalize.star"),
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+            env = dict(os.environ)
+            env["CLIENT_SLUG"] = "ci"
+            clients_err = open(root / "clients.err", "w", encoding="utf-8")
+            wlc_err = open(root / "wlc.err", "w", encoding="utf-8")
+            clients = subprocess.Popen(
+                [str(self.binary), "--config", str(root / "clients.conf"), "--non-strict-env-handling"],
+                stdout=subprocess.DEVNULL,
+                stderr=clients_err,
+                env=env,
+            )
+            wlc = None
+            try:
+                time.sleep(1)
+                wlc = subprocess.Popen(
+                    [str(self.binary), "--config", str(root / "wlc.conf"), "--non-strict-env-handling"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=wlc_err,
+                    env=env,
+                )
+                ap_body = ""
+                client_body = ""
+                deadline = time.time() + 25
+                while time.time() < deadline:
+                    try:
+                        ap_body = urllib.request.urlopen("http://127.0.0.1:19373/metrics", timeout=2).read().decode()
+                        client_body = urllib.request.urlopen("http://127.0.0.1:19374/metrics", timeout=2).read().decode()
+                    except Exception:
+                        time.sleep(0.5)
+                        continue
+                    if "ie_wlc_ap" in ap_body and "ie_wlc_client_rssi" in client_body:
+                        break
+                    time.sleep(0.5)
+            finally:
+                for proc in (wlc, clients):
+                    if proc is None:
+                        continue
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                clients_err.close()
+                wlc_err.close()
+                if "ie_wlc_ap" not in ap_body or "ie_wlc_client_rssi" not in client_body:
+                    sys.stderr.write((root / "wlc.err").read_text(encoding="utf-8")[-2000:])
+                    sys.stderr.write((root / "clients.err").read_text(encoding="utf-8")[-2000:])
+        self.assertIn("ie_wlc_ap", ap_body)
+        self.assertNotIn("aabbccddeef9", ap_body)
+        self.assertNotIn("ie_wlc_client_rssi", ap_body)
+        self.assertIn("ie_wlc_client_rssi", client_body)
+        self.assertIn("aabbccddeef9", client_body)
+        self.assertNotIn("alice from floor", client_body)
 
     def test_host_api_and_syslog_configs_parse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

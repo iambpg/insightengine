@@ -8,7 +8,7 @@ XPaths were checked against YangModels `vendor/cisco/xe/17151` (IOS-XE 17.15.1).
 
 SNMP does not walk individual clients. `bsnMobileStationTable` and `bsnMobileStationStatsTable` are not rendered. AireOS SNMP collects client **counts**: per radio (`bsnAPIfLoadNumOfClients`, `bsnApIfNoOfUsers`), per WLAN (`bsnDot11EssNumberOfMobileStations`), and the controller total (`bsnGlobalDot11SystemMobileStations`). A Catalyst 9800 is not polled by SNMP. Its client total is the MDT rollup `ie_wlc_client_radio_clients`.
 
-9800 MDT collects the client detail that exists in `Cisco-IOS-XE-wireless-client-oper`: AP, slot, SSID, band, protocol, VLAN, mobility role, RSSI, SNR, rates, retries and bytes. Those subscriptions dial `telegraf-wlc-clients` (host port `PORT_MDT_CLIENTS`, default 57502). AP, radio and controller subscriptions stay on `telegraf-wlc` (port 57500), so a client flood cannot fill that process or stop its `/metrics` scrape.
+9800 MDT collects the client detail that exists in `Cisco-IOS-XE-wireless-client-oper`: AP, slot, SSID, band, protocol, VLAN, mobility role, RSSI, SNR, rates, retries and bytes. Every subscription, including client-oper, dials `telegraf-wlc` on the one host port **57500**. The site firewall does not allow a second dial-out port. `telegraf-wlc` retags `common-oper-data`, `dot11-oper-data`, `traffic-stats`, `mobility-oper-data` and `policy-data` and POSTs them to `http://telegraf-wlc-clients:9276/telegraf` on the docker network, before `normalize.star`. That forward buffer is 20000 metrics, enough for one client-oper update of about 9000 rows plus the next. If the clients process is down or falls behind that cap, further client rows are dropped and AP metrics stay in `telegraf-wlc`. A refused connection does not stop the AP collector. The clients process runs `normalize.star` and is the only place per-client series are stored.
 
 Every numeric client leaf is stored, one series per field per client. Labels on `ie_wlc_client` are only `wlc`, `ap`, `ssid`, `band` and the client MAC. Protocol, VLAN, mobility, radio slot and free text are not labels, so a roam does not mint a new series. The client collector expires a series after 300s. Set `IE_WLC_STORE_CLIENTS=0` to drop the per-client series and keep the per-AP/per-radio rollup (`ie_wlc_client_radio_*`). The rollup is produced in `telegraf-wlc-clients`. Alerts (`WifiRssiLow`, `WifiSnrLow`) read it from that Prometheus job. The controller still pushes client-oper until those blocks are removed from the paste config.
 
@@ -44,17 +44,17 @@ On a 5,000-AP controller that is 1,125,000 extra per-client series, plus 340,000
 
 ## Client collector memory
 
-A replay of 9,000 clients (the size that pushed the combined collector past 5 GiB on a 4,616-AP controller) through Telegraf 1.38.3, with 24 numeric fields each and free-text, VLAN and mobility strings on the same records. Prometheus kept 216,000 `ie_wlc_client_*` series and no string labels. Peak RSS was 645,764 kB (631 MiB). RSS once the series count stopped growing was 572,336 kB.
+A replay of 9,000 client-oper rows (the size that pushed the combined collector past 5 GiB on a 4,616-AP controller) through both Telegraf 1.38.3 processes. Each row had 24 numeric fields plus username, VLAN and mobility strings. `telegraf-wlc` POSTed the rows and did not keep them: no client MAC on its scrape, peak RSS 188,396 kB (184 MiB). With the clients listener down, 30,000 of the same rows left that process at 188,340 kB and it kept running. `telegraf-wlc-clients` kept 216,000 `ie_wlc_client_*` series and no string labels. Its peak RSS was 615,332 kB (601 MiB). RSS once the series count stopped growing was 534,280 kB (522 MiB). The same replay also left 2,500 `ie_wlc_client_radio_*` rollup series on the clients process.
 
-The table scales that replay linearly (24 series and about 72 KiB peak per client). The default `IE_TELEGRAF_WLC_CLIENTS_MEM` is 4g. Raise it when the 15-clients-per-AP planning case is real. AP and radio series are not in this process.
+The table scales that clients-process replay linearly (24 series and about 68 KiB peak per client). `telegraf-wlc` does not store those series. The default `IE_TELEGRAF_WLC_CLIENTS_MEM` is 4g. Raise it when the 15-clients-per-AP planning case is real.
 
-| APs | Clients | Assumption | `ie_wlc_client_*` series | Peak RSS |
+| APs | Clients | Assumption | `ie_wlc_client_*` series | Clients peak RSS |
 |---|---:|---|---:|---:|
-| 4,616 | 9,000 | measured, about 2 clients per AP | 216,000 | 631 MiB |
-| 5,000 | 10,000 | 2 clients per AP | 240,000 | 701 MiB |
-| 5,000 | 75,000 | 15 clients per AP | 1,800,000 | 5.3 GiB |
-| 10,000 | 20,000 | 2 clients per AP | 480,000 | 1.4 GiB |
-| 10,000 | 150,000 | 15 clients per AP | 3,600,000 | 10.5 GiB |
+| 4,616 | 9,000 | measured, about 2 clients per AP | 216,000 | 601 MiB |
+| 5,000 | 10,000 | 2 clients per AP | 240,000 | 668 MiB |
+| 5,000 | 75,000 | 15 clients per AP | 1,800,000 | 4.9 GiB |
+| 10,000 | 20,000 | 2 clients per AP | 480,000 | 1.3 GiB |
+| 10,000 | 150,000 | 15 clients per AP | 3,600,000 | 9.8 GiB |
 
 Default export for one 5,000-AP controller is about 890040 series, of which 600000 are per client, 50000 are radio rollups and 80000 are per-SSID counts.
 

@@ -173,7 +173,7 @@ def main() -> int:
     data.mkdir()
     write_sim(data / "public.snmprec")
     ensure_sim_image()
-    run(["sudo", "docker", "rm", "-f", "ie-exp-sim", "ie-exp-snmp", "ie-exp-bb", "ie-exp-prom", "ie-exp-mdt"])
+    run(["sudo", "docker", "rm", "-f", "ie-exp-sim", "ie-exp-snmp", "ie-exp-bb", "ie-exp-prom", "ie-exp-mdt", "ie-exp-clients"])
 
     run([
         "sudo", "docker", "run", "-d", "--name", "ie-exp-sim", "--network", "host",
@@ -336,6 +336,23 @@ def main() -> int:
         print("prometheus discovered the mock bank target")
 
     conf = fast_telegraf()
+    clients_conf = WORK / "telegraf-clients.conf"
+    clients_text = (ROOT / "config" / "telegraf" / "wlc" / "telegraf-clients.conf").read_text()
+    clients_text = clients_text.replace('listen = ":9273"', 'listen = ":19277"')
+    clients_text = clients_text.replace('service_address = "tcp://:9276"', 'service_address = "tcp://127.0.0.1:19276"')
+    clients_conf.write_text(clients_text)
+    clients_proc = run([
+        "sudo", "docker", "run", "-d", "--name", "ie-exp-clients", "--network", "host",
+        "-e", "CLIENT_SLUG=lab",
+        "-e", "IE_WLC_STORE_CLIENTS=0",
+        "-v", "%s:/etc/telegraf/telegraf-clients.conf:ro" % clients_conf,
+        "-v", "%s:/etc/telegraf/normalize.star:ro" % (ROOT / "config" / "telegraf" / "wlc" / "normalize.star"),
+        "telegraf:1.38.3",
+        "--config", "/etc/telegraf/telegraf-clients.conf",
+        "--non-strict-env-handling",
+    ])
+    if clients_proc.returncode != 0:
+        failed.append("telegraf-clients-start")
     mdt = run([
         "sudo", "docker", "run", "-d", "--name", "ie-exp-mdt", "--network", "host",
         "-e", "CLIENT_SLUG=lab",
@@ -344,6 +361,8 @@ def main() -> int:
         "-v", "%s:/etc/telegraf/telegraf.conf:ro" % conf,
         "-v", "%s:/etc/telegraf/mdt.conf:ro" % (ROOT / "config" / "telegraf" / "wlc" / "mdt.conf"),
         "-v", "%s:/etc/telegraf/normalize.star:ro" % (ROOT / "config" / "telegraf" / "wlc" / "normalize.star"),
+        "-v", "%s:/etc/telegraf/client_forward.star:ro" % (ROOT / "config" / "telegraf" / "wlc" / "client_forward.star"),
+        "-e", "IE_WLC_CLIENTS_FORWARD=127.0.0.1:19276",
         "telegraf:1.38.3",
         "--config", "/etc/telegraf/telegraf.conf",
         "--config", "/etc/telegraf/mdt.conf",
@@ -363,22 +382,29 @@ def main() -> int:
                 failed.append("mdt-send")
             else:
                 body = ""
+                client_body = ""
                 deadline = time.time() + 20
                 while time.time() < deadline:
                     try:
                         body = http_text("http://127.0.0.1:9273/metrics")
+                        client_body = http_text("http://127.0.0.1:19277/metrics")
                     except Exception:
                         time.sleep(1)
                         continue
-                    if "ie_wlc_client_radio_clients" in body and "ie_sdwan_tunnel_loss_ratio" in body:
+                    if "ie_wlc_client_radio_clients" in client_body and "ie_sdwan_tunnel_loss_ratio" in body:
                         break
                     time.sleep(1)
-                print("MDT metrics bytes", len(body))
+                print("MDT metrics bytes", len(body), "client bytes", len(client_body))
                 if "aa:bb:cc:dd:ee:01" in body or "aa:bb:cc:dd:ee:02" in body:
                     failed.append("client-mac-stored")
-                if "ie_wlc_client_radio_clients" not in body:
+                if "aa:bb:cc:dd:ee:01" in client_body or "aa:bb:cc:dd:ee:02" in client_body:
+                    failed.append("client-mac-stored")
+                if "ie_wlc_client_radio_clients" in body:
+                    failed.append("client-rollup-on-ap-collector")
+                if "ie_wlc_client_radio_clients" not in client_body:
                     print(sh(["sudo", "docker", "logs", "--tail", "80", "ie-exp-mdt"]))
-                    print(body[:1000])
+                    print(sh(["sudo", "docker", "logs", "--tail", "40", "ie-exp-clients"]))
+                    print(client_body[:1000])
                     failed.append("mdt-clients")
                 if "ie_sdwan_tunnel_latency_ms" not in body:
                     failed.append("mdt-sdwan")
@@ -386,7 +412,7 @@ def main() -> int:
                     failed.append("mdt-rrm")
                 if 'ie_wlc_ap_oper_up' not in body:
                     failed.append("mdt-ap")
-                if not any(item.startswith("mdt-") or item == "client-mac-stored" for item in failed):
+                if not any(item.startswith("mdt-") or item in ("client-mac-stored", "client-rollup-on-ap-collector") for item in failed):
                     print("MDT aggregate exported without per-client series")
 
     tcp.close()
