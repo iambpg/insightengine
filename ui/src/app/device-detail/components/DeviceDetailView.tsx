@@ -23,7 +23,7 @@ import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
-import type { AccessPointRadio, DeviceDetailData, DeviceParentLink, HealthCause, InventorySide, PortInfo } from '@/lib/types';
+import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
 import HealthChecks from './HealthChecks';
@@ -133,8 +133,7 @@ export default function DeviceDetailView() {
   const detailScroll = useRef<HTMLDivElement>(null);
   const localPlateRef = useRef<HTMLDivElement>(null);
   const greyRef = useRef<HTMLDivElement>(null);
-  const plateRefs = useRef(new Map<string, HTMLDivElement>());
-  const plateBinders = useRef(new Map<string, (el: HTMLDivElement | null) => void>());
+  const parentPortRef = useRef<HTMLDivElement>(null);
   const discoveryJob = usePolledDeviceDiscovery(postedDiscovery, {
     onError: (job) => toast.error(job.message || 'Rediscover failed.'),
     onDone: () => toast.success('Rediscover finished.'),
@@ -146,27 +145,7 @@ export default function DeviceDetailView() {
   const loaded = useKeyedLoad<DeviceDetailData>(deviceKey, canLoad, attempt, 'this device', (key) => api.getDevice(key));
   const device = loaded.data;
   const stackMembers = useMemo(() => (device ? stackMembersFor(device) : null), [device]);
-  const kin = useMemo(() => {
-    const rows: { id: string; localPort: string; remotePort: string }[] = [];
-    if (device?.parent) {
-      rows.push({ id: device.parent.id, localPort: device.parent.uplinkInterface, remotePort: device.parent.parentInterface });
-    }
-    for (const child of device?.children ?? []) {
-      rows.push({ id: child.id, localPort: child.parentInterface, remotePort: child.uplinkInterface });
-    }
-    return rows;
-  }, [device]);
-  const plateBinder = (relationId: string) => {
-    let binder = plateBinders.current.get(relationId);
-    if (!binder) {
-      binder = (el: HTMLDivElement | null) => {
-        if (el) plateRefs.current.set(relationId, el);
-        else plateRefs.current.delete(relationId);
-      };
-      plateBinders.current.set(relationId, binder);
-    }
-    return binder;
-  };
+  const parentLink = device?.parent ?? null;
 
   useEffect(() => {
     setSelected(null);
@@ -174,14 +153,13 @@ export default function DeviceDetailView() {
   }, [deviceKey]);
 
   useEffect(() => {
-    if (!selected) {
+    const plate = parentPortRef.current;
+    if (!parentLink || !plate) {
       setCable(null);
       return;
     }
-    const hit = kin.find((row) => portIs(selected, row.localPort));
-    const plate = hit ? plateRefs.current.get(hit.id) ?? document.querySelector<HTMLElement>(`[data-relation-id="${hit.id}"]`) : null;
-    setCable(hit && plate ? { remotePort: hit.remotePort, localPort: selected.name, plate } : null);
-  }, [selected, kin, device?.id]);
+    setCable({ remotePort: parentLink.parentInterface, localPort: parentLink.uplinkInterface, plate });
+  }, [parentLink, device?.id]);
 
   useEffect(() => {
     if (!ready || !live || id) {
@@ -475,30 +453,43 @@ export default function DeviceDetailView() {
                 })}
               </div>
             ) : null}
-            <div ref={greyRef} className={`relative rounded-md bg-gradient-to-b from-secondary to-background p-1 ${kin.length > 0 ? '' : 'overflow-x-auto'}`}>
-              <div className={`flex items-center gap-6 ${kin.length > 0 ? 'w-max max-w-full' : ''}`}>
-                <div ref={localPlateRef} className={kin.length > 0 ? 'min-w-0 overflow-x-auto' : 'w-full shrink-0'}>
-                  <div
-                    className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex w-max min-w-full items-center'}
-                    style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
-                  >
-                    <Faceplate device={device.faceplate} selectedPortId={selected?.id ?? null} onSelectPort={setSelected} caption={false} />
-                  </div>
+            <div ref={greyRef} className="relative flex items-stretch gap-0 overflow-hidden rounded-md bg-gradient-to-b from-secondary to-background p-1" style={{ height: FACEPLATE_HEIGHT }}>
+              <div ref={localPlateRef} className="min-w-0 flex-1 overflow-x-auto">
+                <div
+                  className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex h-full min-w-full items-center'}
+                  style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
+                >
+                  <Faceplate
+                    device={device.faceplate}
+                    selectedPortId={selected?.id ?? null}
+                    onSelectPort={setSelected}
+                    caption={false}
+                    health={device.health}
+                    chassisLabel={device.faceplate.modelName || device.modelFamily}
+                  />
                 </div>
-                {kin.length > 0 ? (
-                  <div className="flex w-max min-w-0 max-w-[50%] shrink-0 items-center gap-3 overflow-hidden">
-                    {device.parent ? <RelationFaceplate link={device.parent} label="Parent" plateRef={plateBinder(device.parent.id)} className="w-40 min-w-[5.5rem] shrink-[0.2]" /> : null}
-                    {(device.children ?? []).length > 0 ? (
-                      <div className="flex min-w-0 shrink items-center gap-2">
-                        {(device.children ?? []).map((child) => (
-                          <RelationFaceplate key={child.id} link={child} label="Child" plateRef={plateBinder(child.id)} className="w-40 min-w-0 max-w-40 shrink" />
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
               </div>
-              <ParentBlock device={device} />
+              <div className="mx-2 w-px shrink-0 bg-border" aria-hidden="true" />
+              <aside data-testid="parent-device" className="flex w-44 shrink-0 flex-col justify-center px-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Parent Device</p>
+                {parentLink ? (
+                  <>
+                    <Link href={devicePath(parentLink.id, parentLink.formFactor || 'generic')} className="mt-1 truncate font-mono-data text-sm font-semibold text-foreground hover:text-primary hover:underline" title={parentLink.hostname}>
+                      {parentLink.hostname}
+                    </Link>
+                    <div ref={parentPortRef} data-relation-id={parentLink.id} className="mt-2">
+                      <ParentPortPicture name={parentLink.parentInterface} />
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">No parent detected</p>
+                )}
+              </aside>
+              {parentLink && !cable ? (
+                <svg className="pointer-events-none absolute inset-0" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M 58 72 V 96 H 86 V 58" fill="none" stroke="#3b82f6" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+                </svg>
+              ) : null}
               {cable ? <UplinkCable localRef={localPlateRef} greyRef={greyRef} remote={cable.plate} localPortName={cable.localPort} remotePortName={cable.remotePort} /> : null}
             </div>
             {device.faceplate.form_factor === 'ceiling-ap' ? <ApRadioBoards device={device} /> : null}
@@ -967,10 +958,6 @@ function shadeColor(shade?: string): string {
   return text;
 }
 
-function portIs(port: PortInfo, wanted: string): boolean {
-  return [port.name, port.id, ...(port.names ?? [])].some((value) => namesMatch(value, wanted));
-}
-
 function portMatches(el: Element, wanted: string): boolean {
   const values = [
     el.getAttribute('data-port-name') || '',
@@ -1004,8 +991,7 @@ function outsideCable(port: DOMRect, chassis: DOMRect, remotePort: DOMRect | nul
   const x = port.left + port.width / 2;
   const y = port.top + port.height / 2;
   const hug = 2;
-  const above = y <= (chassis.top + chassis.bottom) / 2;
-  const laneY = above ? Math.max(grey.top + hug, chassis.top - hug) : Math.min(grey.bottom - hug, chassis.bottom + hug);
+  const laneY = Math.min(grey.bottom - hug, chassis.bottom + hug);
   const endX = remotePort ? remotePort.left + remotePort.width / 2 : remoteBox.left + remoteBox.width / 2;
   const rawEndY = remotePort ? remotePort.top + remotePort.height / 2 : remoteBox.top + remoteBox.height / 2;
   const endY = Math.max(grey.top + hug, Math.min(grey.bottom - hug, rawEndY));
@@ -1050,6 +1036,7 @@ function UplinkCable({
       setPath(outsideCable(localPort.getBoundingClientRect(), metal ? metal.getBoundingClientRect() : localBox, remotePort ? remotePort.getBoundingClientRect() : null, remoteBox, grey.getBoundingClientRect()));
     };
     measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(measure);
     observer.observe(local);
     observer.observe(grey);
@@ -1072,39 +1059,17 @@ function UplinkCable({
   );
 }
 
-function RelationFaceplate({ link, label, plateRef, className }: { link: DeviceParentLink; label: 'Parent' | 'Child'; plateRef: (el: HTMLDivElement | null) => void; className: string }) {
-  const face = link.faceplate ?? null;
+function ParentPortPicture({ name }: { name: string }) {
+  const fiber = /te|hu|fo|twe|sfp|uplink/i.test(name);
   return (
-    <Link
-      href={devicePath(link.id, link.formFactor || 'generic')}
-      aria-label={`Open ${label.toLowerCase()} ${link.hostname}`}
-      style={{ containerType: 'inline-size' }}
-      className={`relative flex flex-col items-center gap-1 self-center rounded-lg border border-border bg-card p-1.5 shadow-card transition-colors hover:border-primary ${className}`}
-    >
-      <div ref={plateRef} data-relation-id={link.id} className="relative w-full overflow-hidden rounded-md bg-background p-1">
-        <span className="pointer-events-none absolute left-1/2 top-0.5 z-10 -translate-x-1/2 text-[9px] font-bold uppercase leading-none tracking-wide text-foreground">{label}</span>
-        <div className="pointer-events-none">
-          {face ? <Faceplate device={face} compact /> : <div className="h-12" />}
-        </div>
-      </div>
-      <span className="max-w-full truncate font-mono-data text-[clamp(0.5rem,16cqw,0.75rem)] font-medium text-foreground" title={link.hostname}>{link.hostname}</span>
-    </Link>
-  );
-}
-
-function ParentBlock({ device }: { device: DeviceDetailData }) {
-  if (!device.unparented && !device.parentDown && !device.wlc) return null;
-  return (
-    <div className="mt-2 max-w-sm space-y-1.5 text-sm">
-      {device.parentDown ? (
-        <p role="status" className="font-medium text-destructive">Unreachable due to parent</p>
-      ) : null}
-      {device.unparented ? (
-        <p className="text-amber-800">No path to a subnet root. This device has no parent.</p>
-      ) : null}
-      {device.wlc ? (
-        <p>Joined WLC <span className="font-mono-data">{device.wlc}</span></p>
-      ) : null}
+    <div data-port-name={name} data-testid="parent-port" className="flex flex-col items-center gap-1">
+      <div
+        className={fiber
+          ? 'h-6 w-10 rounded-[3px] border border-slate-400 bg-slate-800 shadow-sm'
+          : 'h-8 w-7 rounded-[3px] border-2 border-slate-500 bg-slate-900 shadow-sm'}
+        aria-hidden="true"
+      />
+      <span className="max-w-[9rem] truncate font-mono-data text-[10px] text-muted-foreground" title={name}>{name}</span>
     </div>
   );
 }

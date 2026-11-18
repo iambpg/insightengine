@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { PortInfo } from '@/lib/types';
-import ChassisBody, { EngravedText, StatusLeds, VentGrille } from '../Chassis';
+import ChassisBody from '../Chassis';
 import PortGlyph from '../Port';
 import { lockedChassis } from '../size';
 
@@ -20,6 +20,8 @@ interface SwitchProps extends LayoutCommon {
   memberNumber?: number;
   memberHealthColor?: string;
   stackPorts?: boolean;
+  modelLabel?: string;
+  ledHealth?: string;
 }
 
 // Cable ports sit in two rows, odd above even, the way a switch face is built.
@@ -93,56 +95,71 @@ export function switchWidth(portCount: number) {
   return 150 + cols * 24 + Math.max(0, groups - 1) * 6 + 48;
 }
 
-export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect, originX = 0, originY = 0, memberNumber, memberHealthColor, stackPorts }: SwitchProps) {
-  const laid = cablePorts(ports);
-  const cols = Math.max(1, Math.ceil(laid.length / 2));
-  const W = lockedChassis().innerW;
-  const startX = 74;
-  const right = stackPorts ? 78 : 28;
-  const usable = Math.max(22, W - startX - right);
-  const pitch = usable / cols;
-  const glyph = Math.min(19, Math.max(12, pitch - 5));
-  const colX = (c: number) => startX + c * pitch + Math.max(0, (pitch - glyph) / 2);
+function isFiber(port: PortInfo): boolean {
+  return port.type === 'SFP' || port.type === 'SFP+' || port.type === 'QSFP';
+}
 
-  const anyFault = ports.some((p) => p.state === 'fault');
-  const anyWarn = ports.some((p) => p.state === 'warning');
+function ledFill(health: string | undefined): string {
+  if (health === 'critical' || health === 'unreachable' || health === 'fault') return '#ef4444';
+  if (health === 'warning') return '#f59e0b';
+  if (health === 'healthy') return '#22c55e';
+  return '#94a3b8';
+}
+
+export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect, originX = 0, originY = 0, memberNumber, memberHealthColor, modelLabel, ledHealth }: SwitchProps) {
+  const laid = cablePorts(ports);
+  const copper = laid.filter((port) => !isFiber(port));
+  const fiber = laid.filter(isFiber);
+  const W = lockedChassis().innerW;
+  const startX = 86;
+  const fiberCols = Math.max(1, Math.ceil(fiber.length / 2));
+  const fiberW = fiber.length ? fiberCols * 22 + 16 : 8;
+  const cols = Math.max(1, Math.ceil(copper.length / 2));
+  const groups = Math.ceil(cols / 6);
+  const groupGap = 8;
+  const usable = Math.max(22, W - startX - fiberW - groupGap * Math.max(0, groups - 1));
+  const pitch = usable / cols;
+  const glyph = Math.min(16, Math.max(9, pitch - 3));
+  const colX = (c: number) => startX + c * pitch + Math.floor(c / 6) * groupGap + Math.max(0, (pitch - glyph) / 2);
+  const led = ledFill(ledHealth);
+  const accent = memberHealthColor || led;
 
   return (
     <g transform={`translate(${originX} ${originY})`}>
-      <ChassisBody x={0} y={0} w={W} h={SW_H} uid={uid}>
-        {/* left: vent, LEDs, console, number */}
-        <VentGrille x={10} y={10} w={14} h={30} uid={uid} />
-        <rect x={10} y={48} width={16} height={9} rx={1.5} fill="var(--navy)" stroke="var(--metal-hi)" strokeWidth={0.6} />
-        <EngravedText x={10} y={66} size={5}>CONSOLE</EngravedText>
+      <ChassisBody x={0} y={0} w={W} h={SW_H} uid={`${uid}-${memberNumber || 'sw'}`} charcoal ears={false}>
+        <g aria-hidden="true">
+          {['SYS', 'RPS', 'STAT', 'MST'].map((label, index) => (
+            <g key={label} transform={`translate(${8 + index * 18} 8)`}>
+              <circle data-led={label} cx={5} cy={4} r={2.3} fill={led} />
+              <text x={5} y={13} textAnchor="middle" fontSize={4.2} fill="#94a3b8" fontFamily="var(--font-mono)">{label}</text>
+            </g>
+          ))}
+          <rect x={8} y={20} width={28} height={8} rx={1.5} fill="#0b1016" stroke="#9aa6b5" strokeWidth={0.6} />
+          <text x={22} y={26} textAnchor="middle" fontSize={3.6} fill="#94a3b8" fontFamily="var(--font-mono)">CON</text>
+          <rect x={40} y={20} width={16} height={8} rx={1.5} fill="#0b1016" stroke="#9aa6b5" strokeWidth={0.6} />
+          <text x={48} y={26} textAnchor="middle" fontSize={3.4} fill="#94a3b8" fontFamily="var(--font-mono)">USB</text>
+          <rect x={60} y={18} width={12} height={10} rx={1.2} fill="#0b1016" stroke="#9aa6b5" strokeWidth={0.7} />
+          <text x={66} y={34} textAnchor="middle" fontSize={3.4} fill="#94a3b8" fontFamily="var(--font-mono)">MGMT</text>
+        </g>
         {memberNumber ? (
           <g aria-label={`Stack member ${memberNumber}`}>
-            <rect x={10} y={72} width={16} height={14} rx={2} fill="var(--navy)" stroke={memberHealthColor ?? 'var(--success)'} strokeWidth={1.2} />
-            <text x={18} y={83} textAnchor="middle" fontSize={10} fontWeight={700} fill={memberHealthColor ?? 'var(--success)'} fontFamily="var(--font-mono)">
-              {memberNumber}
+            <rect x={8} y={40} width={18} height={16} rx={4} fill={accent} opacity={0.9} />
+            <text x={17} y={51} textAnchor="middle" fontSize={8} fontWeight={700} fill="#0f172a" fontFamily="var(--font-mono)">
+              {String(memberNumber).padStart(2, '0')}
             </text>
           </g>
         ) : null}
-        <StatusLeds
-          x={34}
-          y={12}
-          uid={uid}
-          items={[
-            { label: 'SYS', color: anyFault ? 'var(--destructive)' : anyWarn ? 'var(--warning)' : 'var(--success)', blink: anyWarn && !anyFault },
-            { label: 'PWR', color: 'var(--success)' },
-            { label: 'STK', color: stackPorts ? 'var(--teal)' : 'var(--down)' },
-            { label: 'POE', color: laid.some((p) => p.poe) ? 'var(--success)' : 'var(--down)' },
-          ]}
-        />
-        <EngravedText x={34} y={SW_H - 8} size={4.8}>{memberNumber ? `MEMBER ${memberNumber}` : 'ACCESS SWITCH'}</EngravedText>
+        <text x={8} y={SW_H - 6} fontSize={6} fill="#94a3b8" fontFamily="var(--font-mono)">
+          {modelLabel || ''}
+        </text>
 
-        {/* Two rows: port 1 above port 2, then the next pair, including fiber on the same baselines. */}
         {Array.from({ length: cols }, (_, c) => {
-          const top = laid[c * 2];
-          const bottom = laid[c * 2 + 1];
+          const top = copper[c * 2];
+          const bottom = copper[c * 2 + 1];
           return (
             <React.Fragment key={`${uid}-col-${c + 1}`}>
               {top && (
-                <PortGlyph port={top} x={colX(c)} y={20} size={glyph} uid={uid} selected={selectedId === top.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(top.name)} />
+                <PortGlyph port={top} x={colX(c)} y={18} size={glyph} uid={uid} selected={selectedId === top.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(top.name)} />
               )}
               {bottom && (
                 <PortGlyph port={bottom} x={colX(c)} y={52} size={glyph} uid={uid} selected={selectedId === bottom.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(bottom.name)} silkBelow />
@@ -151,21 +168,27 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
           );
         })}
 
-        {/* stack ports: two cages on the right edge (STACK 1 top, STACK 2 bottom) */}
-        {stackPorts && (
-          <g aria-hidden="true">
-            <line x1={W - 40} y1={14} x2={W - 40} y2={SW_H - 14} stroke="var(--metal-hi)" strokeOpacity={0.5} />
-            <EngravedText x={W - 34} y={14} size={5}>STACK</EngravedText>
-            {[0, 1].map((k) => (
-              <g key={`${uid}-stk-${k}`} transform={`translate(${W - 34} ${22 + k * 32})`}>
-                <rect width={22} height={22} rx={2.5} fill="var(--navy)" stroke="var(--metal-hi)" strokeWidth={0.8} />
-                <rect x={3} y={3} width={16} height={16} rx={1.5} fill="#05080f" stroke="var(--teal)" strokeWidth={0.9} />
-                <rect x={6} y={7} width={10} height={8} rx={1} fill="var(--teal)" opacity={0.35} />
-                <circle cx={19} cy={3} r={1.6} fill="var(--teal)" filter={`url(#${uid}-glow)`} />
-              </g>
-            ))}
-          </g>
-        )}
+        {fiber.map((port, index) => {
+          const column = index % fiberCols;
+          const row = Math.floor(index / fiberCols);
+          const x = W - fiberW + 8 + column * 22;
+          const y = row === 0 ? 16 : 52;
+          return (
+            <PortGlyph
+              key={port.id}
+              port={port}
+              x={x}
+              y={y}
+              size={14}
+              uid={uid}
+              selected={selectedId === port.id}
+              onHover={onHover}
+              onSelect={onSelect}
+              silk={silkLabel(port.name)}
+              silkBelow={row > 0}
+            />
+          );
+        })}
       </ChassisBody>
     </g>
   );
