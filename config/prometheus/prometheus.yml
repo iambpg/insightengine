@@ -46,11 +46,11 @@ scrape_configs:
   # every 5-10 minutes, so this scrape stays short.
   # AP and controller series. Radio and RRM are a different job, so a slow
   # scrape here does not blank channel, noise and interference panels.
-  # 15s covers the measured 10,000-AP scrapes (0.91s on this job, 2.0s on
-  # telegraf-wlc-radio) without marking the target down when one push is late.
+  # Interval stays 60s. Timeout is 45s: a live ~4,600 AP registry was already
+  # an 11.6s scrape, and 15s marked the target down on the next slow one.
   - job_name: telegraf-wlc
     scrape_interval: 60s
-    scrape_timeout: 15s
+    scrape_timeout: 45s
     static_configs: [{targets: ['telegraf-wlc:9273']}]
   - job_name: telegraf-wlc-radio
     scrape_interval: 60s

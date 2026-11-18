@@ -40,7 +40,7 @@ Open **TCP 57500** on the collector. That is the only Telegraf host port: AP, ra
 
 On the device page, **Controller config** copies the IOS-XE or AireOS CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you. The subscription list, including intervals, is `docs/wlc-9800-full.md`.
 
-The paths below are the original client, RRM and AP set. Inventory is 600s, radio and RRM 120s, clients 60s. SSID client counts also have on-change. capwap-data, radio-oper-data and ap-join-stats are periodic only. The full list is `docs/wlc-9800-full.md`.
+The paths below are the original client, RRM and AP set. Inventory and AP oper state are 600s, radio and RRM 120s, clients 60s. SSID client counts also have on-change. capwap-data, radio-oper-data and ap-join-stats are periodic only. The full list is `docs/wlc-9800-full.md`.
 
 | Path | Policy | What it is |
 |---|---|---|

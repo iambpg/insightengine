@@ -36,9 +36,12 @@ MDT_SUBS = (
     (0, "/wireless-access-point-oper:access-point-oper-data/ap-name-mac-map",
      "ie_wlc_ap_name_map", "periodic", 600, "AP name, radio MAC, Ethernet MAC"),
     # capwap-data and radio-oper-data reject on-change on IOS-XE ("Format failure"
-    # / "on-change not supported, only periodic"). The periodic subscriptions cover them.
+    # / "on-change not supported, only periodic"). capwap-data stays at 600s.
+    # It is the source of ie_wlc_ap_oper_up, not inventory alone. 3600s would
+    # lag AP-down by an hour, and the 1200s expiration would drop the series
+    # before the next push.
     (2, "/wireless-access-point-oper:access-point-oper-data/capwap-data",
-     "ie_wlc_ap_mdt", "periodic", 600, "AP name, model, serial, IP, location, country, IOS, mode, tags"),
+     "ie_wlc_ap_mdt", "periodic", 600, "AP name, model, serial, IP, location, country, IOS, mode, tags, oper state"),
     (4, "/wireless-access-point-oper:access-point-oper-data/radio-oper-data",
      "ie_wlc_radio_mdt", "periodic", 120, "Radio channel, width, tx power, admin/oper, antenna"),
     (5, "/wireless-access-point-oper:access-point-oper-data/radio-oper-stats",
