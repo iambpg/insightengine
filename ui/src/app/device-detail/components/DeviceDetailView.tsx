@@ -335,7 +335,7 @@ export default function DeviceDetailView() {
       {/* header */}
       <header className="rounded-none border-x-0 border-y border-border bg-card px-3 py-2 shadow-card">
         {device ? (
-          <div className="grid min-w-0 grid-cols-1 items-center gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="min-w-0 space-y-2">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="rounded-lg border border-border bg-muted/50 px-3 py-1.5 font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
@@ -351,7 +351,9 @@ export default function DeviceDetailView() {
                   </span>
                 )}
               </div>
-              <dl className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            </div>
+            <div className="mt-2 flex flex-wrap items-start gap-3">
+              <dl data-testid="device-header-facts" className="mr-auto grid w-max max-w-full grid-cols-2 gap-1.5 sm:grid-cols-4">
                 <Meta label="Role" value={device.role} shade={device.roleColor} />
                 <Meta label="Model" value={device.partNumber || device.faceplate.partNumber || device.faceplate.modelName || device.modelFamily} mono shade={toneShade(syncTones.tones.model)} />
                 <Meta label="Serial number" value={device.serialMasked} mono shade={toneShade(syncTones.tones.serial)} />
@@ -361,10 +363,15 @@ export default function DeviceDetailView() {
                 <Meta label="Last poll" value={device.lastPoll} mono />
                 <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
-            </div>
-            <div data-testid="device-header-actions" className="flex h-[5.375rem] w-full min-w-0 max-w-[17.5rem] items-center justify-end gap-1.5 justify-self-stretch overflow-hidden xl:justify-self-end">
-              {stackMembers && <StackBadge members={stackMembers} />}
-              <div className="grid h-full min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] grid-rows-2 gap-1.5">
+            <div data-testid="device-header-actions" className="ml-auto flex h-[5.375rem] shrink-0 items-center gap-1.5">
+              {stackMembers && (
+                <StackBadge
+                  members={stackMembers}
+                  deviceHealth={device.health}
+                  deviceReason={deviceHealthReason(device.health, healthItems)}
+                />
+              )}
+              <div className="flex h-full w-[8.5rem] shrink-0 flex-col gap-0.5">
               <button
                 type="button"
                 disabled={rediscovering || !device.mgmtIp}
@@ -378,10 +385,21 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setRediscovering(false));
                 }}
-                className="inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-tight transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[11px] font-medium leading-none transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
               >
-                <Icon name="MagnifyingGlassIcon" size={16} />
+                <Icon name="MagnifyingGlassIcon" size={12} />
                 {rediscovering ? 'Rediscovering…' : 'Rediscover'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRerun(true);
+                  setTimeout(() => setRerun(false), 1100);
+                }}
+                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[11px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
+              >
+                <Icon name="ArrowPathIcon" size={12} className={rerun ? 'animate-spin' : ''} />
+                {rerun ? 'Running checks…' : 'Re-run health check'}
               </button>
               <button
                 type="button"
@@ -402,21 +420,10 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setSyncing(false));
                 }}
-                className={`inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-transparent px-1.5 text-center text-[13px] font-medium leading-tight text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
+                className={`inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-transparent px-1.5 text-center text-[11px] font-medium leading-none text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
               >
-                <Icon name="ArrowsRightLeftIcon" size={16} />
-                {syncing ? 'Syncing…' : 'Netbox Sync'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRerun(true);
-                  setTimeout(() => setRerun(false), 1100);
-                }}
-                className="inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-tight transition-all hover:bg-muted active:scale-95"
-              >
-                <Icon name="ArrowPathIcon" size={16} className={rerun ? 'animate-spin' : ''} />
-                {rerun ? 'Running checks…' : 'Re-run health check'}
+                <Icon name="ArrowsRightLeftIcon" size={12} />
+                {syncing ? 'Syncing…' : 'NetBox Sync'}
               </button>
               <Link
                 href={
@@ -424,16 +431,15 @@ export default function DeviceDetailView() {
                     ? `/device-cli?form=${encodeURIComponent(form)}`
                     : `/device-cli?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
                 }
-                className="inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-tight transition-all hover:bg-muted active:scale-95"
+                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[11px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
               >
-                <Icon name="CommandLineIcon" size={16} />
+                <Icon name="CommandLineIcon" size={12} />
                 Open device
               </Link>
               </div>
             </div>
-            <div className="xl:col-span-2">
-              <DeviceDiscoveryStatus job={discoveryJob} />
             </div>
+            <DeviceDiscoveryStatus job={discoveryJob} />
           </div>
         ) : (
           <div className="space-y-3">
@@ -1103,15 +1109,31 @@ function ParentBlock({ device }: { device: DeviceDetailData }) {
   );
 }
 
+function deviceHealthReason(health: string, items: HealthCause[]): string {
+  const rank: Record<string, number> = { healthy: 0, warning: 1, critical: 2, unreachable: 3 };
+  let best: HealthCause | null = null;
+  let bestRank = 0;
+  for (const item of items) {
+    const score = rank[item.effect || item.severity] || 0;
+    if (score > bestRank) {
+      best = item;
+      bestRank = score;
+    }
+  }
+  if (!best) return `Device is ${health}`;
+  return `${best.title}. ${best.detail}`;
+}
+
 function Meta({ label, value, mono, link, shade }: { label: string; value: string; mono?: boolean; link?: string; shade?: string }) {
   const color = shadeColor(shade);
   return (
     <div
-      className="flex h-14 w-full min-w-0 flex-col justify-center rounded-lg border border-border bg-muted/40 px-2.5 py-1"
-      style={color ? { boxShadow: `0 10px 16px -10px ${color}, inset 3px 0 0 ${color}` } : undefined}
+      data-testid="header-fact"
+      className="flex h-10 w-[7.75rem] shrink-0 flex-col justify-center overflow-hidden rounded-md border border-border bg-muted/40 px-1.5"
+      style={color ? { boxShadow: `inset 3px 0 0 ${color}` } : undefined}
     >
-      <dt className="label-caps text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 truncate text-sm ${mono ? 'font-mono-data' : 'font-medium'}`} title={value}>
+      <dt className="truncate text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className={`truncate text-[11px] leading-tight ${mono ? 'font-mono-data' : 'font-medium'}`} title={value}>
         {link ? <Link href={link} className="hover:text-primary hover:underline">{value}</Link> : value}
       </dd>
     </div>

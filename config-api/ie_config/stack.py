@@ -12,6 +12,10 @@ stack fields (including a Zabbix-only install) takes that same fallback.
 
 from __future__ import annotations
 
+import re
+
+from .health import explain_health
+
 SWITCH_FORMS = {"access-switch-24", "access-switch-48", "switch-stack"}
 
 # CISCO-STACKWISE-MIB cswSwitchRole: master(1), member(2), notMember(3), standby(4).
@@ -163,3 +167,145 @@ def resolve_stack(
     if snmp is not None:
         return snmp
     return standalone_stack(str(device.get("model") or ""), str(device.get("serial") or ""))
+
+
+# Same ranking as explain_health. unknown is a tile with nothing of its own.
+_TILE_RANK = {"unknown": -1, "healthy": 0, "warning": 1, "critical": 2, "unreachable": 3}
+_NETBOX_DOWN = {"offline", "failed", "decommissioning"}
+_MEMBER_TEXT = re.compile(r"(?i)(?:switch|member)\s*#?\s*(\d{1,2})\b|\bsw(\d{1,2})\b")
+
+
+def member_from_metric(metric: dict) -> int | None:
+    """Stack member named by a sensor label, such as 'Switch 2 Fan 1'."""
+    if not isinstance(metric, dict):
+        return None
+    for key in ("cswSwitchNumCurrent", "member", "stack_member"):
+        number = _position(metric.get(key))
+        if number is not None:
+            return number
+    for key, value in metric.items():
+        if key == "__name__" or value is None:
+            continue
+        match = _MEMBER_TEXT.search(str(value))
+        if not match:
+            continue
+        raw = match.group(1) or match.group(2)
+        number = _position(raw)
+        if number is not None:
+            return number
+    return None
+
+
+def _sensor_snapshot(samples: list[dict]) -> dict:
+    fans, psus, cpus, temps, memories = [], [], [], [], []
+    for sample in samples:
+        kind = sample.get("kind")
+        if kind == "fan" and sample.get("state"):
+            fans.append(sample["state"])
+        elif kind == "psu" and sample.get("state"):
+            psus.append(sample["state"])
+        elif kind == "cpu" and sample.get("value") is not None:
+            cpus.append(sample["value"])
+        elif kind == "temp" and sample.get("value") is not None:
+            temps.append(sample["value"])
+        elif kind == "memory" and sample.get("value") is not None:
+            memories.append(sample["value"])
+    snap = {}
+    if fans:
+        snap["fans"] = fans
+    if psus:
+        snap["psus"] = psus
+    if cpus:
+        snap["cpu"] = max(cpus)
+    if temps:
+        snap["tempC"] = max(temps)
+    if memories:
+        snap["memoryPercent"] = max(memories)
+    return snap
+
+
+def _worst_item_reason(items: list[dict]) -> str:
+    best = None
+    best_rank = -1
+    for item in items or []:
+        effect = str(item.get("effect") or item.get("severity") or "")
+        rank = _TILE_RANK.get(effect, 0)
+        if rank > best_rank and rank > 0:
+            best = item
+            best_rank = rank
+    if not best:
+        return ""
+    title = str(best.get("title") or "").strip()
+    detail = str(best.get("detail") or "").strip()
+    if title and detail:
+        return "%s. %s" % (title, detail)
+    return title or detail
+
+
+def paint_member_health(
+    members: list[dict],
+    device_health: str,
+    device_reason: str = "",
+    statuses: dict | None = None,
+    samples: list[dict] | None = None,
+) -> list[dict]:
+    """Colour each tile from that member's own signals.
+
+    Stackwise state, a down NetBox status, and PSU, fan, temperature, CPU
+    and memory samples that name the member use the same thresholds as the
+    device badge. A state other than ready is critical. When no member has
+    any of those signals, every tile uses the device health. A member with
+    nothing of its own, beside members that do, is unknown.
+    """
+    statuses = statuses or {}
+    grouped: dict[int, list[dict]] = {}
+    for sample in samples or []:
+        if not isinstance(sample, dict):
+            continue
+        number = sample.get("member")
+        if not isinstance(number, int):
+            continue
+        grouped.setdefault(number, []).append(sample)
+    own: dict[int, list[tuple[int, str]]] = {}
+    for member in members or []:
+        number = member.get("number")
+        signals: list[tuple[int, str]] = []
+        state = str(member.get("state") or "").strip()
+        if state:
+            if state.lower() == "ready":
+                signals.append((0, "Member state is ready"))
+            else:
+                signals.append((2, "Member state is %s" % state))
+        status = str(statuses.get(number) or "").strip().lower()
+        if status in _NETBOX_DOWN:
+            signals.append((2, "NetBox status is %s" % status))
+        snap = _sensor_snapshot(grouped.get(number) or [])
+        if snap:
+            explained = explain_health(snap)
+            effect = explained.get("health") or "healthy"
+            reason = _worst_item_reason(explained.get("items") or [])
+            if not reason:
+                reason = "Within the device health thresholds"
+            signals.append((_TILE_RANK.get(effect, 0), reason))
+        own[number] = signals
+    any_own = any(own.values())
+    fallback = device_health if device_health in _TILE_RANK and device_health != "unknown" else "unknown"
+    for member in members or []:
+        signals = own.get(member.get("number")) or []
+        if not signals:
+            if not any_own:
+                member["health"] = fallback
+                member["healthReason"] = device_reason or "Device is %s" % fallback
+            else:
+                member["health"] = "unknown"
+                member["healthReason"] = "No data pulled from this member"
+            continue
+        rank = max(score for score, _text in signals)
+        health = next(name for name, score in _TILE_RANK.items() if score == rank)
+        if health == "healthy":
+            ready = next((text for score, text in signals if score == 0 and text.startswith("Member state")), "")
+            member["healthReason"] = ready or "Within the device health thresholds"
+        else:
+            member["healthReason"] = "; ".join(text for score, text in signals if score == rank)
+        member["health"] = health
+    return members

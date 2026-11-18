@@ -58,7 +58,7 @@ from .hostnames import effective_suffixes, names_match, strip_device_label, stri
 from .ifnames import canonical_iface, iface_compact, iface_match_keys
 from .ifnames import names_match as iface_names_match
 from .neighbours import merge_neighbors, neighbors_from_cdp, neighbors_from_lldp
-from .stack import is_switch, resolve_stack, standalone_stack
+from .stack import is_switch, member_from_metric, paint_member_health, resolve_stack, standalone_stack
 
 log = logging.getLogger("ie-config.fleet")
 
@@ -2181,6 +2181,22 @@ class FleetService:
         )
         if stack is None:
             stack = standalone_stack(str(device.get("model") or ""), str(device.get("serial") or ""))
+        cached = self.cache.get("ports:" + str(device.get("name") or ""))
+        statuses = {}
+        for peer in peers:
+            try:
+                number = int(peer.get("vc_position"))
+            except (TypeError, ValueError):
+                continue
+            if number >= 1:
+                statuses[number] = str(peer.get("status") or "")
+        paint_member_health(
+            stack.get("members") or [],
+            str(detail.get("health") or "unknown"),
+            _device_health_reason(detail),
+            statuses=statuses,
+            samples=_stack_sensor_samples(cached if isinstance(cached, dict) else {}),
+        )
         detail["stack"] = stack
 
     def _finish_health(self, detail: dict, found: dict, alerts: dict, rows: list[dict]) -> None:
@@ -3072,6 +3088,8 @@ class FleetService:
             "discards_in": "rate(ifInDiscards%s[5m])" % selector,
             "discards_out": "rate(ifOutDiscards%s[5m])" % selector,
             "cpu": 'avg(cpmCPUTotal5minRev%s) or avg(fgSysCpuUsage%s) or avg(ie_wlc_cpu_busy_percent{wlc="%s"})' % (selector, selector, safe_host),
+            "cpu_series": "cpmCPUTotal5minRev%s" % selector,
+            "temp_series": "ciscoEnvMonTemperatureStatusValue%s" % selector,
             "mem": (
                 "(sum(ciscoMemoryPoolUsed%(s)s) / clamp_min(sum(ciscoMemoryPoolUsed%(s)s) + sum(ciscoMemoryPoolFree%(s)s), 1)) * 100 "
                 "or avg(fgSysMemUsage%(s)s) "
@@ -3128,8 +3146,10 @@ class FleetService:
             "snmp_at": _latest_stamp(oper or admin or speed),
             "has_if_mib": bool(oper or admin),
             "cpu": _first_value(rows("cpu")),
+            "cpu_series": rows("cpu_series"),
             "mem": _first_value(rows("mem")),
             "temp": _first_value(rows("temp")),
+            "temp_series": rows("temp_series"),
             "fans": rows("fans"),
             "psus": rows("psus"),
             "rtt": _first_value(rows("rtt")),
@@ -5336,6 +5356,57 @@ def _hw_status(kind: str, value: float | None):
         status = "fail" if value >= 75 else "warn" if value >= 60 else "ok"
         return status, "%.0f°C" % value
     return "ok", "—"
+
+
+def _device_health_reason(detail: dict) -> str:
+    health = str(detail.get("health") or "healthy")
+    best = None
+    best_rank = 0
+    rank = {"healthy": 0, "warning": 1, "critical": 2, "unreachable": 3}
+    for item in detail.get("healthItems") or []:
+        if not isinstance(item, dict):
+            continue
+        effect = str(item.get("effect") or item.get("severity") or "")
+        score = rank.get(effect, 0)
+        if score > best_rank:
+            best = item
+            best_rank = score
+    if not best:
+        return "Device is %s" % health
+    title = str(best.get("title") or "").strip()
+    detail_text = str(best.get("detail") or "").strip()
+    if title and detail_text:
+        return "%s. %s" % (title, detail_text)
+    return title or detail_text or ("Device is %s" % health)
+
+
+def _stack_sensor_samples(cached: dict) -> list[dict]:
+    """PSU, fan, temperature and CPU samples that name a stack member.
+
+    Device-wide averages stay on the device badge. A sample counts for a
+    tile only when its label names that member. Memory is a used-byte pool
+    sum today, so it is not split across members here.
+    """
+    samples = []
+    for sample in cached.get("fans") or []:
+        metric = sample.get("metric") if isinstance(sample, dict) else {}
+        state = _env_state(sample, "ciscoEnvMonFanState") or _env_state(sample, "cefcFanTrayOperStatus") or _env_state(sample, "state")
+        samples.append({"member": member_from_metric(metric if isinstance(metric, dict) else {}), "kind": "fan", "state": state or ""})
+    for sample in cached.get("psus") or []:
+        metric = sample.get("metric") if isinstance(sample, dict) else {}
+        state = _env_state(sample, "ciscoEnvMonSupplyState") or _env_state(sample, "cefcFRUPowerOperStatus") or _env_state(sample, "state")
+        samples.append({"member": member_from_metric(metric if isinstance(metric, dict) else {}), "kind": "psu", "state": state or ""})
+    for key, kind in (("cpu_series", "cpu"), ("temp_series", "temp")):
+        for sample in cached.get(key) or []:
+            if not isinstance(sample, dict):
+                continue
+            metric = sample.get("metric") if isinstance(sample.get("metric"), dict) else {}
+            samples.append({
+                "member": member_from_metric(metric),
+                "kind": kind,
+                "value": _sample_value(sample),
+            })
+    return samples
 
 
 def _env_state(sample: dict, label_key: str):

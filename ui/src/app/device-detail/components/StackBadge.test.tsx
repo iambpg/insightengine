@@ -5,7 +5,7 @@ import path from 'path';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { StackMemberInfo } from '@/lib/types';
-import StackBadge, { memberTooltip, stackMembersFor, tileMetrics } from './StackBadge';
+import StackBadge, { memberTooltip, stackMembersFor, tileHealth, tileMetrics } from './StackBadge';
 
 function member(number: number, master = false, extra: Partial<StackMemberInfo> = {}): StackMemberInfo {
   return {
@@ -36,7 +36,9 @@ describe('stack badge', () => {
     const tile = screen.getByRole('img', { name: /Member 01/ });
     expect(tile).toHaveTextContent('01');
     expect(tile).toHaveAttribute('data-master', 'true');
-    expect(tile).toHaveAttribute('data-tone', 'teal');
+    expect(tile).toHaveAttribute('data-tone', 'green');
+    expect(tile).toHaveAttribute('data-health', 'healthy');
+    expect(tile).toHaveAttribute('title', expect.stringContaining('Member state is ready'));
     expect(screen.getAllByRole('img')).toHaveLength(1);
     expect(memberTooltip(stack(1, 1)[0])).toBe('Member 01 · active · C9300-1 · SER01 · ready');
   });
@@ -51,7 +53,9 @@ describe('stack badge', () => {
     expect(Number(screen.getByTestId('stack-member-01').style.zIndex)).toBeGreaterThan(
       Number(screen.getByTestId('stack-member-02').style.zIndex),
     );
-    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-tone', 'amber');
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-tone', 'grey');
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-health', 'unknown');
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('title', expect.stringContaining('No data pulled from this member'));
   });
 
   it('draws member 02 larger when it is the master of a stack of two', () => {
@@ -72,7 +76,8 @@ describe('stack badge', () => {
       expect(screen.getByTestId(`stack-member-${label}`)).toHaveTextContent(label);
     }
     expect(screen.getByTestId('stack-member-05')).toHaveAttribute('data-master', 'true');
-    expect(screen.getByTestId('stack-member-05')).toHaveAttribute('data-tone', 'blue');
+    expect(screen.getByTestId('stack-member-05')).toHaveAttribute('data-tone', 'green');
+    expect(screen.getByTestId('stack-member-05')).toHaveAttribute('data-health', 'healthy');
     expect(screen.getByTestId('stack-badge').style.gridTemplateColumns).toContain('repeat(4');
     const pair = tileMetrics(2);
     const eight = tileMetrics(8);
@@ -95,6 +100,36 @@ describe('stack badge', () => {
     expect(screen.getAllByRole('img')).toHaveLength(1);
   });
 
+  it('colours a member that is not ready red, and uses device health when no member was checked', () => {
+    render(<StackBadge members={[member(1, true, { state: 'verMismatch' }), member(2, false, { state: 'ready' })]} />);
+    expect(screen.getByTestId('stack-member-01')).toHaveAttribute('data-health', 'critical');
+    expect(screen.getByTestId('stack-member-01')).toHaveAttribute('data-tone', 'red');
+    expect(screen.getByTestId('stack-member-01')).toHaveStyle({ color: '#fffef8' });
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-health', 'healthy');
+    const blank = stackMembersFor({ role: 'Access switch', faceplate: { form_factor: 'access-switch-48' } }) || [];
+    expect(tileHealth(blank[0], blank, 'warning', 'CPU high. CPU is above the 80% threshold.')).toEqual({
+      health: 'warning',
+      reason: 'CPU high. CPU is above the 80% threshold.',
+    });
+  });
+
+  it('keeps an explicit per-member health and shows it in the tooltip', () => {
+    const members = [
+      member(1, true, { health: 'healthy', healthReason: 'Member state is ready' }),
+      member(2, false, { health: 'warning', healthReason: 'CPU high. CPU is above the 80% threshold.' }),
+      member(3, false, { health: 'critical', healthReason: 'Fan degraded. Fan 1 state is critical.' }),
+      member(4, false, { health: 'unknown', healthReason: 'No data pulled from this member' }),
+    ];
+    render(<StackBadge members={members} deviceHealth="critical" />);
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-health', 'warning');
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-tone', 'amber');
+    expect(screen.getByTestId('stack-member-03')).toHaveAttribute('data-health', 'critical');
+    expect(screen.getByTestId('stack-member-04')).toHaveAttribute('data-health', 'unknown');
+    expect(screen.getByTestId('stack-member-04')).toHaveAttribute('data-tone', 'grey');
+    expect(screen.getByRole('img', { name: /CPU is above the 80% threshold/ })).toBeInTheDocument();
+    expect(widthOf('01') / widthOf('02')).toBeCloseTo(1.4, 1);
+  });
+
   it('gives a standby member a ring and hides the badge on other devices', () => {
     render(<StackBadge members={[member(1, true), member(2, false, { role: 'standby' })]} />);
     expect(screen.getByTestId('stack-member-02').style.boxShadow).toContain('0 0 0 1.5px');
@@ -107,7 +142,13 @@ describe('stack badge', () => {
 describe('stack badge screenshots', () => {
   it('writes one frame per case when IE_STACK_SHOTS is set', () => {
     if (process.env.IE_STACK_SHOTS !== '1') return;
+    const painted = (health: StackMemberInfo['health'], reason: string) => (number: number) => ({ health, healthReason: reason });
     const cases: Array<[string, StackMemberInfo[] | null]> = [
+      ['healthy', stack(2, 1, painted('healthy', 'Member state is ready'))],
+      ['warning', stack(2, 1, (number) => ({ health: number === 2 ? 'warning' : 'healthy', healthReason: number === 2 ? 'CPU high. CPU is above the 80% threshold.' : 'Member state is ready' }))],
+      ['critical', stack(2, 1, painted('critical', 'Member state is verMismatch'))],
+      ['unknown', stack(2, 1, painted('unknown', 'No data pulled from this member'))],
+      ['stack-4-one-red', stack(4, 1, (number) => ({ health: number === 3 ? 'critical' : 'healthy', healthReason: number === 3 ? 'Fan degraded. Fan 1 state is critical.' : 'Member state is ready' }))],
       ['standalone', stack(1, 1)],
       ['stack-2-master-1', stack(2, 1)],
       ['stack-2-master-2', stack(2, 2)],
@@ -118,15 +159,26 @@ describe('stack badge screenshots', () => {
     fs.mkdirSync(dir, { recursive: true });
     for (const [name, members] of cases) {
       const { container, unmount } = render(
-        <div style={{ width: 360, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', background: '#f8fafc', padding: 12, boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', height: 86, width: 280, alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', background: '#ffffff', padding: 4, boxSizing: 'border-box' }}>
-            <StackBadge members={members || []} />
-            <div style={{ flex: 1, height: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '40px 40px', gap: 6 }}>
-              {['Rediscover', 'Netbox Sync', 'Re-run health check', 'Open device'].map((label) => (
-                <div key={label} style={{ border: '1px solid #cbd5e1', borderRadius: 6, font: '600 11px/1.1 ui-sans-serif, system-ui', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 2 }}>
+        <div style={{ width: 980, height: 168, display: 'flex', alignItems: 'center', background: '#f8fafc', padding: 12, boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 124px)', gap: 6 }}>
+              {['Role', 'Model', 'Serial number', 'Site', 'Management IP', 'Uptime', 'Last poll', 'Firmware'].map((label) => (
+                <div key={label} style={{ width: 124, height: 40, border: '1px solid #e2e8f0', borderRadius: 6, background: '#f8fafc', padding: '4px 6px', boxSizing: 'border-box', font: '600 9px/1.2 ui-sans-serif, system-ui', color: '#64748b' }}>
                   {label}
+                  <div style={{ font: '600 11px/1.2 ui-sans-serif, system-ui', color: '#0f172a' }}>sample</div>
                 </div>
               ))}
+            </div>
+            <div style={{ flex: 1 }} />
+            <div style={{ display: 'flex', height: 86, alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <StackBadge members={members || []} />
+              <div style={{ height: '100%', width: 136, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {['Rediscover', 'Re-run health check', 'NetBox Sync', 'Open device'].map((label) => (
+                  <div key={label} style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: 6, font: '600 10px/1 ui-sans-serif, system-ui', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 2 }}>
+                    {label}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>,
