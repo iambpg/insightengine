@@ -36,17 +36,17 @@ by_role_platform:
     auth: ntt_snmpv3_auth
 by_role:
   access-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime, cisco_stackwise]
     auth: ntt_snmpv3_auth
   core-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime, cisco_stackwise]
     auth: ntt_snmpv3_auth
   # NetBox role slug on the 3560 is plural. Same CPU, memory and environment polls.
   core-switches:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, cisco_cdp, lldp, uptime, cisco_stackwise]
     auth: ntt_snmpv3_auth
   distribution-switch:
-    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, system, cisco_cdp, lldp]
+    modules: [if_mib, cisco_environ, cisco_mem, cisco_pro, system, cisco_cdp, lldp, cisco_stackwise]
     auth: ie_snmp_v2
   sdwan:
     modules: [if_mib_fortigate, fortigate, fortigate_bandwidth, fortinet_health]

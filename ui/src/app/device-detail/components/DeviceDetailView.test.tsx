@@ -352,4 +352,25 @@ describe('DeviceDetailView client navigation', () => {
     expect(five).toHaveTextContent('Clear of noise');
     expect(two).toHaveTextContent('24 dB');
   });
+
+  it('puts the stack badge in the header action box without growing that box', async () => {
+    queryState.value = 'id=42&form=access-switch-48';
+    vi.mocked(api.getDevice).mockResolvedValue({
+      ...device('42', 'edge-42'),
+      stack: {
+        source: 'netbox',
+        members: [
+          { number: 1, role: 'member', model: 'C9300-48P', serial: 'SER01', state: '', master: false },
+          { number: 2, role: 'active', model: 'C9300-48P', serial: 'SER02', state: 'ready', master: true },
+        ],
+      },
+    });
+    render(<DeviceDetailView />);
+    const actions = await screen.findByTestId('device-header-actions');
+    expect(actions).toHaveClass('h-[5.375rem]', 'max-w-[17.5rem]');
+    expect(actions).toContainElement(screen.getByTestId('stack-member-02'));
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-master', 'true');
+    expect(screen.getByTestId('device-faceplate')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Rediscover/ })).toBeInTheDocument();
+  });
 });

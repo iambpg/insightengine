@@ -58,6 +58,7 @@ from .hostnames import effective_suffixes, names_match, strip_device_label, stri
 from .ifnames import canonical_iface, iface_compact, iface_match_keys
 from .ifnames import names_match as iface_names_match
 from .neighbours import merge_neighbors, neighbors_from_cdp, neighbors_from_lldp
+from .stack import is_switch, resolve_stack, standalone_stack
 
 log = logging.getLogger("ie-config.fleet")
 
@@ -1710,6 +1711,21 @@ class FleetService:
             else:
                 status = str(status_raw or "active")
             custom = raw.get("custom_fields") if isinstance(raw.get("custom_fields"), dict) else {}
+            vc_raw = raw.get("virtual_chassis")
+            vc = vc_raw if isinstance(vc_raw, dict) else {}
+            master = vc.get("master")
+            if isinstance(master, dict):
+                vc_master_id = str(master.get("id") or "")
+            elif master:
+                vc_master_id = str(master)
+            else:
+                vc_master_id = ""
+            if vc:
+                vc_id = str(vc.get("id") or "")
+            elif vc_raw:
+                vc_id = str(vc_raw)
+            else:
+                vc_id = ""
             rows.append({
                 "id": str(raw.get("id")),
                 "name": str(raw.get("name") or ("device-%s" % raw.get("id"))),
@@ -1732,6 +1748,9 @@ class FleetService:
                 "serial": str(raw.get("serial") or ""),
                 "platform": str(platform.get("name") or ""),
                 "last_updated": str(raw.get("last_updated") or ""),
+                "vc_id": vc_id,
+                "vc_position": raw.get("vc_position"),
+                "vc_master_id": vc_master_id,
             })
         self.cache.put("nb-devices", rows, ttl=60)
         return rows
@@ -2119,9 +2138,50 @@ class FleetService:
             log.warning("hierarchy could not be attached for %s", found.get("hostname"))
             detail.setdefault("parent", None)
             detail.setdefault("children", [])
+        try:
+            self._attach_stack(client, detail, found, rows)
+        except Exception:
+            log.warning("stack badge could not be built for %s", found.get("hostname"))
         body = self._with_degraded(detail, degraded)
         self.cache.put("detail:" + key, body, ttl=60)
         return body
+
+    def _attach_stack(self, client, detail: dict, row: dict, rows: list[dict]) -> None:
+        """NetBox virtual chassis, then cswSwitch* from Prometheus, then one tile."""
+        device = row.get("_device") if isinstance(row.get("_device"), dict) else {}
+        role_slug = str(row.get("role_slug") or device.get("role_slug") or "")
+        face = detail.get("faceplate") if isinstance(detail.get("faceplate"), dict) else {}
+        form = str(row.get("formFactor") or face.get("form_factor") or "")
+        if not is_switch(role_slug, form):
+            return
+        peers = []
+        for item in rows:
+            raw = item.get("_device") if isinstance(item, dict) else None
+            if isinstance(raw, dict):
+                peers.append(raw)
+        role_samples: list = []
+        state_samples: list = []
+        if not str(device.get("vc_id") or "").strip() and device.get("name"):
+            selector = self._selector(device)
+            try:
+                role_samples = self._prom(client, "cswSwitchRole%s" % selector)
+            except Exception:
+                log.warning("stack role could not be read for %s", row.get("hostname"))
+            try:
+                state_samples = self._prom(client, "cswSwitchState%s" % selector)
+            except Exception:
+                log.warning("stack state could not be read for %s", row.get("hostname"))
+        stack = resolve_stack(
+            device,
+            peers,
+            role_samples,
+            state_samples,
+            role_slug=role_slug,
+            form_factor=form,
+        )
+        if stack is None:
+            stack = standalone_stack(str(device.get("model") or ""), str(device.get("serial") or ""))
+        detail["stack"] = stack
 
     def _finish_health(self, detail: dict, found: dict, alerts: dict, rows: list[dict]) -> None:
         """Recompute the badge from the same items the Health section lists."""

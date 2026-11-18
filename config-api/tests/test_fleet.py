@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1106,3 +1107,75 @@ def test_ap_online_from_info_without_oper_metric(stack):
     assert radio["channel"] == 1
     assert radio["snrAvg"] == 24.5
     assert radio["interference"] == 8
+
+
+def _switch(id_, name, ip, position=None, master=None, vc=None):
+    row = {
+        "id": id_, "name": name, "serial": "SER%s" % id_, "last_updated": "2026-10-27T14:00:00Z",
+        "role": {"name": "Access Switch", "slug": "access-switch"},
+        "site": {"id": 1, "name": "Rotterdam", "slug": "rotterdam"},
+        "device_type": {"model": "C9300-48P", "manufacturer": {"name": "Cisco"}},
+        "primary_ip4": {"address": ip + "/32"},
+        "platform": {"name": "IOS-XE"},
+    }
+    if vc is not None:
+        row["virtual_chassis"] = {"id": vc, "name": "closet", "master": {"id": master, "name": "master"}}
+        row["vc_position"] = position
+    return row
+
+
+def test_device_detail_stack_uses_the_virtual_chassis_master(stack):
+    _auth(stack)
+    stack["up"].devices = [
+        _switch(21, "stack-a", "10.1.0.21", 1, 22, 7),
+        _switch(22, "stack-b", "10.1.0.22", 2, 22, 7),
+    ]
+    detail = stack["client"].get("/api/v1/devices/21")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["stack"]["source"] == "netbox"
+    assert [item["number"] for item in body["stack"]["members"]] == [1, 2]
+    assert [item["master"] for item in body["stack"]["members"]] == [False, True]
+    assert body["stack"]["members"][1]["role"] == "active"
+    assert body["stack"]["members"][1]["serial"] == "SER22"
+    assert body["stack"]["members"][0]["model"] == "C9300-48P"
+
+
+def test_device_detail_stack_uses_snmp_when_there_is_no_chassis(stack, monkeypatch):
+    _auth(stack)
+
+    original = _detail_instant
+
+    def instant(query):
+        if "cswSwitchRole" in query and "edge-2" in query:
+            return [
+                {"metric": {"cswSwitchNumCurrent": "1"}, "value": [NOW, "2"]},
+                {"metric": {"cswSwitchNumCurrent": "2"}, "value": [NOW, "1"]},
+            ]
+        if "cswSwitchState" in query and "edge-2" in query:
+            return [
+                {"metric": {"cswSwitchNumCurrent": "1"}, "value": [NOW, "4"]},
+                {"metric": {"cswSwitchNumCurrent": "2"}, "value": [NOW, "4"]},
+            ]
+        return original(query)
+
+    monkeypatch.setattr(sys.modules[__name__], "_detail_instant", instant)
+    detail = stack["client"].get("/api/v1/devices/11")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()["stack"]
+    assert body["source"] == "snmp"
+    assert [(item["number"], item["role"], item["master"]) for item in body["members"]] == [
+        (1, "member", False),
+        (2, "active", True),
+    ]
+    assert body["members"][1]["state"] == "ready"
+
+
+def test_device_detail_without_stack_data_is_standalone(stack):
+    _auth(stack)
+    detail = stack["client"].get("/api/v1/devices/11")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["stack"]["source"] == "standalone"
+    assert detail.json()["stack"]["members"][0]["number"] == 1
+    firewall = stack["client"].get("/api/v1/devices/12")
+    assert "stack" not in firewall.json()
