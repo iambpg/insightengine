@@ -105,7 +105,10 @@ def apply(metric):
         return snmp_join(metric)
     if name in ("ie_wlc_env", "ie_wlc_platform", "ie_wlc_interface", "ie_wlc_hardware", "ie_wlc_mobility", "ie_wlc_ap_global_stats", "ie_wlc_join_count"):
         return controller_passthrough(metric)
-    return metric
+    # Unknown subscriptions still keep their numbers. Strings and list indexes
+    # are not copied onto the series, or one raw dial-out row becomes a new
+    # Prometheus series for every timestamp and MAC.
+    return sanitize(metric)
 
 
 def buckets():
@@ -377,21 +380,24 @@ def ap_metric(metric):
         ap = tag_or_field(metric, ("wtp_mac", "wtp-mac"))
     if not ap:
         ap = "unknown"
+    if not _keep_history_row(metric, str(ap)):
+        return None
     oper = tag_or_field(metric, ("ap_operation_state", "oper_status", "ap_state", "ap-operation-state"))
-    reason = tag_or_field(metric, ("reboot_reason", "join_reason", "disconnect_reason", "reboot-reason", "ap-disconnect-reason", "disconnects"))
+    # A free-text disconnect reason is a new series on every numeric leaf.
+    # Keep a short enum on this one AP series so WlcApDown can still show it.
+    reason = tag_or_field(metric, ("reboot_reason", "join_reason", "disconnect_reason", "reboot-reason", "ap-disconnect-reason", "ap_disconnect_reason_str"))
     out = Metric("ie_wlc_ap")
     copy_place(metric, out)
     out.tags["ap"] = str(ap)
-    if reason:
-        out.tags["reboot_reason"] = str(reason)
+    if reason and low_card("reboot_reason", str(reason)) and _tag_room("reboot_reason", str(reason).strip()):
+        out.tags["reboot_reason"] = str(reason).strip()
     up = oper_up(oper)
     # No state leaf is not the same as down. The API treats a fresh info
     # sample as online. Forcing 0 here marked every joined AP offline.
     if up != None:
         out.fields["oper_up"] = up
-    mac = tag_or_field(metric, ("wtp_mac", "wtp-mac", "mac", "ethernet_mac", "wtp_enet_mac"))
-    if mac:
-        out.tags["mac"] = str(mac)
+    # MAC, serial and IP live on the info series only. Copying them onto
+    # every counter makes the scrape carry one label set per leaf.
     disconnects = num(tag_or_field(metric, ("disconnects",)))
     if disconnects != None:
         out.fields["disconnects"] = disconnects
@@ -441,6 +447,11 @@ def ap_info(metric, ap):
     if ios:
         info.tags["ios"] = str(ios)
         info.tags["sw_version"] = str(ios)
+    # One label on the info series. The same word on every counter leaf
+    # made each AP state a second copy of the whole counter set.
+    state = tag_or_field(metric, ("ap_operation_state", "oper_status", "ap_state", "ap-operation-state"))
+    if state and low_card("ap_operation_state", str(state)):
+        info.tags["ap_operation_state"] = str(state).strip()
     if mode:
         info.tags["mode"] = str(mode)
     if site_tag:
@@ -1154,9 +1165,91 @@ def _tag_room(leaf, text):
     return True
 
 
+def _index_parent(key):
+    # The container immediately before a numeric list index. None when the
+    # leaf is a scalar.
+    found = None
+    if "/" in key:
+        parts = key.split("/")
+        for i in range(len(parts)):
+            if not _digits(parts[i]):
+                continue
+            if i > 0:
+                found = parts[i - 1]
+            else:
+                found = ""
+        return found
+    parts = key.split("_")
+    for i in range(len(parts) - 1):
+        if _digits(parts[i + 1]):
+            found = parts[i]
+    return found
+
+
+def _unstable_index(key):
+    # History keeps the newest row under the leaf name. A slash index is a
+    # YANG list position: channel noise is rewritten to noise_<channel>, and
+    # every other list (neighbors, clients, rogues) would be a new series
+    # each time the position changed. A scalar leaf such as stat_1 is kept.
+    if history_group(key) != None:
+        return not _history_kept(key)
+    if "/" not in key:
+        return False
+    parent = _index_parent(key)
+    if parent == None:
+        return False
+    # Channel noise stays. snake() names the dBm leaf "noise", and
+    # attach_channel_noise adds noise_<channel>.
+    if "noise" in parent.lower():
+        return False
+    return True
+
+
+def _is_history_metric(metric):
+    path = ""
+    if "path" in metric.tags:
+        path = metric.tags["path"]
+    blob = (metric.name + " " + path).lower()
+    return "history" in blob
+
+
+def _keep_history_row(metric, ap):
+    # Each history record arrives as its own metric. Only the newest one
+    # for this AP is stored, under the same labels as the AP series.
+    if not _is_history_metric(metric):
+        return True
+    rank = None
+    for key in metric.fields:
+        found = _time_rank(key, metric.fields[key])
+        if found == None:
+            continue
+        if rank == None or _rank_newer(found, rank):
+            rank = found
+    if "hist_rank" not in state:
+        state["hist_rank"] = {}
+    ranks = state["hist_rank"]
+    ident = who(metric) + "|" + str(ap)
+    prev = ranks[ident] if ident in ranks else None
+    if rank != None and prev != None and _rank_newer(prev, rank):
+        return False
+    if rank != None:
+        ranks[ident] = rank
+    return True
+
+
+def sanitize(metric):
+    out = Metric(metric.name)
+    copy_place(metric, out)
+    for key in ("ap", "radio", "ssid", "band", "if", "name", "pool", "interface"):
+        if key in metric.tags and metric.tags[key]:
+            out.tags[key] = metric.tags[key]
+    out.time = metric.time
+    return finish(metric, out)
+
+
 def attach_extra(metric, out):
     for key in metric.fields:
-        if not _history_kept(key):
+        if not _history_kept(key) or _unstable_index(key):
             continue
         leaf = field_name(key)
         if leaf == "":
@@ -1172,6 +1265,8 @@ def attach_extra(metric, out):
             out.fields[leaf] = value
         elif kind == "bool":
             out.fields[leaf] = 1 if value else 0
+        elif leaf in ("ap_operation_state", "oper_state", "operation_state", "ap_state"):
+            continue
         elif low_card(key, value) and leaf not in out.tags and _tag_room(leaf, str(value).strip()):
             out.tags[leaf] = str(value).strip()
 

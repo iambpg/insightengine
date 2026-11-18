@@ -38,7 +38,7 @@ Assumption for the estimate: 2 radios per AP, 8 SSIDs per radio, 15 clients per 
 | Extra series, 5,000 APs, clients stored | 1465080 | passthrough fields on top of the 890040 |
 | Extra series, 5,000 APs, `IE_WLC_STORE_CLIENTS=0` | 340080 | radio and controller passthrough only | 
 
-Per-client series are 8 named numeric fields (RSSI, SNR, bytes in, bytes out, tx retries, RTS retries, current rate, and `speed`). `current-rate` in IOS-XE 17.15 is a string such as `72.2`; an MCS token such as `m9` does not parse, and the uint32 `speed` leaf is used instead. Every other numeric leaf on the same client record is kept (15 further traffic-stats leaves: packet counts, MIC errors, spatial streams, drops). Labels are `wlc`, `ap`, `ssid`, `band` and the client MAC. A VLAN or mobility change does not start a new series. `telegraf-wlc-clients` expires a client series after 300s. `telegraf-wlc` still expires AP and radio series after 1200s.
+Per-client series are 8 named numeric fields (RSSI, SNR, bytes in, bytes out, tx retries, RTS retries, current rate, and `speed`). `current-rate` in IOS-XE 17.15 is a string such as `72.2`; an MCS token such as `m9` does not parse, and the uint32 `speed` leaf is used instead. Every other numeric leaf on the same client record is kept (15 further traffic-stats leaves: packet counts, MIC errors, spatial streams, drops). Labels are `wlc`, `ap`, `ssid`, `band` and the client MAC. A VLAN or mobility change does not start a new series. `telegraf-wlc-clients` expires a client series after 300s. `telegraf-wlc` expires AP and controller series after 1200s. Radio and RRM series expire after 1200s on `telegraf-wlc-radio`.
 
 On a 5,000-AP controller that is 1,125,000 extra per-client series, plus 340,000 extra radio series (26 `radio-oper-stats` counters and about 8 per-channel noise fields on each of 10,000 radios), plus about 80 controller series for environment, interfaces and hardware. `IE_WLC_STORE_CLIENTS=0` drops the per-client extras and leaves the 340,080 radio and controller extras. Radio noise dBm comes from `noise/noise/noise-data` (one leaf per scanned channel) or from `noise-floor` on `radio-oper-stats`. `load/rx-noise-channel-utilization` is a percent and is stored under its own name.
 
@@ -57,6 +57,37 @@ The table scales that clients-process replay linearly (24 series and about 68 Ki
 | 10,000 | 150,000 | 15 clients per AP | 3,600,000 | 9.8 GiB |
 
 Default export for one 5,000-AP controller is about 890040 series, of which 600000 are per client, 50000 are radio rollups and 80000 are per-SSID counts.
+
+## AP and radio scrape
+
+After client-oper was moved out, `telegraf-wlc` on the live collector (started 2026-11-18T15:53:12Z, one controller, about 4,600 APs) was still too large to scrape. VmRSS was 3,822,524 kB (3.65 GiB) and VmHWM was 5,138,444 kB (4.90 GiB), against a 6 GiB limit. CPU sat around 150–200%. `GET /metrics` on `:9273` wrote 0 bytes: an empty reply at 15.8s, then a 20s timeout with no headers. Prometheus marked `telegraf-wlc` down (`up=0`, `scrape_samples_scraped` 0, error `EOF`, duration about 20s), which dropped every wireless panel because they all came from that one job. A series-by-name histogram was not taken. The handler never wrote a byte, and a second full scrape was not run because the process was already at its Go memory limit. One failed `ap-history` decode in the log held 2,119 copies of each history leaf and 328 AP names, about 6.5 history rows per AP in that single message.
+
+The same 1,000-AP fixture through the old normalizer (string fields exported as labels) was 122,000 series, 11,180,222 bytes, a 0.22s scrape and peak RSS 422,064 kB. `mac` was a label on 44,000 of those series. At about 3.5 KiB per series that live peak is roughly 1.5 million series. The fixture has 40 scalar counters per AP, so the live record is larger than the fixture, and history timestamps plus list indexes were labels on top of that.
+
+What is no longer a series:
+
+- A YANG list position, except channel noise and the newest `history` / `ptr` row. Neighbor RSSI and the other slash-indexed lists are not one series per position. Counts such as `rogue_neighbors` stay. The index is a list slot, not an identity.
+- History rows older than the newest timestamp for that AP. The newest `uptime`, `bytes` and `disconnects` stay under those names. Timestamps and free-text notes are not labels.
+- MAC, serial, IP, model, location and IOS as labels on every counter. They stay on `ie_wlc_ap_info`, one series per AP.
+- `ap_operation_state` as a label on every counter. It stays on `ie_wlc_ap_info`. `ie_wlc_ap_oper_up` is the numeric field `WlcApDown` uses. `reboot_reason` stays on the AP series only when it is a short enum, and only for 128 distinct values, so the annotation still renders.
+- The raw MDT metric. An unknown subscription keeps its numeric leaves and the stable tags (`wlc`, `site`, `platform`, `source`, plus `ap`, `radio`, `ssid`, `band`, `if`, `name`, `pool`, `interface` when the row already has them).
+
+Still stored, because the UI, alerts and dashboards read them: `ie_wlc_ap_oper_up`, `ie_wlc_ap_info`, `ie_wlc_ap_global_joined_aps`, `ie_wlc_radio_channel_util`, `ie_wlc_radio_interference`, `ie_wlc_radio_channel`, `ie_wlc_radio_noise`, `ie_wlc_radio_noise_<channel>`, `ie_wlc_radio_retry_count`, `ie_wlc_radio_tx_frame_count`, `ie_wlc_radio_fcs_error_count`, `ie_wlc_radio_rx_fragment_count`, `ie_wlc_radio_clients`, `ie_wlc_radio_poor_snr_clients`, radio `oper_up` / `tx_power` / `width`, `ie_wlc_ssid`, `ie_wlc_client_radio_*`, `ie_wlc_cpu`, `ie_wlc_memory`, `ie_wlc_env`, `ie_wlc_interface`, `ie_wlc_hardware`, `ie_wlc_ha_active`. AireOS SNMP is unchanged. `string_as_label` stays on for `telegraf-wlc` because those SNMP metrics still return their original fields. 9800 counters do not copy string leaves into fields, so the flag does not multiply them.
+
+`ie_wlc_radio_mdt`, `ie_wlc_radio_stats`, `ie_wlc_rrm` and `ie_wlc_rrm_slot` are POSTed to `http://telegraf-wlc-radio:9277/telegraf` before `normalize.star`. The buffer is 50,000 metrics, enough for one 10,000-AP push (two radios, oper, stats and RRM) and then it drops. A refused connection does not stop the AP collector. The controller still dials only port 57500. Prometheus job `telegraf-wlc-radio` scrapes `:9273` on that container. `scrape_timeout` for `telegraf-wlc` and `telegraf-wlc-radio` is 15s, which covers the measured scrapes below. A slow scrape of one job does not blank the panels that read the other.
+
+Replay of the new normalizer, Telegraf 1.38.3, same fixture (6 history rows, 2 radios, 26 radio counters, 8 noise channels, 10 neighbor RSSI values). Neighbor RSSI is not in the radio scrape. Channel noise is (`noise` and `noise_36` through `noise_64`).
+
+| Process | APs | Series | Scrape body | Scrape time | Peak RSS |
+|---|---:|---:|---:|---:|---:|
+| `telegraf-wlc` | 1,000 | 44,214 | 2,747,972 bytes | 0.058s | 259,484 kB |
+| `telegraf-wlc-radio` | 1,000 | 76,000 | 5,425,066 bytes | 0.15s | 305,864 kB |
+| `telegraf-wlc` | 5,000 | 220,107 | | 0.45s | 537,100 kB |
+| `telegraf-wlc-radio` | 5,000 | 380,000 | | 1.0s | 856,964 kB |
+| `telegraf-wlc` | 10,000 | 440,214 | 27,038,972 bytes | 0.91s | 1,074,200 kB |
+| `telegraf-wlc-radio` | 10,000 | 760,000 | 54,979,066 bytes | 2.0s | 1,713,928 kB |
+
+The 1,000 and 10,000 rows were measured on Telegraf 1.38.3. The 5,000 rows are half of the 10,000 measurement. `telegraf-wlc` kept 44 series per AP (40 counters, `oper_up`, `info`, and the newest history `uptime` and `disconnects`). `telegraf-wlc-radio` kept 76 series per AP (26 counters, 8 channel-noise fields, plus `noise`, `channel_util`, `interference` and `channel` on each of 2 radios). Both 10,000-AP scrapes finished in under 10s. Peak RSS fits the defaults (`IE_TELEGRAF_WLC_MEM` 6g, `IE_TELEGRAF_WLC_RADIO_MEM` 4g). A fuller capwap record than this 40-counter fixture adds series on the AP collector only. Raise `IE_TELEGRAF_WLC_MEM` if that collector approaches the limit. Do not raise it to keep radio series there.
 
 ## 9800 MDT
 

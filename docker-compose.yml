@@ -987,6 +987,40 @@ services:
         limits: {memory: "${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
         reservations: {memory: 256m}
 
+  # Radio oper, radio stats and RRM. Own cgroup and Prometheus job so a
+  # radio scrape cannot blank AP and controller panels. No host port.
+  telegraf-wlc-radio:
+    build:
+      context: ./config/telegraf/wlc
+      dockerfile: Dockerfile
+    image: insightengine/telegraf-wlc:1.38.3
+    container_name: telegraf-wlc-radio-${CLIENT_SLUG}
+    restart: unless-stopped
+    logging: *default-logging
+    networks: [monitoring-net]
+    user: "0:0"
+    environment:
+      CLIENT_SLUG: ${CLIENT_SLUG}
+      IE_WLC_ROLE: radio
+      IE_TELEGRAF_WLC_RADIO_MEM: ${IE_TELEGRAF_WLC_RADIO_MEM:-4g}
+      PYTHONPATH: /usr/local/bin:/etc/telegraf
+    # No host ports. telegraf-wlc forwards radio and RRM to :9277 on this network.
+    # Prometheus scrapes telegraf-wlc-radio:9273 the same way.
+    volumes:
+      - ./config/telegraf/wlc:/etc/telegraf:ro
+      - ./config/telegraf/wlc/catalog.py:/usr/local/bin/catalog.py:ro
+      - ./certs/ca.crt:/etc/ie-certs/ca.crt:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9273/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits: {memory: "${IE_TELEGRAF_WLC_RADIO_MEM:-4g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
+        reservations: {memory: 256m}
+
   telegraf-host:
     image: ${TELEGRAF_IMAGE}
     container_name: telegraf-host-${CLIENT_SLUG}

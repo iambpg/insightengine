@@ -10,6 +10,8 @@ umask 077
 role="${IE_WLC_ROLE:-ap}"
 if [ "$role" = "clients" ]; then
   mem_limit="${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}"
+elif [ "$role" = "radio" ]; then
+  mem_limit="${IE_TELEGRAF_WLC_RADIO_MEM:-4g}"
 else
   mem_limit="${IE_TELEGRAF_WLC_MEM:-6g}"
 fi
@@ -100,6 +102,9 @@ fi
 if [ "$role" = "clients" ]; then
   # No dial-out socket. Client rows arrive from telegraf-wlc on :9276.
   set -- --config /etc/telegraf/telegraf-clients.conf
+elif [ "$role" = "radio" ]; then
+  # No dial-out socket. Radio and RRM arrive from telegraf-wlc on :9277.
+  set -- --config /etc/telegraf/telegraf-radio.conf
 else
   set -- --config /etc/telegraf/telegraf.conf
   if [ "$transport" != "gnmi" ] && [ "$enable" != "0" ]; then
@@ -115,7 +120,13 @@ while kill -0 "$main_pid" 2>/dev/null; do
   if log=$(python3 /usr/local/bin/render_wlc.py -o "$out" 2>&1); then
     printf '%s\n' "$log"
     case "$log" in
-      wrote*) start_poller ;;
+      wrote*)
+        # Radio has no :9274 socket. socket_writer exits the poller when
+        # that port is closed, so SNMP stays on the AP collector only.
+        if [ "$role" != "radio" ]; then
+          start_poller
+        fi
+        ;;
     esac
     have=1
     delay=2
