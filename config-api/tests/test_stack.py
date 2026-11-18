@@ -74,27 +74,26 @@ def test_no_stack_data_is_a_single_tile():
     assert stack["members"][0]["master"] is True
 
 
+def _indexed(index, value):
+    return {"metric": {"entPhysicalIndex": str(index)}, "value": [0, str(value)]}
+
+
 def test_positions_are_not_renumbered_and_netbox_beats_snmp():
     peers = [_peer(1, 1, 1), _peer(3, 3, 1)]
-    snmp_roles = [
-        {"metric": {"cswSwitchNumCurrent": "2"}, "value": [0, "1"]},
-        {"metric": {"cswSwitchNumCurrent": "1"}, "value": [0, "2"]},
-    ]
-    stack = resolve_stack(peers[0], peers, snmp_roles, [], role_slug="access-switch", form_factor="switch-stack")
+    snmp_roles = [_indexed(1000, 2), _indexed(2000, 1)]
+    numbers = [_indexed(1000, 1), _indexed(2000, 2)]
+    stack = resolve_stack(
+        peers[0], peers, snmp_roles, [], numbers, role_slug="access-switch", form_factor="switch-stack",
+    )
     assert stack["source"] == "netbox"
     assert [item["number"] for item in stack["members"]] == [1, 3]
 
 
 def test_snmp_stack_marks_role_and_state():
-    roles = [
-        {"metric": {"cswSwitchNumCurrent": "1"}, "value": [0, "4"]},
-        {"metric": {"cswSwitchNumCurrent": "2"}, "value": [0, "1"]},
-    ]
-    states = [
-        {"metric": {"cswSwitchNumCurrent": "1"}, "value": [0, "4"]},
-        {"metric": {"cswSwitchNumCurrent": "2"}, "value": [0, "4"]},
-    ]
-    stack = stack_from_snmp(roles, states)
+    numbers = [_indexed(1000, 1), _indexed(2000, 2)]
+    roles = [_indexed(1000, 4), _indexed(2000, 1)]
+    states = [_indexed(1000, 4), _indexed(2000, 4)]
+    stack = stack_from_snmp(roles, states, numbers)
     assert stack["source"] == "snmp"
     assert stack["members"][0]["role"] == "standby"
     assert stack["members"][0]["master"] is False
@@ -106,6 +105,7 @@ def test_snmp_stack_marks_role_and_state():
         [],
         roles,
         states,
+        numbers,
         role_slug="distribution-switch",
         form_factor="access-switch-24",
     )
@@ -115,6 +115,22 @@ def test_snmp_stack_marks_role_and_state():
     ]}
     assert [item["number"] for item in resolved["members"]] == [1, 2]
     assert resolved["members"][1]["master"] is True
+
+
+def test_ent_physical_index_is_not_the_member_number():
+    """1000/2000 and 1001/2001 are entity indexes. Values 1 and 2 are the members."""
+    numbers = [_indexed(1000, 1), _indexed(2000, 2), _indexed(1001, 1), _indexed(2001, 2)]
+    roles = [_indexed(1000, 2), _indexed(2000, 1), _indexed(1001, 2), _indexed(2001, 1)]
+    states = [_indexed(1000, 4), _indexed(2000, 4), _indexed(1001, 4), _indexed(2001, 4)]
+    stack = stack_from_snmp(roles, states, numbers)
+    assert [item["number"] for item in stack["members"]] == [1, 2]
+    assert stack["members"][0]["role"] == "member"
+    assert stack["members"][0]["master"] is False
+    assert stack["members"][0]["state"] == "ready"
+    assert stack["members"][1]["role"] == "active"
+    assert stack["members"][1]["master"] is True
+    assert 1000 not in [item["number"] for item in stack["members"]]
+    assert 2000 not in [item["number"] for item in stack["members"]]
 
 
 def _members(count, master, state_for=None):
