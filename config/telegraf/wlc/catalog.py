@@ -19,6 +19,8 @@ rollup. Every subscription, including client-oper, dials the one host port
 
 from __future__ import annotations
 
+import os
+
 YANG_RELEASE = "17.15.1"
 YANG_TREE = "vendor/cisco/xe/17151"
 
@@ -390,7 +392,26 @@ def is_client_subscription(xpath: str) -> bool:
     return "client-oper-data" in (xpath or "")
 
 
-def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str, vrf: str = "") -> str:
+def ap_history_enabled(flag=None) -> bool:
+    """ap-history is off unless IE_WLC_AP_HISTORY is set.
+
+    Telegraf 1.38 unmarshals the kvGPB message with the Go protobuf library.
+    A string that is not UTF-8 fails the whole message. The plugin has no
+    setting to skip that field or that row. IOS-XE puts those bytes in
+    ap-history, so the default paste does not subscribe to it.
+    """
+    if flag is None:
+        flag = os.environ.get("IE_WLC_AP_HISTORY", "")
+    return str(flag).strip().lower() in ("1", "true", "yes", "on")
+
+
+def active_mdt_subs(include_ap_history=None):
+    if ap_history_enabled(include_ap_history):
+        return MDT_SUBS
+    return tuple(row for row in MDT_SUBS if not str(row[1]).endswith("/ap-history"))
+
+
+def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str, vrf: str = "", include_ap_history=None) -> str:
     base = wlc_subscription_base(name)
     user = username or "<SNMP_V3_USERNAME>"
     lines = [
@@ -409,6 +430,11 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
         "! A management VRF is added only when the device has one set. Mgmt-intf is not the default.",
         "! capwap-data, radio-oper-data and ap-join-stats are periodic only.",
         "! This IOS-XE rejects on-change for those three paths.",
+        "! ap-history is not subscribed. Telegraf 1.38 rejects the whole kvGPB message",
+        "! when any string is not UTF-8, and this path sends those bytes. There is no",
+        "! plugin setting to skip the bad string. Disconnects stay on ap-join-stats.",
+        "! Set IE_WLC_AP_HISTORY=1 on ie-config and re-paste to subscribe anyway.",
+        "! That flag does not make the current Telegraf decode the message.",
         "! Replace %s if IE_MDT_RECEIVER was unset." % receiver,
         "!",
         "netconf-yang",
@@ -420,7 +446,7 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
         "! snmp-server community <ie_wlc_v2 community> RO",
         "!",
     ]
-    for offset, xpath, _alias, policy, seconds, shows in MDT_SUBS:
+    for offset, xpath, _alias, policy, seconds, shows in active_mdt_subs(include_ap_history):
         lines.append("! %s" % shows)
         block = [
             "telemetry ietf subscription %d" % (base + offset),

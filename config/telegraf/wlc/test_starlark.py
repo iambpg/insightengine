@@ -135,14 +135,24 @@ class CatalogPackagingTests(unittest.TestCase):
         self.assertNotIn("ports:", clients)
         self.assertIn("IE_WLC_ROLE: radio", radio)
         self.assertIn("IE_TELEGRAF_WLC_RADIO_MEM: ${IE_TELEGRAF_WLC_RADIO_MEM:-4g}", radio)
+        self.assertIn('cpus: "${IE_TELEGRAF_WLC_RADIO_CPUS:-2}"', radio)
+        self.assertIn('cpus: "${IE_TELEGRAF_WLC_CLIENTS_CPUS:-2}"', clients)
         self.assertNotIn("ports:", radio)
         wlc_conf = (WLC / "telegraf.conf").read_text(encoding="utf-8")
         self.assertIn("client_forward.star", wlc_conf)
         self.assertIn("http://${IE_WLC_CLIENTS_FORWARD:-telegraf-wlc-clients:9276}/telegraf", wlc_conf)
         self.assertIn("http://${IE_WLC_RADIO_FORWARD:-telegraf-wlc-radio:9277}/telegraf", wlc_conf)
         self.assertIn("[[outputs.http]]", wlc_conf)
+        self.assertIn('timeout = "30s"', wlc_conf)
+        self.assertIn('content_encoding = "gzip"', wlc_conf)
+        self.assertIn("metric_batch_size = 5000", wlc_conf)
+        self.assertIn("metric_buffer_limit = 10000", wlc_conf)
         self.assertIn("metric_buffer_limit = 20000", wlc_conf)
-        self.assertIn("metric_buffer_limit = 50000", wlc_conf)
+        self.assertIn('alias = "wlc-radio"', wlc_conf)
+        self.assertIn('alias = "wlc-clients"', wlc_conf)
+        self.assertIn("[[inputs.internal]]", wlc_conf)
+        self.assertIn("per_instance = true", wlc_conf)
+        self.assertNotIn("metric_buffer_limit = 50000", wlc_conf)
         self.assertIn('namedrop = [', wlc_conf)
         clients_conf = (WLC / "telegraf-clients.conf").read_text(encoding="utf-8")
         self.assertIn("[[inputs.http_listener_v2]]", clients_conf)
@@ -320,7 +330,7 @@ class StarlarkDialectTests(unittest.TestCase):
                     'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-9,ms_mac_address=aabbccddeef0,store_clients=1,ssid=corp,band=5 current_rate="72.2",speed=144i,most_recent_rssi=-60i,most_recent_snr=30i,policy_errs=2i,vlan_name="user vlan",mobility="local",username="alice from floor 2"',
                     'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-3,ms_mac_address=aabbccddeef2,wlc_role=ap,store_clients=1 most_recent_rssi=-55i',
                     'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-8,ms_mac_address=aabbccddeef1,store_clients=0 current_rate="m9",speed=54i,most_recent_rssi=-61i,most_recent_snr=22i',
-                    'ie_wlc_rrm,wlc=lab,site=hq,ap_name=AP-7,radio_slot_id=1,path=rrm-measurement current_channel=36i,load/cca_util_percentage=40i,load/rx_noise_channel_utilization=3i,noise/noise/noise_data/0/chan=36i,noise/noise/noise_data/0/noise=-91i,noise/noise/noise_data/1/chan=40i,noise/noise/noise_data/1/noise=-70i,mystery_counter=5i',
+                    'ie_wlc_rrm,wlc=lab,site=hq,ap_name=AP-7,radio_slot_id=1,path=rrm-measurement current_channel=36i,load/cca_util_percentage=40i,load/rx_noise_channel_utilization=3i,noise/noise/noise_data/0/chan=36i,noise/noise/noise_data/0/noise=-91i,noise/noise/noise_data/1/chan=40i,noise/noise/noise_data/1/noise=-70i,dot11/neighbor/0/rssi=-40i,mystery_counter=5i',
                     'ie_wlc_radio_stats,wlc=lab,site=hq,ap_name=AP-6,radio_slot_id=0,path=radio-oper-stats odd_counter=9i',
                     "",
                 ]),
@@ -397,6 +407,7 @@ class StarlarkDialectTests(unittest.TestCase):
         self.assertIn("rx_noise_channel_utilization=3", text)
         self.assertIn("mystery_counter=5", text)
         self.assertIn("odd_counter=9", text)
+        self.assertNotIn("rssi=-40", text)
         self.assertNotIn("noise=3", text)
         self.assertNotIn("noise=-70", text)
 

@@ -11,7 +11,7 @@ Four checks sit next to device health. None of them push configuration onto a ro
 
 The UI page is **Service Experience**. Empty groups say **not configured**. Grafana dashboard **Service Experience** is provisioned from `config/grafana/provisioning/dashboards/json/service-experience.json`. Alerts and recording rules are `config/prometheus/experience-rules.yml`.
 
-9800 client detail from MDT arrives on `telegraf-wlc` port 57500 and is forwarded to `telegraf-wlc-clients` on the docker network. `IE_WLC_STORE_CLIENTS=0` drops those series and keeps the per-AP/per-radio rollup. AP inventory stays on `telegraf-wlc`. Radio and RRM series stay on `telegraf-wlc-radio`. SNMP never walks a client list. The full path, OID and cardinality table is `docs/wlc-9800-full.md`.
+9800 client detail from MDT arrives on `telegraf-wlc` port 57500 and is forwarded to `telegraf-wlc-clients` on the docker network. `IE_WLC_STORE_CLIENTS=0` drops those series and keeps the per-AP/per-radio rollup. AP inventory stays on `telegraf-wlc`. Radio and RRM series stay on `telegraf-wlc-radio`. `ap-history` is not in the paste (`IE_WLC_AP_HISTORY=1` to add it). Telegraf 1.38 cannot skip an invalid UTF-8 string in that message. Forward errors are `internal_write_errors` on the `telegraf-wlc` scrape, tagged `wlc-radio` or `wlc-clients`. SNMP never walks a client list. The full path, OID and cardinality table is `docs/wlc-9800-full.md`.
 
 ## NetBox fields
 
