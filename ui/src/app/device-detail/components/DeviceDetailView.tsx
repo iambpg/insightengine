@@ -454,11 +454,8 @@ export default function DeviceDetailView() {
               </div>
             ) : null}
             <div ref={greyRef} className="relative flex items-stretch gap-0 overflow-hidden rounded-md bg-gradient-to-b from-secondary to-background p-1" style={{ height: FACEPLATE_HEIGHT }}>
-              <div ref={localPlateRef} className="min-w-0 flex-1 overflow-x-auto">
-                <div
-                  className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'flex h-full min-w-full items-center'}
-                  style={device.faceplate.form_factor === 'ceiling-ap' ? undefined : { height: FACEPLATE_HEIGHT }}
-                >
+              <div ref={localPlateRef} className="flex min-w-0 flex-1 items-start overflow-x-auto">
+                <div className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'min-w-full'}>
                   <Faceplate
                     device={device.faceplate}
                     selectedPortId={selected?.id ?? null}
@@ -470,11 +467,11 @@ export default function DeviceDetailView() {
                 </div>
               </div>
               <div className="mx-2 w-px shrink-0 bg-border" aria-hidden="true" />
-              <aside data-testid="parent-device" className="flex w-44 shrink-0 flex-col justify-center px-2">
+              <aside data-testid="parent-device" className="flex w-44 shrink-0 flex-col justify-center overflow-visible px-2 py-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Parent Device</p>
                 {parentLink ? (
                   <>
-                    <Link href={devicePath(parentLink.id, parentLink.formFactor || 'generic')} className="mt-1 truncate font-mono-data text-sm font-semibold text-foreground hover:text-primary hover:underline" title={parentLink.hostname}>
+                    <Link href={devicePath(parentLink.id, parentLink.formFactor || 'generic')} className="mt-1 break-all font-mono-data text-sm font-semibold leading-tight text-foreground hover:text-primary hover:underline" title={parentLink.hostname}>
                       {parentLink.hostname}
                     </Link>
                     <div ref={parentPortRef} data-relation-id={parentLink.id} className="mt-2">
@@ -485,11 +482,6 @@ export default function DeviceDetailView() {
                   <p className="mt-1 text-sm text-muted-foreground">No parent detected</p>
                 )}
               </aside>
-              {parentLink && !cable ? (
-                <svg className="pointer-events-none absolute inset-0" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                  <path d="M 58 72 V 96 H 86 V 58" fill="none" stroke="#3b82f6" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-                </svg>
-              ) : null}
               {cable ? <UplinkCable localRef={localPlateRef} greyRef={greyRef} remote={cable.plate} localPortName={cable.localPort} remotePortName={cable.remotePort} /> : null}
             </div>
             {device.faceplate.form_factor === 'ceiling-ap' ? <ApRadioBoards device={device} /> : null}
@@ -988,13 +980,15 @@ function cablePath(points: { x: number; y: number }[]): string {
 }
 
 function outsideCable(port: DOMRect, chassis: DOMRect, remotePort: DOMRect | null, remoteBox: DOMRect, grey: DOMRect): string {
-  const x = port.left + port.width / 2;
-  const y = port.top + port.height / 2;
-  const hug = 2;
-  const laneY = Math.min(grey.bottom - hug, chassis.bottom + hug);
-  const endX = remotePort ? remotePort.left + remotePort.width / 2 : remoteBox.left + remoteBox.width / 2;
-  const rawEndY = remotePort ? remotePort.top + remotePort.height / 2 : remoteBox.top + remoteBox.height / 2;
-  const endY = Math.max(grey.top + hug, Math.min(grey.bottom - hug, rawEndY));
+  const localX = (rect: DOMRect) => rect.left - grey.left + rect.width / 2;
+  const localY = (rect: DOMRect) => rect.top - grey.top + rect.height / 2;
+  const x = localX(port);
+  const y = localY(port);
+  const hug = 6;
+  const laneY = Math.min(grey.height - hug, chassis.bottom - grey.top + hug);
+  const endX = remotePort ? localX(remotePort) : remoteBox.left - grey.left + remoteBox.width / 2;
+  const rawEndY = remotePort ? localY(remotePort) : remoteBox.top - grey.top + remoteBox.height / 2;
+  const endY = Math.max(hug, Math.min(grey.height - hug, rawEndY));
   return cablePath([
     { x, y },
     { x, y: laneY },
@@ -1025,15 +1019,22 @@ function UplinkCable({
     const measure = () => {
       const localPort = findPort(local, localPortName);
       const remotePort = findPort(remote, remotePortName);
-      if (!localPort) {
+      const greyBox = grey.getBoundingClientRect();
+      if (!localPort || greyBox.width < 2 || greyBox.height < 2) {
+        setPath('');
+        return;
+      }
+      const portBox = localPort.getBoundingClientRect();
+      if (portBox.width < 1 && portBox.height < 1) {
         setPath('');
         return;
       }
       const localBox = local.getBoundingClientRect();
-      const metal = local.querySelector('[data-chassis]');
+      const metals = local.querySelectorAll('[data-chassis]');
+      const metal = metals.length ? metals[metals.length - 1] : null;
       const remoteBox = remote.getBoundingClientRect();
-      setSize({ w: window.innerWidth, h: window.innerHeight });
-      setPath(outsideCable(localPort.getBoundingClientRect(), metal ? metal.getBoundingClientRect() : localBox, remotePort ? remotePort.getBoundingClientRect() : null, remoteBox, grey.getBoundingClientRect()));
+      setSize({ w: greyBox.width, h: greyBox.height });
+      setPath(outsideCable(portBox, metal ? metal.getBoundingClientRect() : localBox, remotePort ? remotePort.getBoundingClientRect() : null, remoteBox, greyBox));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -1049,27 +1050,28 @@ function UplinkCable({
       window.removeEventListener('resize', measure);
     };
   }, [localRef, greyRef, remote, localPortName, remotePortName]);
-  if (!path || size.w <= 0 || typeof document === 'undefined') return null;
-  return createPortal(
-    <svg width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} style={{ position: 'fixed', left: 0, top: 0, zIndex: 80, pointerEvents: 'none' }} aria-hidden="true">
+  if (!path || size.w <= 0) return null;
+  return (
+    <svg data-testid="uplink-cable" width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} style={{ position: 'absolute', left: 0, top: 0, zIndex: 5, pointerEvents: 'none' }} aria-hidden="true">
       <path d={path} fill="none" stroke="#1e293b" strokeWidth={7} strokeLinejoin="miter" strokeLinecap="butt" />
       <path d={path} fill="none" stroke="#3b82f6" strokeWidth={3} strokeLinejoin="miter" strokeLinecap="butt" />
-    </svg>,
-    document.body,
+    </svg>
   );
 }
 
 function ParentPortPicture({ name }: { name: string }) {
   const fiber = /te|hu|fo|twe|sfp|uplink/i.test(name);
   return (
-    <div data-port-name={name} data-testid="parent-port" className="flex flex-col items-center gap-1">
+    <div data-port-name={name} data-testid="parent-port" className="flex w-full flex-col items-center gap-1">
       <div
         className={fiber
-          ? 'h-6 w-10 rounded-[3px] border border-slate-400 bg-slate-800 shadow-sm'
-          : 'h-8 w-7 rounded-[3px] border-2 border-slate-500 bg-slate-900 shadow-sm'}
+          ? 'h-8 w-14 rounded-[3px] border border-slate-400 bg-slate-800 shadow-sm'
+          : 'h-10 w-8 rounded-[3px] border-2 border-slate-400 bg-slate-900 shadow-sm'}
         aria-hidden="true"
-      />
-      <span className="max-w-[9rem] truncate font-mono-data text-[10px] text-muted-foreground" title={name}>{name}</span>
+      >
+        <div className={fiber ? 'mx-auto mt-1.5 h-3 w-8 rounded-sm bg-slate-500' : 'mx-auto mt-1 h-4 w-5 rounded-sm bg-slate-600'} />
+      </div>
+      <span className="max-w-full text-center font-mono-data text-[11px] leading-tight text-foreground" title={name}>{name}</span>
     </div>
   );
 }

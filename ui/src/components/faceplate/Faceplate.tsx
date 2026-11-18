@@ -6,7 +6,7 @@ import FaceplateDefs from './FaceplateDefs';
 import PortTooltip from './PortTooltip';
 import RadioTooltip from './RadioTooltip';
 import FortiGateLayout from './layouts/FortiGateLayout';
-import SwitchLayout, { SW_H } from './layouts/SwitchLayout';
+import SwitchLayout, { SW_H, switchCanvas } from './layouts/SwitchLayout';
 import { CHASSIS_WIDTH, FACEPLATE_HEIGHT, lockedChassis } from './size';
 
 export { FACEPLATE_HEIGHT };
@@ -119,9 +119,10 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
       case 'access-switch-24': case 'access-switch-48': case 'generic':
       case 'firewall': case 'branch-router': case 'wireless-controller': case 'modular-chassis': {
         const ports = device.modules?.length ? device.modules.flatMap((module) => module.ports) : (device.ports ?? []);
+        const canvas = switchCanvas(ports);
         return {
-          vbW: frame.vbW,
-          vbH: frame.vbH,
+          vbW: canvas.width + pad * 2,
+          vbH: canvas.height + pad * 2,
           rowCount: 1,
           body: (
             <SwitchLayout
@@ -139,8 +140,9 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         const members = device.members ?? [];
         const rows = Math.max(members.length, 1);
         const gap = 8;
+        const width = Math.max(1, ...members.map((member) => switchCanvas(member.ports).width));
         return {
-          vbW: frame.vbW,
+          vbW: width + pad * 2,
           vbH: pad * 2 + rows * SW_H + Math.max(0, rows - 1) * gap,
           rowCount: rows,
           body: (
@@ -151,6 +153,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
                   ports={member.ports}
                   originX={pad}
                   originY={pad + index * (SW_H + gap)}
+                  canvasWidth={width}
                   {...common}
                   memberNumber={member.number}
                   memberHealthColor={memberInk(member.health)}
@@ -186,10 +189,12 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
     );
   }
 
-  const drawnHeight = stackRows > 4 ? Math.round((stackRows / 4) * FACEPLATE_HEIGHT) : FACEPLATE_HEIGHT;
+  // The panel stays 168px. This slot is the metal; the strip below it is the parent cable.
+  const chassisSlot = FACEPLATE_HEIGHT - 26;
+  const drawnHeight = stackRows > 4 ? Math.round((stackRows / 4) * chassisSlot) : chassisSlot;
 
   return (
-    <div ref={wrapRef} className={`relative w-full min-w-0 ${className}`} style={stackRows > 4 ? { height: FACEPLATE_HEIGHT, overflowY: 'auto' } : undefined}>
+    <div ref={wrapRef} className={`relative w-full min-w-0 ${className}`} style={stackRows > 4 ? { height: chassisSlot, overflowY: 'auto' } : undefined}>
       <div className="w-full min-w-0">
         <svg
           viewBox={`0 0 ${vbW} ${vbH}`}

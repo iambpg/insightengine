@@ -4,7 +4,6 @@ import React from 'react';
 import type { PortInfo } from '@/lib/types';
 import ChassisBody from '../Chassis';
 import PortGlyph from '../Port';
-import { lockedChassis } from '../size';
 
 export interface LayoutCommon {
   uid: string;
@@ -22,10 +21,17 @@ interface SwitchProps extends LayoutCommon {
   stackPorts?: boolean;
   modelLabel?: string;
   ledHealth?: string;
+  canvasWidth?: number;
 }
 
 // Cable ports sit in two rows, odd above even, the way a switch face is built.
-export const SW_H = 96;
+// Height includes the port numbers above the top row and below the bottom row.
+export const SW_H = 124;
+const START_X = 86;
+const PITCH = 28;
+const GROUP_GAP = 10;
+const TOP_Y = 16;
+const BOTTOM_Y = 70;
 
 const CABLE_TYPES = new Set(['RJ45', 'SFP', 'SFP+', 'QSFP', 'MGMT']);
 
@@ -91,8 +97,20 @@ export function cablePorts(ports: PortInfo[]): PortInfo[] {
 
 export function switchWidth(portCount: number) {
   const cols = Math.max(1, Math.ceil(portCount / 2));
-  const groups = Math.ceil(cols / 4);
-  return 150 + cols * 24 + Math.max(0, groups - 1) * 6 + 48;
+  const groups = Math.ceil(cols / 6);
+  return START_X + cols * PITCH + Math.max(0, groups - 1) * GROUP_GAP + 48;
+}
+
+export function switchCanvas(ports: PortInfo[]) {
+  const laid = cablePorts(ports);
+  const copper = laid.filter((port) => !isFiber(port));
+  const fiber = laid.filter(isFiber);
+  const cols = Math.max(1, Math.ceil(copper.length / 2));
+  const groups = Math.ceil(cols / 6);
+  const fiberCols = Math.max(1, Math.ceil(fiber.length / 2));
+  const fiberW = fiber.length ? fiberCols * 26 + 12 : 8;
+  const width = START_X + cols * PITCH + Math.max(0, groups - 1) * GROUP_GAP + fiberW + 8;
+  return { width, height: SW_H, cols, groups, fiberCols, fiberW, copper, fiber };
 }
 
 function isFiber(port: PortInfo): boolean {
@@ -106,21 +124,14 @@ function ledFill(health: string | undefined): string {
   return '#94a3b8';
 }
 
-export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect, originX = 0, originY = 0, memberNumber, memberHealthColor, modelLabel, ledHealth }: SwitchProps) {
-  const laid = cablePorts(ports);
-  const copper = laid.filter((port) => !isFiber(port));
-  const fiber = laid.filter(isFiber);
-  const W = lockedChassis().innerW;
-  const startX = 86;
-  const fiberCols = Math.max(1, Math.ceil(fiber.length / 2));
-  const fiberW = fiber.length ? fiberCols * 22 + 16 : 8;
-  const cols = Math.max(1, Math.ceil(copper.length / 2));
-  const groups = Math.ceil(cols / 6);
-  const groupGap = 8;
-  const usable = Math.max(22, W - startX - fiberW - groupGap * Math.max(0, groups - 1));
+export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect, originX = 0, originY = 0, memberNumber, memberHealthColor, modelLabel, ledHealth, canvasWidth }: SwitchProps) {
+  const canvas = switchCanvas(ports);
+  const { copper, fiber, cols, fiberCols, fiberW } = canvas;
+  const W = canvasWidth && canvasWidth > canvas.width ? canvasWidth : canvas.width;
+  const usable = Math.max(PITCH, W - START_X - fiberW - GROUP_GAP * Math.max(0, canvas.groups - 1));
   const pitch = usable / cols;
-  const glyph = Math.min(16, Math.max(9, pitch - 3));
-  const colX = (c: number) => startX + c * pitch + Math.floor(c / 6) * groupGap + Math.max(0, (pitch - glyph) / 2);
+  const glyph = Math.min(18, Math.max(11, pitch - 8));
+  const colX = (c: number) => START_X + c * pitch + Math.floor(c / 6) * GROUP_GAP + Math.max(0, (pitch - glyph) / 2);
   const led = ledFill(ledHealth);
   const accent = memberHealthColor || led;
 
@@ -159,10 +170,10 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
           return (
             <React.Fragment key={`${uid}-col-${c + 1}`}>
               {top && (
-                <PortGlyph port={top} x={colX(c)} y={18} size={glyph} uid={uid} selected={selectedId === top.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(top.name)} />
+                <PortGlyph port={top} x={colX(c)} y={TOP_Y} size={glyph} uid={uid} selected={selectedId === top.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(top.name)} />
               )}
               {bottom && (
-                <PortGlyph port={bottom} x={colX(c)} y={52} size={glyph} uid={uid} selected={selectedId === bottom.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(bottom.name)} silkBelow />
+                <PortGlyph port={bottom} x={colX(c)} y={BOTTOM_Y} size={glyph} uid={uid} selected={selectedId === bottom.id} onHover={onHover} onSelect={onSelect} silk={silkLabel(bottom.name)} silkBelow />
               )}
             </React.Fragment>
           );
@@ -171,8 +182,8 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
         {fiber.map((port, index) => {
           const column = index % fiberCols;
           const row = Math.floor(index / fiberCols);
-          const x = W - fiberW + 8 + column * 22;
-          const y = row === 0 ? 16 : 52;
+          const x = W - fiberW + 6 + column * 26;
+          const y = row === 0 ? TOP_Y : BOTTOM_Y;
           return (
             <PortGlyph
               key={port.id}
