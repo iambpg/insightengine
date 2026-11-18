@@ -89,17 +89,6 @@ def sla_ids(name: str) -> int:
     return _id_block(name, 4000, 10000)
 
 
-def _clients_port() -> int:
-    raw = (os.environ.get("IE_MDT_CLIENTS_PORT") or "57502").strip()
-    try:
-        port = int(raw)
-    except ValueError:
-        return 57502
-    if port < 1 or port > 65535:
-        return 57502
-    return port
-
-
 def _receiver(explicit: str | None = None) -> tuple[str, int, bool]:
     host = (explicit if explicit is not None else os.environ.get("IE_MDT_RECEIVER") or "").strip()
     raw_port = (os.environ.get("IE_MDT_PORT") or "57500").strip()
@@ -168,7 +157,7 @@ def telemetry_config(device: dict, receiver: str | None = None) -> dict:
             # The placeholder is already called out inside the generated text.
             pass
         return dict(base, configured=True, reason="", config=wlc_catalog().iosxe_wlc_config(
-            name, ip, shown, port, user, _management_vrf(device), _clients_port(),
+            name, ip, shown, port, user, _management_vrf(device),
         ))
     ids = telemetry_ids(name)
     lines = [

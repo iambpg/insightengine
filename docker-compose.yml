@@ -963,13 +963,12 @@ services:
       IE_WLC_SHARD_INDEX: ${IE_WLC_SHARD_INDEX:-0}
       IE_GNMI_USER: ${IE_GNMI_USER:-}
       IE_GNMI_PASSWORD: ${IE_GNMI_PASSWORD:-}
-      IE_MDT_CLIENTS_PORT: ${IE_MDT_CLIENTS_PORT:-57502}
       IE_NETBOX_SD_URL: https://caddy:8443/api/plugins/lists/prometheus-devices/?status=active&role=wireless-controller
       IE_NETBOX_CA: /etc/ie-certs/ca.crt
       IE_TELEGRAF_WLC_CLIENTS_MEM: ${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}
       PYTHONPATH: /usr/local/bin:/etc/telegraf
-    ports:
-      - "${HOST_BIND:-0.0.0.0}:${PORT_MDT_CLIENTS:-57502}:${IE_MDT_CLIENTS_PORT:-57502}"
+    # No host ports. telegraf-wlc forwards client-oper to :9276 on this network.
+    # Prometheus scrapes telegraf-wlc-clients:9273 the same way.
     volumes:
       - ./config/telegraf/wlc:/etc/telegraf:ro
       - ./config/telegraf/wlc/catalog.py:/usr/local/bin/catalog.py:ro

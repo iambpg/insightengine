@@ -46,12 +46,10 @@ fi
 # catalog.py is copied next to render_wlc.py and is also on the /etc/telegraf
 # checkout mount (compose and upgrade.sh).
 export PYTHONPATH="/usr/local/bin:/etc/telegraf${PYTHONPATH:+:$PYTHONPATH}"
-# Dial-out port. 57500 is where telegraf-wlc is reached. 57400 is UI HTTPS.
-# Client subscriptions use 57502 on telegraf-wlc-clients.
+# Dial-out port. 57500 is the only host port. Client rows are forwarded
+# to telegraf-wlc-clients on the docker network.
 IE_MDT_PORT="${IE_MDT_PORT:-57500}"
 export IE_MDT_PORT
-IE_MDT_CLIENTS_PORT="${IE_MDT_CLIENTS_PORT:-57502}"
-export IE_MDT_CLIENTS_PORT
 out=/tmp/wlc-generated.conf
 refresh="${IE_WLC_REFRESH_SECONDS:-300}"
 case "$refresh" in
@@ -100,10 +98,8 @@ if [ -z "$enable" ]; then
   fi
 fi
 if [ "$role" = "clients" ]; then
+  # No dial-out socket. Client rows arrive from telegraf-wlc on :9276.
   set -- --config /etc/telegraf/telegraf-clients.conf
-  if [ "$transport" != "gnmi" ] && [ "$enable" != "0" ]; then
-    set -- "$@" --config /etc/telegraf/mdt-clients.conf
-  fi
 else
   set -- --config /etc/telegraf/telegraf.conf
   if [ "$transport" != "gnmi" ] && [ "$enable" != "0" ]; then

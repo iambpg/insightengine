@@ -11,7 +11,7 @@ Four checks sit next to device health. None of them push configuration onto a ro
 
 The UI page is **Service Experience**. Empty groups say **not configured**. Grafana dashboard **Service Experience** is provisioned from `config/grafana/provisioning/dashboards/json/service-experience.json`. Alerts and recording rules are `config/prometheus/experience-rules.yml`.
 
-9800 client detail from MDT is stored per client on `telegraf-wlc-clients` (dial-out port 57502). `IE_WLC_STORE_CLIENTS=0` drops those series and keeps the per-AP/per-radio rollup. AP and radio series stay on `telegraf-wlc`. SNMP never walks a client list. The full path, OID and cardinality table is `docs/wlc-9800-full.md`.
+9800 client detail from MDT arrives on `telegraf-wlc` port 57500 and is forwarded to `telegraf-wlc-clients` on the docker network. `IE_WLC_STORE_CLIENTS=0` drops those series and keeps the per-AP/per-radio rollup. AP and radio series stay on `telegraf-wlc`. SNMP never walks a client list. The full path, OID and cardinality table is `docs/wlc-9800-full.md`.
 
 ## NetBox fields
 
@@ -34,9 +34,9 @@ A site with no `vbs_server_ip` is not pinged and its routers show **not configur
 
 A Catalyst 9800 is not polled by SNMP. Per-client RSSI/SNR, per-radio noise and chassis health come from MDT. `render_wlc.py` emits no `inputs.snmp` for a 9800. AireOS stays on its SNMP tables.
 
-`telegraf-wlc` listens for gRPC dial-out on port **57500** (`inputs.cisco_telemetry_mdt`, `service_address = ":${IE_MDT_PORT}"`). `telegraf-wlc-clients` listens on **57502**. `IE_MDT_PORT` and `PORT_MDT` default to 57500. `IE_MDT_CLIENTS_PORT` and `PORT_MDT_CLIENTS` default to 57502. Set `IE_MDT_RECEIVER` to an address the controller can route to. AP subscriptions use `receiver ip address <server> 57500`. Client-oper uses port 57502.
+`telegraf-wlc` listens for gRPC dial-out on port **57500** (`inputs.cisco_telemetry_mdt`, `service_address = ":${IE_MDT_PORT}"`). `IE_MDT_PORT` and `PORT_MDT` default to 57500. Set `IE_MDT_RECEIVER` to an address the controller can route to. Every generated line is `receiver ip address <server> 57500`, including client-oper. `telegraf-wlc` then POSTs those rows to `http://telegraf-wlc-clients:9276/telegraf`.
 
-Open **TCP 57500** on the collector for AP, radio, controller and cEdge dial-out, and **TCP 57502** (`PORT_MDT_CLIENTS`) for client-oper. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. Telegraf's Prometheus `/metrics` output is not published (it used to be host 57500, then 57501). Prometheus scrapes `telegraf-host:9273`, `telegraf-wlc:9273` and `telegraf-wlc-clients:9273` on the docker network. gNMI dial-in does not use these ports: Telegraf dials the controller on port 9339. The generated client-oper lines use `receiver ip address <server> 57502`.
+Open **TCP 57500** on the collector. That is the only Telegraf host port: AP, radio, controller, client-oper and cEdge dial-out. **57400** is UI HTTPS when 443 is already taken; MDT does not use it. Telegraf's Prometheus `/metrics` output is not published (it used to be host 57500, then 57501). Prometheus scrapes `telegraf-host:9273`, `telegraf-wlc:9273` and `telegraf-wlc-clients:9273` on the docker network. gNMI dial-in does not use 57500: Telegraf dials the controller on port 9339.
 
 On the device page, **Controller config** copies the IOS-XE or AireOS CLI. The same text is `GET /api/v1/devices/{id}/telemetry-config`. It is not applied for you. The subscription list, including intervals, is `docs/wlc-9800-full.md`.
 

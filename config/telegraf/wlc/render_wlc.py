@@ -46,15 +46,10 @@ for _text in reversed(_catalog_dirs):
 import catalog  # noqa: E402
 
 
-def _gnmi_subs(role: str):
+def _gnmi_subs():
     rows = []
     seen = set()
     for _offset, xpath, alias, policy, seconds, _shows in catalog.MDT_SUBS:
-        client = catalog.is_client_subscription(xpath)
-        if role == "clients" and not client:
-            continue
-        if role != "clients" and client:
-            continue
         mode = "on_change" if policy == "on-change" else "sample"
         interval = "%ds" % (seconds or 60)
         key = (alias, xpath, mode)
@@ -164,7 +159,7 @@ def auth_for(name: str, env: dict) -> dict:
     return {"version": 2, "community": env.get("SNMP_V2_COMMUNITY") or ""}
 
 
-def _gnmi(agent: str, tags: dict, env: dict, collector: str) -> str:
+def _gnmi(agent: str, tags: dict, env: dict) -> str:
     user = env.get("IE_GNMI_USER") or ""
     password = env.get("IE_GNMI_PASSWORD") or ""
     if not user or not password:
@@ -182,7 +177,7 @@ def _gnmi(agent: str, tags: dict, env: dict, collector: str) -> str:
         "    device_role = %s" % _toml(tags["role"]),
         "    store_clients = %s" % _toml(tags.get("store_clients") or "1"),
     ]
-    for name, path, mode, interval in _gnmi_subs(collector):
+    for name, path, mode, interval in _gnmi_subs():
         lines.extend([
             "  [[inputs.gnmi.subscription]]",
             "    name = %s" % _toml(name),
@@ -231,7 +226,10 @@ def render(targets: list[dict], env: dict) -> str:
         role = str(labels.get("__meta_netbox_role") or "")
         device_type = str(labels.get("__meta_netbox_device_type") or "")
         kind = platform_kind(platform, role, device_type)
-        if collector == "clients" and kind != "iosxe":
+        if collector == "clients":
+            chunks.append(
+                "# %s: client rows are forwarded from telegraf-wlc. No inputs in this process.\n" % ip
+            )
             continue
         if kind == "iosxe" and transport == "gnmi":
             chunks.append(_gnmi("%s:9339" % ip, {
@@ -240,7 +238,7 @@ def render(targets: list[dict], env: dict) -> str:
                 "platform": platform or kind,
                 "role": role or "wireless-controller",
                 "store_clients": store,
-            }, env, collector))
+            }, env))
             continue
         if kind == "iosxe":
             chunks.append(

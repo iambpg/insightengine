@@ -13,8 +13,8 @@ retries, bytes, VLAN and mobility come from 9800 MDT only.
 
 Per-client Prometheus series are stored by default on telegraf-wlc-clients.
 IE_WLC_STORE_CLIENTS=0 drops those series and keeps the per-AP / per-radio
-rollup. Client subscriptions dial a second receiver port so the AP collector
-does not parse them.
+rollup. Every subscription, including client-oper, dials the one host port
+57500. telegraf-wlc forwards client rows on the docker network.
 """
 
 from __future__ import annotations
@@ -390,7 +390,7 @@ def is_client_subscription(xpath: str) -> bool:
     return "client-oper-data" in (xpath or "")
 
 
-def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str, vrf: str = "", clients_port: int = 57502) -> str:
+def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str, vrf: str = "") -> str:
     base = wlc_subscription_base(name)
     user = username or "<SNMP_V3_USERNAME>"
     lines = [
@@ -400,8 +400,8 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
         "! wireless-site-oper and wireless-ha-oper are not in that tree.",
         "! Site, policy and RF tags are inside capwap-data. SSO is Cisco-IOS-XE-ha-oper.",
         "! wireless-wlan-cfg is not subscribed (key-management leaves). SSID names are wlan-global-oper.",
-        "! client-oper subscriptions use receiver port %d (telegraf-wlc-clients)." % clients_port,
-        "! Every other subscription uses port %d (telegraf-wlc)." % port,
+        "! Every subscription, including client-oper, uses receiver port %d." % port,
+        "! telegraf-wlc forwards client-oper to telegraf-wlc-clients. The firewall publishes only this port.",
         "! Per-client series are stored unless IE_WLC_STORE_CLIENTS=0.",
         "! That switch does not stop the dial-out. Delete the client-oper blocks to stop the bandwidth.",
         "! SNMP below is names and placeholders. Secrets are not in this text.",
@@ -430,11 +430,10 @@ def iosxe_wlc_config(name: str, ip: str, receiver: str, port: int, username: str
         ]
         if vrf:
             block.append(" source-vrf %s" % vrf)
-        dest = clients_port if is_client_subscription(xpath) else port
         block.extend([
             " stream yang-push",
             " update-policy %s" % subscription_policy(policy, seconds),
-            " receiver ip address %s %d protocol grpc-tcp" % (receiver, dest),
+            " receiver ip address %s %d protocol grpc-tcp" % (receiver, port),
         ])
         lines.extend(block)
         lines.append("!")
