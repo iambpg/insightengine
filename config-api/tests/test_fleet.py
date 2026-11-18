@@ -1147,15 +1147,20 @@ def test_device_detail_stack_uses_snmp_when_there_is_no_chassis(stack, monkeypat
     original = _detail_instant
 
     def instant(query):
+        if "cswSwitchNumCurrent" in query and "edge-2" in query:
+            return [
+                {"metric": {"entPhysicalIndex": "1000"}, "value": [NOW, "1"]},
+                {"metric": {"entPhysicalIndex": "2000"}, "value": [NOW, "2"]},
+            ]
         if "cswSwitchRole" in query and "edge-2" in query:
             return [
-                {"metric": {"cswSwitchNumCurrent": "1"}, "value": [NOW, "2"]},
-                {"metric": {"cswSwitchNumCurrent": "2"}, "value": [NOW, "1"]},
+                {"metric": {"entPhysicalIndex": "1000"}, "value": [NOW, "2"]},
+                {"metric": {"entPhysicalIndex": "2000"}, "value": [NOW, "1"]},
             ]
         if "cswSwitchState" in query and "edge-2" in query:
             return [
-                {"metric": {"cswSwitchNumCurrent": "1"}, "value": [NOW, "4"]},
-                {"metric": {"cswSwitchNumCurrent": "2"}, "value": [NOW, "4"]},
+                {"metric": {"entPhysicalIndex": "1000"}, "value": [NOW, "4"]},
+                {"metric": {"entPhysicalIndex": "2000"}, "value": [NOW, "4"]},
             ]
         return original(query)
 

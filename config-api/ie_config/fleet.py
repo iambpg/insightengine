@@ -2161,8 +2161,13 @@ class FleetService:
                 peers.append(raw)
         role_samples: list = []
         state_samples: list = []
+        number_samples: list = []
         if not str(device.get("vc_id") or "").strip() and device.get("name"):
             selector = self._selector(device)
+            try:
+                number_samples = self._prom(client, "cswSwitchNumCurrent%s" % selector)
+            except Exception:
+                log.warning("stack member number could not be read for %s", row.get("hostname"))
             try:
                 role_samples = self._prom(client, "cswSwitchRole%s" % selector)
             except Exception:
@@ -2176,6 +2181,7 @@ class FleetService:
             peers,
             role_samples,
             state_samples,
+            number_samples,
             role_slug=role_slug,
             form_factor=form,
         )
