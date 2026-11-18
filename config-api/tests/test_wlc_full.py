@@ -82,12 +82,16 @@ def test_9800_paste_has_every_subscription_and_no_secret():
     assert "super-secret-priv" not in text
     assert "<auth-passphrase>" in text
     catalog = _catalog()
-    for _offset, xpath, _alias, policy, seconds, _shows in catalog.MDT_SUBS:
+    for _offset, xpath, _alias, policy, seconds, _shows in catalog.active_mdt_subs(False):
         assert xpath in text
         if policy == "on-change":
             assert "update-policy on-change" in text
         else:
             assert "update-policy periodic %d" % (seconds * 100) in text
+    assert "/ap-history" not in text
+    assert "IE_WLC_AP_HISTORY=1" in text
+    opted = catalog.iosxe_wlc_config("wlc-9800", "10.9.0.8", "10.1.1.50", 57500, "ie-collector", include_ap_history=True)
+    assert "/ap-history" in opted
     assert "wireless-wlan-cfg" in text
     assert "/wireless-rogue-oper:rogue-oper-data/rogue-data" not in text
     for block in text.split("telemetry ietf subscription ")[1:]:

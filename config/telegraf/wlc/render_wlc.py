@@ -49,7 +49,7 @@ import catalog  # noqa: E402
 def _gnmi_subs():
     rows = []
     seen = set()
-    for _offset, xpath, alias, policy, seconds, _shows in catalog.MDT_SUBS:
+    for _offset, xpath, alias, policy, seconds, _shows in catalog.active_mdt_subs():
         mode = "on_change" if policy == "on-change" else "sample"
         interval = "%ds" % (seconds or 60)
         key = (alias, xpath, mode)

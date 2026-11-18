@@ -68,15 +68,18 @@ def apply(metric):
     if "wireless-client-oper" in blob or name in CLIENT_NAMES or "traffic-stats" in blob or "common-oper-data" in blob or "dot11-oper-data" in blob:
         if not _clients_here(metric):
             return None
-        state["history_keep"] = history_keep(metric)
+        # Client rows have no history list. Skip that scan; it walked every
+        # leaf on every client and made the forward listener miss its deadline.
+        state["history_drop"] = {}
         return client_metric(metric, blob)
+    if name in RADIO_NAMES or "rrm-oper" in blob or "radio-oper" in blob or "ssid-counter" in blob or "ethernet-if" in blob or "capwap-pkts" in blob:
+        state["history_drop"] = {}
+        return radio_metric(metric, blob)
     # One pass decides which history-list index is newest. Lookups and
     # passthrough both skip the older copies.
     state["history_keep"] = history_keep(metric)
     if "cdp-cache" in blob or "lldp-neigh" in blob or name in ("ie_wlc_cdp_mdt", "ie_wlc_lldp_mdt", "ie_wlc_cdp"):
         return neighbor_metric(metric)
-    if name in RADIO_NAMES or "rrm-oper" in blob or "radio-oper" in blob or "ssid-counter" in blob or "ethernet-if" in blob or "capwap-pkts" in blob:
-        return radio_metric(metric, blob)
     if name in AP_NAMES_IN or "capwap-data" in blob or name in ("ie_wlc_ap_join", "ie_wlc_ap_history"):
         return ap_metric(metric)
     if "rogue-oper" in blob or name == "ie_wlc_rogue_mdt":
@@ -304,7 +307,7 @@ def radio_metric(metric, blob):
         if clients != None:
             out.fields["clients"] = clients
         out.time = metric.time
-        return finish(metric, out)
+        return finish_fast(metric, out)
     if "ethernet" in blob:
         out = Metric("ie_wlc_ethernet")
         copy_place(metric, out)
@@ -319,7 +322,7 @@ def radio_metric(metric, blob):
         if tx != None:
             out.fields["tx_pkts"] = tx
         out.time = metric.time
-        return finish(metric, out)
+        return finish_fast(metric, out)
     out = Metric("ie_wlc_radio")
     copy_place(metric, out)
     out.tags["ap"] = str(ap)
@@ -371,7 +374,7 @@ def radio_metric(metric, blob):
         out.fields["oper_up"] = radio_up
         wrote = True
     out.time = metric.time
-    return finish(metric, out)
+    return finish_fast(metric, out)
 
 
 def ap_metric(metric):
@@ -1306,13 +1309,54 @@ def finish(metric, out):
     return out
 
 
-def finish_client(metric, out):
-    # Numbers only. A string leaf (username, VLAN name, timestamp) is not a label.
-    attach_numbers(metric, out)
+def _drop_list_index(key):
+    # A numeric YANG list slot. Channel noise is kept and renamed later.
+    if "/" not in key:
+        return False
+    parts = key.split("/")
+    for i in range(len(parts)):
+        if not _digits(parts[i]):
+            continue
+        parent = ""
+        if i > 0:
+            parent = parts[i - 1]
+        if "noise" in parent:
+            continue
+        return True
+    return False
+
+
+def finish_fast(metric, out):
+    # Radio and client rows. Numbers only, one walk, no string tags and no
+    # history index. The AP path still uses finish().
+    attach_channel_noise(metric, out)
+    for key in metric.fields:
+        if _drop_list_index(key):
+            continue
+        value = metric.fields[key]
+        kind = type(value)
+        if kind != "int" and kind != "float" and kind != "bool":
+            continue
+        leaf = snake(key)
+        if leaf == "":
+            continue
+        if leaf in ALIAS_OF:
+            leaf = ALIAS_OF[leaf]
+        if leaf in out.fields:
+            continue
+        if kind == "bool":
+            out.fields[leaf] = 1 if value else 0
+        else:
+            out.fields[leaf] = value
     if not has_field(out.fields):
         out.fields["present"] = 1
     out.time = metric.time
     return out
+
+
+def finish_client(metric, out):
+    # Numbers only. A string leaf (username, VLAN name, timestamp) is not a label.
+    return finish_fast(metric, out)
 
 
 def emit_client(metric, ap, radio, mac, ssid, band, protocol, vlan, mobility, rssi, snr, bytes_rx, bytes_tx, tx_retries, rts_retries, current_rate, now):

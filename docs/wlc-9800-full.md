@@ -87,6 +87,10 @@ Replay of the new normalizer, Telegraf 1.38.3, same fixture (6 history rows, 2 r
 | `telegraf-wlc` | 10,000 | 440,214 | 27,038,972 bytes | 0.91s | 1,074,200 kB |
 | `telegraf-wlc-radio` | 10,000 | 760,000 | 54,979,066 bytes | 2.0s | 1,713,928 kB |
 
+`telegraf-wlc` exports `internal_write_buffer_size`, `internal_write_errors` and `internal_write_metrics_dropped` from `inputs.internal` (`per_instance`, memory stats off). The `alias` label is `wlc-radio` or `wlc-clients`. A buffer sitting near its limit, or `metrics_written` stuck at 0 while `buffer_size` is above 0, is a forward backlog. The series is not a client or radio counter.
+
+Radio and client normalizer rows skip the history-index scan and do not copy string leaves. Numeric fields stay, including channel noise. A neighbor list index is still not a series. Live CPU on those two containers was about 125% against a 2-CPU quota, so the quota was not the 5s timeout. `IE_TELEGRAF_WLC_RADIO_CPUS` and `IE_TELEGRAF_WLC_CLIENTS_CPUS` default to 2 and are separate from `TELEGRAF_WLC_CPUS`. The forward itself uses a 30s timeout, 5000-row gzip batches, and buffers of 10000 client rows (~40MB) and 20000 radio rows (~80MB).
+
 The 1,000 and 10,000 rows were measured on Telegraf 1.38.3. The 5,000 rows are half of the 10,000 measurement. `telegraf-wlc` kept 44 series per AP (40 counters, `oper_up`, `info`, and the newest history `uptime` and `disconnects`). `telegraf-wlc-radio` kept 76 series per AP (26 counters, 8 channel-noise fields, plus `noise`, `channel_util`, `interference` and `channel` on each of 2 radios). Both 10,000-AP scrapes finished in under 10s. Peak RSS fits the defaults (`IE_TELEGRAF_WLC_MEM` 6g, `IE_TELEGRAF_WLC_RADIO_MEM` 4g). A fuller capwap record than this 40-counter fixture adds series on the AP collector only. Raise `IE_TELEGRAF_WLC_MEM` if that collector approaches the limit. Do not raise it to keep radio series there.
 
 ## 9800 MDT
@@ -114,7 +118,7 @@ The 1,000 and 10,000 rows were measured on Telegraf 1.38.3. The 5,000 rows are h
 | MDT | `/wireless-client-oper:client-oper-data/policy-data` | 60s | Client VLAN from policy |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/ewlc-ap-stats` | 600s | Controller AP counters |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/ap-join-stats` | 300s | Per-AP join and disconnect reason |
-| MDT | `/wireless-ap-global-oper:ap-global-oper-data/ap-history` | 300s | Per-AP disconnect counter |
+| MDT | `/wireless-ap-global-oper:ap-global-oper-data/ap-history` | off | Not in the paste. Telegraf 1.38 fails the whole kvGPB message on invalid UTF-8 and cannot skip the field. Disconnects stay on ap-join-stats. `IE_WLC_AP_HISTORY=1` adds the subscription back; it does not make this Telegraf decode it |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/emltd-join-count-stat` | 300s | Joined AP count |
 | MDT | `/wireless-ap-global-oper:ap-global-oper-data/wlan-client-stats` | 60s | Clients per WLAN (count, not a client list) |
 | MDT | `/wireless-wlan-global-oper:wlan-global-oper-data/wlan-info` | 600s | SSID profile name and current client count |

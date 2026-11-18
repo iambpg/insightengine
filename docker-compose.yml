@@ -474,6 +474,7 @@ services:
       PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
       IE_MDT_RECEIVER: ${IE_MDT_RECEIVER:-}
       IE_MDT_PORT: ${IE_MDT_PORT:-57500}
+      IE_WLC_AP_HISTORY: ${IE_WLC_AP_HISTORY:-0}
       ALERTMANAGER_URL: ${ALERTMANAGER_URL:-http://alertmanager:9093}
       IE_CA_FILE: /etc/ie-certs/ca.crt
       # App role password is NETDISCO_DB_PASS (see netdisco-initdb.sh), not the
@@ -984,7 +985,7 @@ services:
       start_period: 40s
     deploy:
       resources:
-        limits: {memory: "${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
+        limits: {memory: "${IE_TELEGRAF_WLC_CLIENTS_MEM:-4g}", cpus: "${IE_TELEGRAF_WLC_CLIENTS_CPUS:-2}"}
         reservations: {memory: 256m}
 
   # Radio oper, radio stats and RRM. Own cgroup and Prometheus job so a
@@ -1018,7 +1019,7 @@ services:
       start_period: 40s
     deploy:
       resources:
-        limits: {memory: "${IE_TELEGRAF_WLC_RADIO_MEM:-4g}", cpus: "${TELEGRAF_WLC_CPUS:-2}"}
+        limits: {memory: "${IE_TELEGRAF_WLC_RADIO_MEM:-4g}", cpus: "${IE_TELEGRAF_WLC_RADIO_CPUS:-2}"}
         reservations: {memory: 256m}
 
   telegraf-host:
