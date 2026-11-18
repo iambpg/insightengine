@@ -243,6 +243,7 @@ def test_module_map_picks_wlc_platform_and_skips_aps():
     # Unlabelled access switches keep the existing module list.
     access, access_auth = choose("access-switch", "cisco", "", "", "", mapping)
     assert access.split(",")[:6] == ["if_mib", "cisco_environ", "cisco_mem", "cisco_pro", "cisco_cdp", "lldp"]
+    assert access.split(",")[-1] == "cisco_stackwise"
     assert access_auth == "ntt_snmpv3_auth"
     palo, _ = choose("core-firewall", "palo-alto", "pan-os", "", "", mapping)
     assert palo == "if_mib,paloalto_health,uptime"

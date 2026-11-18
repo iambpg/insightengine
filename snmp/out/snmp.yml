@@ -7666,3 +7666,36 @@ modules:
       type: gauge
       help: The time (in hundredths of a second) since the network management portion
         of the system was last re-initialized. - 1.3.6.1.2.1.1.3
+
+  # Hand-maintained. CISCO-STACKWISE-MIB is not in snmp/mibs, so generator.yml
+  # cannot emit this module. A full generator run must keep this block.
+  # cswSwitchInfoEntry index is cswSwitchNumCurrent (the same chassis number
+  # the faceplate reads from GigabitEthernet<n>/0/x).
+  # Role: master(1), member(2), notMember(3), standby(4).
+  cisco_stackwise:
+    walk:
+    - 1.3.6.1.4.1.9.9.500.1.2.1.1.1
+    - 1.3.6.1.4.1.9.9.500.1.2.1.1.3
+    - 1.3.6.1.4.1.9.9.500.1.2.1.1.6
+    metrics:
+    - name: cswSwitchNumCurrent
+      oid: 1.3.6.1.4.1.9.9.500.1.2.1.1.1
+      type: gauge
+      help: Stack member number - 1.3.6.1.4.1.9.9.500.1.2.1.1.1
+      indexes:
+      - labelname: cswSwitchNumCurrent
+        type: gauge
+    - name: cswSwitchRole
+      oid: 1.3.6.1.4.1.9.9.500.1.2.1.1.3
+      type: gauge
+      help: Stack role (1 active/master, 2 member, 3 notMember, 4 standby) - 1.3.6.1.4.1.9.9.500.1.2.1.1.3
+      indexes:
+      - labelname: cswSwitchNumCurrent
+        type: gauge
+    - name: cswSwitchState
+      oid: 1.3.6.1.4.1.9.9.500.1.2.1.1.6
+      type: gauge
+      help: Stack state (4 ready) - 1.3.6.1.4.1.9.9.500.1.2.1.1.6
+      indexes:
+      - labelname: cswSwitchNumCurrent
+        type: gauge

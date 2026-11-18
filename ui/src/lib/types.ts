@@ -433,6 +433,20 @@ export interface HierarchyReport {
   degraded?: string[];
 }
 
+export interface StackMemberInfo {
+  number: number;
+  role: 'active' | 'standby' | 'member' | string;
+  model?: string;
+  serial?: string;
+  state?: string;
+  master?: boolean;
+}
+
+export interface DeviceStack {
+  source: 'netbox' | 'snmp' | 'standalone' | string;
+  members: StackMemberInfo[];
+}
+
 export interface DeviceDetailData {
   id: string;
   hostname: string;
@@ -472,6 +486,7 @@ export interface DeviceDetailData {
   history?: SeriesPoint[];
   sources?: DeviceSource[];
   comparison?: SourceComparison;
+  stack?: DeviceStack;
 }
 
 export interface LauncherApp {

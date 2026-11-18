@@ -31,6 +31,7 @@ import HardwareHealth from './HardwareHealth';
 import PortSidePanel, { PortThroughputGraph } from './PortSidePanel';
 import DeviceGraphs from './DeviceGraphs';
 import PortTable from './PortTable';
+import StackBadge, { stackMembersFor } from './StackBadge';
 
 const FORMS = Object.keys(FACEPLATE_SAMPLES);
 const NEEDS_ID = 'Open a device from the list. This page needs a device id.';
@@ -144,6 +145,7 @@ export default function DeviceDetailView() {
   const canLoad = ready && (!live || Boolean(id));
   const loaded = useKeyedLoad<DeviceDetailData>(deviceKey, canLoad, attempt, 'this device', (key) => api.getDevice(key));
   const device = loaded.data;
+  const stackMembers = useMemo(() => (device ? stackMembersFor(device) : null), [device]);
   const kin = useMemo(() => {
     const rows: { id: string; localPort: string; remotePort: string }[] = [];
     if (device?.parent) {
@@ -333,7 +335,7 @@ export default function DeviceDetailView() {
       {/* header */}
       <header className="rounded-none border-x-0 border-y border-border bg-card px-3 py-2 shadow-card">
         {device ? (
-          <div className="grid grid-cols-1 items-center gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid min-w-0 grid-cols-1 items-center gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="rounded-lg border border-border bg-muted/50 px-3 py-1.5 font-mono-data text-xl font-semibold tracking-tight">{device.hostname}</h1>
@@ -360,7 +362,9 @@ export default function DeviceDetailView() {
                 <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
             </div>
-            <div className="grid w-[17.5rem] shrink-0 grid-cols-2 gap-1.5 justify-self-end">
+            <div data-testid="device-header-actions" className="flex h-[5.375rem] w-full min-w-0 max-w-[17.5rem] items-center justify-end gap-1.5 justify-self-stretch overflow-hidden xl:justify-self-end">
+              {stackMembers && <StackBadge members={stackMembers} />}
+              <div className="grid h-full min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] grid-rows-2 gap-1.5">
               <button
                 type="button"
                 disabled={rediscovering || !device.mgmtIp}
@@ -374,7 +378,7 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setRediscovering(false));
                 }}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 text-sm font-medium transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+                className="inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-tight transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
               >
                 <Icon name="MagnifyingGlassIcon" size={16} />
                 {rediscovering ? 'Rediscovering…' : 'Rediscover'}
@@ -398,7 +402,7 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setSyncing(false));
                 }}
-                className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 text-sm font-medium text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
+                className={`inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-transparent px-1.5 text-center text-[13px] font-medium leading-tight text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
               >
                 <Icon name="ArrowsRightLeftIcon" size={16} />
                 {syncing ? 'Syncing…' : 'Netbox Sync'}
@@ -409,7 +413,7 @@ export default function DeviceDetailView() {
                   setRerun(true);
                   setTimeout(() => setRerun(false), 1100);
                 }}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 text-center text-sm font-medium leading-tight transition-all hover:bg-muted active:scale-95"
+                className="inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-tight transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="ArrowPathIcon" size={16} className={rerun ? 'animate-spin' : ''} />
                 {rerun ? 'Running checks…' : 'Re-run health check'}
@@ -420,11 +424,12 @@ export default function DeviceDetailView() {
                     ? `/device-cli?form=${encodeURIComponent(form)}`
                     : `/device-cli?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
                 }
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 text-sm font-medium transition-all hover:bg-muted active:scale-95"
+                className="inline-flex h-10 max-h-10 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-tight transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="CommandLineIcon" size={16} />
                 Open device
               </Link>
+              </div>
             </div>
             <div className="xl:col-span-2">
               <DeviceDiscoveryStatus job={discoveryJob} />

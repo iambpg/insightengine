@@ -74,6 +74,8 @@ modules:
   # Health modules. Source of truth also in generator-health.yml.
   # A full generator run rewrites snmp/out/snmp.yml; merge new modules
   # instead of replacing if_mib, cisco_cdp, lldp and cisco_wlc_universal.
+  # cisco_stackwise is hand-written in snmp/out/snmp.yml (numeric OIDs).
+  # Keep that module when regenerating. CISCO-STACKWISE-MIB is not in snmp/mibs.
   # Lookup-rich CISCO-ENVMON. The live module cisco_environ stays so existing
   # jobs that name it keep working. New platform lists use cisco_env.
   cisco_env:
