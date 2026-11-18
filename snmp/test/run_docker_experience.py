@@ -173,7 +173,7 @@ def main() -> int:
     data.mkdir()
     write_sim(data / "public.snmprec")
     ensure_sim_image()
-    run(["sudo", "docker", "rm", "-f", "ie-exp-sim", "ie-exp-snmp", "ie-exp-bb", "ie-exp-prom", "ie-exp-mdt", "ie-exp-clients"])
+    run(["sudo", "docker", "rm", "-f", "ie-exp-sim", "ie-exp-snmp", "ie-exp-bb", "ie-exp-prom", "ie-exp-mdt", "ie-exp-clients", "ie-exp-radio"])
 
     run([
         "sudo", "docker", "run", "-d", "--name", "ie-exp-sim", "--network", "host",
@@ -353,6 +353,22 @@ def main() -> int:
     ])
     if clients_proc.returncode != 0:
         failed.append("telegraf-clients-start")
+    radio_conf = WORK / "telegraf-radio.conf"
+    radio_text = (ROOT / "config" / "telegraf" / "wlc" / "telegraf-radio.conf").read_text()
+    radio_text = radio_text.replace('listen = ":9273"', 'listen = ":19279"')
+    radio_text = radio_text.replace('service_address = "tcp://:9277"', 'service_address = "tcp://127.0.0.1:19278"')
+    radio_conf.write_text(radio_text)
+    radio_proc = run([
+        "sudo", "docker", "run", "-d", "--name", "ie-exp-radio", "--network", "host",
+        "-e", "CLIENT_SLUG=lab",
+        "-v", "%s:/etc/telegraf/telegraf-radio.conf:ro" % radio_conf,
+        "-v", "%s:/etc/telegraf/normalize.star:ro" % (ROOT / "config" / "telegraf" / "wlc" / "normalize.star"),
+        "telegraf:1.38.3",
+        "--config", "/etc/telegraf/telegraf-radio.conf",
+        "--non-strict-env-handling",
+    ])
+    if radio_proc.returncode != 0:
+        failed.append("telegraf-radio-start")
     mdt = run([
         "sudo", "docker", "run", "-d", "--name", "ie-exp-mdt", "--network", "host",
         "-e", "CLIENT_SLUG=lab",
@@ -363,6 +379,7 @@ def main() -> int:
         "-v", "%s:/etc/telegraf/normalize.star:ro" % (ROOT / "config" / "telegraf" / "wlc" / "normalize.star"),
         "-v", "%s:/etc/telegraf/client_forward.star:ro" % (ROOT / "config" / "telegraf" / "wlc" / "client_forward.star"),
         "-e", "IE_WLC_CLIENTS_FORWARD=127.0.0.1:19276",
+        "-e", "IE_WLC_RADIO_FORWARD=127.0.0.1:19278",
         "telegraf:1.38.3",
         "--config", "/etc/telegraf/telegraf.conf",
         "--config", "/etc/telegraf/mdt.conf",
@@ -383,18 +400,20 @@ def main() -> int:
             else:
                 body = ""
                 client_body = ""
+                radio_body = ""
                 deadline = time.time() + 20
                 while time.time() < deadline:
                     try:
                         body = http_text("http://127.0.0.1:9273/metrics")
                         client_body = http_text("http://127.0.0.1:19277/metrics")
+                        radio_body = http_text("http://127.0.0.1:19279/metrics")
                     except Exception:
                         time.sleep(1)
                         continue
-                    if "ie_wlc_client_radio_clients" in client_body and "ie_sdwan_tunnel_loss_ratio" in body:
+                    if "ie_wlc_client_radio_clients" in client_body and "ie_sdwan_tunnel_loss_ratio" in body and "ie_wlc_radio_channel_util" in radio_body:
                         break
                     time.sleep(1)
-                print("MDT metrics bytes", len(body), "client bytes", len(client_body))
+                print("MDT metrics bytes", len(body), "client bytes", len(client_body), "radio bytes", len(radio_body))
                 if "aa:bb:cc:dd:ee:01" in body or "aa:bb:cc:dd:ee:02" in body:
                     failed.append("client-mac-stored")
                 if "aa:bb:cc:dd:ee:01" in client_body or "aa:bb:cc:dd:ee:02" in client_body:
@@ -408,11 +427,14 @@ def main() -> int:
                     failed.append("mdt-clients")
                 if "ie_sdwan_tunnel_latency_ms" not in body:
                     failed.append("mdt-sdwan")
-                if "ie_wlc_radio_channel_util" not in body:
+                if "ie_wlc_radio_channel_util" not in radio_body:
+                    print(sh(["sudo", "docker", "logs", "--tail", "40", "ie-exp-radio"]))
                     failed.append("mdt-rrm")
+                if "ie_wlc_radio_channel_util" in body:
+                    failed.append("radio-on-ap-collector")
                 if 'ie_wlc_ap_oper_up' not in body:
                     failed.append("mdt-ap")
-                if not any(item.startswith("mdt-") or item in ("client-mac-stored", "client-rollup-on-ap-collector") for item in failed):
+                if not any(item.startswith("mdt-") or item in ("client-mac-stored", "client-rollup-on-ap-collector", "radio-on-ap-collector") for item in failed):
                     print("MDT aggregate exported without per-client series")
 
     tcp.close()
