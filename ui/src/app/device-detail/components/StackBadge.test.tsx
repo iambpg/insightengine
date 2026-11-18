@@ -50,6 +50,8 @@ describe('stack badge', () => {
     expect(screen.getByTestId('stack-member-01')).toHaveAttribute('data-master', 'true');
     expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-master', 'false');
     expect(widthOf('01') / widthOf('02')).toBeCloseTo(1.4, 1);
+    expect(screen.getByTestId('stack-member-01').style.fontSize).toBe('22px');
+    expect(screen.getByTestId('stack-member-01').style.borderRadius).toBe('45%');
     expect(Number(screen.getByTestId('stack-member-01').style.zIndex)).toBeGreaterThan(
       Number(screen.getByTestId('stack-member-02').style.zIndex),
     );
@@ -79,11 +81,27 @@ describe('stack badge', () => {
     expect(screen.getByTestId('stack-member-05')).toHaveAttribute('data-tone', 'green');
     expect(screen.getByTestId('stack-member-05')).toHaveAttribute('data-health', 'healthy');
     expect(screen.getByTestId('stack-badge').style.gridTemplateColumns).toContain('repeat(4');
+    const single = tileMetrics(1);
     const pair = tileMetrics(2);
+    const quad = tileMetrics(4);
     const eight = tileMetrics(8);
+    expect(single.cols).toBe(1);
+    expect(pair.cols).toBe(2);
+    expect(pair.rows).toBe(1);
+    expect(quad.cols).toBe(2);
+    expect(quad.rows).toBe(2);
+    expect(eight.cols).toBe(4);
+    expect(eight.rows).toBe(2);
     expect(eight.base).toBeLessThan(pair.base);
+    expect(single.base).toBeGreaterThanOrEqual(80);
+    expect(pair.boxW).toBeGreaterThan(pair.base);
+    expect(eight.boxW).toBeGreaterThan(quad.boxW);
     expect(eight.big / eight.base).toBeCloseTo(1.4, 1);
+    expect(single.font).toBe(22);
+    expect(quad.font).toBe(22);
+    expect(eight.font).toBeLessThan(22);
     expect(widthOf('05') / widthOf('01')).toBeCloseTo(1.4, 1);
+    expect(screen.getByTestId('stack-member-01').style.borderRadius).toBe('45%');
   });
 
   it('shows tile 01 when a switch has no stack data', () => {
@@ -152,14 +170,14 @@ describe('stack badge screenshots', () => {
       ['standalone', stack(1, 1)],
       ['stack-2-master-1', stack(2, 1)],
       ['stack-2-master-2', stack(2, 2)],
-      ['stack-8-master-5', stack(8, 5)],
+      ['stack-8-master-5', stack(8, 5, painted('healthy', 'Member state is ready'))],
       ['no-data', stackMembersFor({ role: 'Access switch', modelFamily: 'C9300-48P', faceplate: { form_factor: 'access-switch-48' } })],
     ];
     const dir = process.env.IE_STACK_SHOT_DIR || path.join(os.tmpdir(), 'stack-badge-shots');
     fs.mkdirSync(dir, { recursive: true });
     for (const [name, members] of cases) {
       const { container, unmount } = render(
-        <div style={{ width: 980, height: 168, display: 'flex', alignItems: 'center', background: '#f8fafc', padding: 12, boxSizing: 'border-box' }}>
+        <div style={{ width: 980, height: 220, display: 'flex', alignItems: 'center', background: '#f8fafc', padding: 16, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 124px)', gap: 6 }}>
               {['Role', 'Model', 'Serial number', 'Site', 'Management IP', 'Uptime', 'Last poll', 'Firmware'].map((label) => (
@@ -183,7 +201,12 @@ describe('stack badge screenshots', () => {
           </div>
         </div>,
       );
-      const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">${container.innerHTML}</body></html>`;
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        [data-tone="green"]{background-color:#22c55e;background-image:linear-gradient(180deg,rgba(255,255,255,.8) 0%,rgba(255,255,255,0) 26%),linear-gradient(180deg,#dcfce7 0%,#22c55e 40%,#15803d 100%)}
+        [data-tone="amber"]{background-color:#f59e0b;background-image:linear-gradient(180deg,rgba(255,255,255,.8) 0%,rgba(255,255,255,0) 26%),linear-gradient(180deg,#fef3c7 0%,#f59e0b 40%,#b45309 100%)}
+        [data-tone="red"]{background-color:#ef4444;background-image:linear-gradient(180deg,rgba(255,255,255,.8) 0%,rgba(255,255,255,0) 26%),linear-gradient(180deg,#fecaca 0%,#ef4444 40%,#991b1b 100%)}
+        [data-tone="grey"]{background-color:#94a3b8;background-image:linear-gradient(180deg,rgba(255,255,255,.8) 0%,rgba(255,255,255,0) 26%),linear-gradient(180deg,#f8fafc 0%,#94a3b8 40%,#64748b 100%)}
+      </style></head><body style="margin:0">${container.innerHTML}</body></html>`;
       fs.writeFileSync(path.join(dir, `${name}.html`), html);
       unmount();
     }

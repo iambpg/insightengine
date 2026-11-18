@@ -61,19 +61,17 @@ export function stackGrid(count: number): { cols: number; rows: number } {
   return { cols: 4, rows: Math.ceil(total / 4) };
 }
 
-/** Fit the cluster inside the existing header button box (about 72×86). */
-export function tileMetrics(count: number, maxW = 72, maxH = 86) {
+/** Fill the 5.375rem stack box. 1–4 members use a 22px number. Master is 1.4× and overlaps. */
+export function tileMetrics(count: number, boxH = 86) {
   const { cols, rows } = stackGrid(count);
+  const gap = count <= 4 ? 3 : 2;
   const many = count > 1;
-  for (let base = 48; base >= 12; base -= 1) {
-    const big = many ? Math.round(base * 1.4) : base;
-    const overlap = Math.max(2, Math.round(base * 0.22));
-    const extra = big - base;
-    const width = cols * base - overlap * Math.max(cols - 1, 0) + extra;
-    const height = rows * base - overlap * Math.max(rows - 1, 0) + extra;
-    if (width <= maxW && height <= maxH) return { base, big, overlap, cols, rows };
-  }
-  return { base: 12, big: many ? 17 : 12, overlap: 2, cols, rows };
+  const inner = boxH - gap * Math.max(rows - 1, 0);
+  const base = Math.max(12, Math.floor(inner / rows));
+  const big = many ? Math.round(base * 1.4) : base;
+  const font = count <= 4 ? 22 : Math.max(13, Math.round(base * 0.4));
+  const boxW = cols * base + gap * Math.max(cols - 1, 0);
+  return { base, big, gap, cols, rows, font, boxW };
 }
 
 export function isSwitchDevice(device: { role?: string; faceplate?: { form_factor?: string } }): boolean {
@@ -101,12 +99,6 @@ export function stackMembersFor(device: {
   }];
 }
 
-function pebbleRadius(number: number): string {
-  const a = 44 + (number % 3) * 3;
-  const b = 56 - (number % 4);
-  return `${a}% ${b}% ${50 + (number % 5)}% 48% / 52% ${46 + (number % 3)}% 54% 50%`;
-}
-
 export default function StackBadge({
   members,
   deviceHealth,
@@ -118,28 +110,31 @@ export default function StackBadge({
 }) {
   const ordered = [...members].filter((member) => member.number >= 1).sort((a, b) => a.number - b.number);
   const shown = ordered.length ? ordered : [{ number: 1, role: 'active', master: true }];
-  const { base, big, overlap, cols, rows } = tileMetrics(shown.length);
+  const { base, big, gap, cols, rows, font, boxW } = tileMetrics(shown.length);
   return (
     <div
       data-testid="stack-badge"
       role="group"
       aria-label="Stack members"
-      className="grid h-full w-[4.5rem] shrink-0 content-center justify-center"
+      className="grid h-full shrink-0 content-center justify-center"
       style={{
         display: 'grid',
-        width: '4.5rem',
+        width: boxW,
         height: '100%',
         flexShrink: 0,
         alignContent: 'center',
         justifyContent: 'center',
-        gridTemplateColumns: `repeat(${cols}, max-content)`,
-        gridTemplateRows: `repeat(${rows}, max-content)`,
+        columnGap: gap,
+        rowGap: gap,
+        gridTemplateColumns: `repeat(${cols}, ${base}px)`,
+        gridTemplateRows: `repeat(${rows}, ${base}px)`,
       }}
     >
       {shown.map((member, index) => {
         const resolved = tileHealth(member, shown, deviceHealth, deviceReason);
         const tone = HEALTH_TONES[resolved.health];
         const size = member.master ? big : base;
+        const extra = size - base;
         const tip = memberTooltip({ ...member, healthReason: resolved.reason });
         const column = (index % cols) + 1;
         const row = Math.floor(index / cols) + 1;
@@ -159,14 +154,18 @@ export default function StackBadge({
               gridRow: row,
               width: size,
               height: size,
-              marginLeft: column === 1 ? 0 : -overlap,
-              marginTop: row === 1 ? 0 : -overlap,
+              marginLeft: extra ? -extra / 2 : 0,
+              marginTop: extra ? -extra / 2 : 0,
               zIndex: member.master ? 30 : index + 1,
-              borderRadius: pebbleRadius(member.number),
-              background: `radial-gradient(circle at 32% 28%, ${tone.light} 0%, ${tone.mid} 46%, ${tone.deep} 100%)`,
+              borderRadius: '45%',
+              backgroundColor: tone.mid,
+              backgroundImage: [
+                'linear-gradient(180deg, rgba(255,255,255,.8) 0%, rgba(255,255,255,0) 26%)',
+                `linear-gradient(180deg, ${tone.light} 0%, ${tone.mid} 40%, ${tone.deep} 100%)`,
+              ].join(', '),
               boxShadow: [
-                'inset 0 1px 0 rgba(255,255,255,.8)',
-                '0 1px 2px rgba(15,23,42,.28)',
+                'inset 0 2px 0 rgba(255,255,255,.9)',
+                '0 3px 6px rgba(15,23,42,.28)',
                 member.role === 'standby' ? '0 0 0 1.5px #0f172a' : '',
               ].filter(Boolean).join(', '),
               display: 'flex',
@@ -175,7 +174,7 @@ export default function StackBadge({
               fontWeight: 800,
               color: tone.ink,
               textShadow: resolved.health === 'critical' ? '0 1px 1px rgba(0,0,0,.45)' : 'none',
-              fontSize: Math.max(9, Math.round(size * 0.34)),
+              fontSize: font,
               lineHeight: 1,
               fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             }}
