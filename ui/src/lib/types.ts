@@ -440,6 +440,9 @@ export interface StackMemberInfo {
   serial?: string;
   state?: string;
   master?: boolean;
+  /** Tile colour. unknown means this member had no sample of its own. */
+  health?: DeviceHealth | 'unknown';
+  healthReason?: string;
 }
 
 export interface DeviceStack {

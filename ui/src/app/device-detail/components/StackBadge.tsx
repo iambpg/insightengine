@@ -1,21 +1,20 @@
 'use client';
 
 import React from 'react';
-import type { DeviceStack, StackMemberInfo } from '@/lib/types';
+import type { DeviceHealth, DeviceStack, StackMemberInfo } from '@/lib/types';
 
 const SWITCH_FORMS = new Set(['access-switch-24', 'access-switch-48', 'switch-stack']);
 
-/** Tile colour follows the member number, so 01 stays teal on every stack. */
-export const STACK_TONES = [
-  { name: 'teal', deep: '#0f766e', mid: '#14b8a6', light: '#99f6e4' },
-  { name: 'amber', deep: '#b45309', mid: '#f59e0b', light: '#fde68a' },
-  { name: 'green', deep: '#15803d', mid: '#22c55e', light: '#bbf7d0' },
-  { name: 'slate', deep: '#475569', mid: '#94a3b8', light: '#e2e8f0' },
-  { name: 'blue', deep: '#1d4ed8', mid: '#3b82f6', light: '#bfdbfe' },
-  { name: 'purple', deep: '#6d28d9', mid: '#a855f7', light: '#e9d5ff' },
-  { name: 'coral', deep: '#e11d48', mid: '#fb7185', light: '#fecdd3' },
-  { name: 'cyan', deep: '#0e7490', mid: '#22d3ee', light: '#cffafe' },
-] as const;
+export type TileHealth = DeviceHealth | 'unknown';
+
+/** Glossy pebble in the same colour the device health badge uses. */
+export const HEALTH_TONES: Record<TileHealth, { name: string; deep: string; mid: string; light: string; ink: string }> = {
+  healthy: { name: 'green', deep: '#15803d', mid: '#22c55e', light: '#dcfce7', ink: '#14532d' },
+  warning: { name: 'amber', deep: '#b45309', mid: '#f59e0b', light: '#fef3c7', ink: '#451a03' },
+  critical: { name: 'red', deep: '#991b1b', mid: '#ef4444', light: '#fecaca', ink: '#fffef8' },
+  unreachable: { name: 'grey', deep: '#334155', mid: '#64748b', light: '#e2e8f0', ink: '#0f172a' },
+  unknown: { name: 'grey', deep: '#64748b', mid: '#94a3b8', light: '#f8fafc', ink: '#0f172a' },
+};
 
 export function memberLabel(number: number): string {
   return String(number).padStart(2, '0');
@@ -26,7 +25,32 @@ export function memberTooltip(member: StackMemberInfo): string {
   if (member.model) parts.push(member.model);
   if (member.serial) parts.push(member.serial);
   if (member.state) parts.push(member.state);
+  if (member.healthReason) parts.push(member.healthReason);
   return parts.join(' · ');
+}
+
+/** Same rule as the API: own state wins, otherwise the device badge, otherwise grey. */
+export function tileHealth(
+  member: StackMemberInfo,
+  members: StackMemberInfo[],
+  deviceHealth?: DeviceHealth,
+  deviceReason?: string,
+): { health: TileHealth; reason: string } {
+  if (member.health) {
+    const health = member.health in HEALTH_TONES ? member.health : 'unknown';
+    return { health, reason: member.healthReason || member.health };
+  }
+  const state = (member.state || '').trim();
+  const anyState = members.some((item) => (item.state || '').trim());
+  if (state) {
+    if (state.toLowerCase() !== 'ready') return { health: 'critical', reason: `Member state is ${state}` };
+    return { health: 'healthy', reason: 'Member state is ready' };
+  }
+  if (anyState) return { health: 'unknown', reason: 'No data pulled from this member' };
+  if (deviceHealth && deviceHealth in HEALTH_TONES) {
+    return { health: deviceHealth, reason: deviceReason || `Device is ${deviceHealth}` };
+  }
+  return { health: 'unknown', reason: 'No data pulled from this member' };
 }
 
 export function stackGrid(count: number): { cols: number; rows: number } {
@@ -83,7 +107,15 @@ function pebbleRadius(number: number): string {
   return `${a}% ${b}% ${50 + (number % 5)}% 48% / 52% ${46 + (number % 3)}% 54% 50%`;
 }
 
-export default function StackBadge({ members }: { members: StackMemberInfo[] }) {
+export default function StackBadge({
+  members,
+  deviceHealth,
+  deviceReason,
+}: {
+  members: StackMemberInfo[];
+  deviceHealth?: DeviceHealth;
+  deviceReason?: string;
+}) {
   const ordered = [...members].filter((member) => member.number >= 1).sort((a, b) => a.number - b.number);
   const shown = ordered.length ? ordered : [{ number: 1, role: 'active', master: true }];
   const { base, big, overlap, cols, rows } = tileMetrics(shown.length);
@@ -105,9 +137,10 @@ export default function StackBadge({ members }: { members: StackMemberInfo[] }) 
       }}
     >
       {shown.map((member, index) => {
-        const tone = STACK_TONES[(member.number - 1) % STACK_TONES.length];
+        const resolved = tileHealth(member, shown, deviceHealth, deviceReason);
+        const tone = HEALTH_TONES[resolved.health];
         const size = member.master ? big : base;
-        const tip = memberTooltip(member);
+        const tip = memberTooltip({ ...member, healthReason: resolved.reason });
         const column = (index % cols) + 1;
         const row = Math.floor(index / cols) + 1;
         return (
@@ -118,6 +151,7 @@ export default function StackBadge({ members }: { members: StackMemberInfo[] }) 
             data-master={member.master ? 'true' : 'false'}
             data-role={member.role || 'member'}
             data-tone={tone.name}
+            data-health={resolved.health}
             title={tip}
             aria-label={tip}
             style={{
@@ -139,7 +173,8 @@ export default function StackBadge({ members }: { members: StackMemberInfo[] }) 
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 800,
-              color: '#1c1917',
+              color: tone.ink,
+              textShadow: resolved.health === 'critical' ? '0 1px 1px rgba(0,0,0,.45)' : 'none',
               fontSize: Math.max(9, Math.round(size * 0.34)),
               lineHeight: 1,
               fontFamily: 'ui-sans-serif, system-ui, sans-serif',

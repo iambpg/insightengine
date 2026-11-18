@@ -206,7 +206,7 @@ describe('DeviceDetailView client navigation', () => {
     vi.mocked(api.syncNetbox).mockResolvedValue({ ok: true, updated: ['model', 'serial', 'firmware'], note: '' });
     const user = userEvent.setup();
     render(<DeviceDetailView />);
-    await user.click(await screen.findByRole('button', { name: 'Netbox Sync' }));
+    await user.click(await screen.findByRole('button', { name: 'NetBox Sync' }));
     await waitFor(() => expect(api.syncNetbox).toHaveBeenCalledWith('42'));
     await waitFor(() => expect(api.getDevice).toHaveBeenCalledTimes(2));
   });
@@ -367,7 +367,12 @@ describe('DeviceDetailView client navigation', () => {
     });
     render(<DeviceDetailView />);
     const actions = await screen.findByTestId('device-header-actions');
-    expect(actions).toHaveClass('h-[5.375rem]', 'max-w-[17.5rem]');
+    expect(actions).toHaveClass('h-[5.375rem]', 'shrink-0');
+    expect(actions.querySelector('.flex-col')).toBeTruthy();
+    const facts = screen.getAllByTestId('header-fact');
+    expect(facts).toHaveLength(8);
+    expect(facts[0]).toHaveClass('w-[7.75rem]');
+    expect(screen.getByTestId('device-header-facts').compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(actions).toContainElement(screen.getByTestId('stack-member-02'));
     expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-master', 'true');
     expect(screen.getByTestId('device-faceplate')).toBeInTheDocument();
