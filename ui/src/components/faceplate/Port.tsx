@@ -24,10 +24,13 @@ interface PortGlyphProps {
 export default function PortGlyph({ port, x, y, size = 20, uid, selected, showLabel, labelBelow, labelText, silk, silkBelow, onHover, onSelect }: PortGlyphProps) {
   const c = STATE_COLOR[port.state];
   const isFiber = port.type === 'SFP' || port.type === 'SFP+' || port.type === 'QSFP';
-  const w = isFiber ? size * 1.15 : size;
-  const h = isFiber ? size * 0.85 : size * 0.9;
-  const lit = port.state === 'up' || port.state === 'warning' || port.state === 'fault';
-  const adminDown = port.state === 'disabled';
+  const w = isFiber ? size * 1.25 : size * 0.82;
+  const h = isFiber ? size * 0.72 : size * 0.95;
+  const faulted = port.state === 'fault' || port.errors > 0;
+  const adminDown = port.state === 'disabled' && !faulted;
+  const linked = port.state === 'up';
+  const rim = faulted ? '#ef4444' : linked ? '#22c55e' : adminDown ? '#334155' : c.rim;
+  const lit = linked || port.state === 'warning' || faulted;
   const label = `${port.name}${port.names?.length ? ` (${port.names.join(', ')})` : ''}${port.description ? `, ${port.description}` : ''}, ${STATE_LABEL[port.state]}, ${port.speed}, ${port.utilisation}% utilisation, ${port.errors} errors`;
 
   return (
@@ -55,12 +58,12 @@ export default function PortGlyph({ port, x, y, size = 20, uid, selected, showLa
     >
       {/* recessed housing with depth */}
       <rect x={-1.5} y={-1.5} width={w + 3} height={h + 3} rx={3} fill="var(--navy)" opacity={0.85} />
-      <rect x={0} y={0} width={w} height={h} rx={2.2} fill={`url(#${uid}-bay)`} stroke={c.rim} strokeWidth={lit ? 1.6 : adminDown ? 1.4 : 1} strokeOpacity={lit ? 0.95 : 0.7} strokeDasharray={adminDown ? '1.5 1.1' : undefined} filter={port.state === 'fault' || port.state === 'warning' ? `url(#${uid}-glow)` : undefined} />
+      <rect x={0} y={0} width={w} height={h} rx={isFiber ? 1.4 : 2} fill={adminDown ? '#1e293b' : `url(#${uid}-bay)`} stroke={rim} strokeWidth={linked || faulted ? 1.7 : 1} strokeOpacity={0.95} filter={linked || faulted ? `url(#${uid}-glow)` : undefined} />
       {/* inner cage */}
       {isFiber ? (
         <>
           <rect x={w * 0.12} y={h * 0.2} width={w * 0.76} height={h * 0.6} rx={1.2} fill="var(--metal-3)" stroke="var(--metal-hi)" strokeWidth={0.5} />
-          <rect x={w * 0.2} y={h * 0.38} width={w * 0.6} height={h * 0.24} rx={0.8} fill={c.fill} opacity={lit ? 0.9 : 0.28} />
+          <rect x={w * 0.2} y={h * 0.38} width={w * 0.6} height={h * 0.24} rx={0.8} fill={linked ? '#22c55e' : adminDown ? '#334155' : c.fill} opacity={lit ? 0.9 : 0.35} />
         </>
       ) : (
         <>
