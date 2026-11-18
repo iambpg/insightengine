@@ -135,7 +135,7 @@ class CatalogPackagingTests(unittest.TestCase):
         self.assertNotIn("ports:", clients)
         self.assertIn("IE_WLC_ROLE: radio", radio)
         self.assertIn("IE_TELEGRAF_WLC_RADIO_MEM: ${IE_TELEGRAF_WLC_RADIO_MEM:-4g}", radio)
-        self.assertIn('cpus: "${IE_TELEGRAF_WLC_RADIO_CPUS:-2}"', radio)
+        self.assertIn('cpus: "${IE_TELEGRAF_WLC_RADIO_CPUS:-4}"', radio)
         self.assertIn('cpus: "${IE_TELEGRAF_WLC_CLIENTS_CPUS:-2}"', clients)
         self.assertNotIn("ports:", radio)
         wlc_conf = (WLC / "telegraf.conf").read_text(encoding="utf-8")
@@ -325,7 +325,7 @@ class StarlarkDialectTests(unittest.TestCase):
                     "ie_wlc_radio,index=9.8.7,wlc=lab,site=hq channel=1i",
                     "ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-1,ms_mac_address=aabbccddeeff most_recent_rssi=-62i,most_recent_snr=28i",
                     "ie_wlc_rogue_raw,index=aabb,wlc=lab value=1i",
-                    'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",wtp_mac="00:11:22:33:44:55",device_detail/static_info/ap_models/model="C9120AXI-B",device_detail/static_info/board_data/wtp_serial_num="FGL2417ABC1",device_detail/wtp_version/sw_version="17.15.1.4",wtp_ip="10.8.0.10",ap_location/location="floor-1",ap_mode_data/wtp_mode="local",tag_info/site_tag/site_tag_name="site-a",tag_info/policy_tag_info/policy_tag_name="pol-a",tag_info/rf_tag/rf_tag_name="rf-a",ap_state/ap_operation_state="ewlc-ap-state-registered"',
+                    'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-1",wtp_mac="00:11:22:33:44:55",device_detail/static_info/ap_models/model="C9120AXI-B",device_detail/static_info/board_data/wtp_serial_num="FGL2417ABC1",device_detail/wtp_version/sw_version="17.15.1.4",wtp_ip="10.8.0.10",ap_location/location="floor-1",ap_mode_data/wtp_mode="local",tag_info/site_tag/site_tag_name="site-a",tag_info/policy_tag_info/policy_tag_name="pol-a",tag_info/rf_tag/rf_tag_name="rf-a",ap_state/ap_operation_state="ewlc-ap-state-registered",cdp_enable=1i,alarms_enable=1i,alarm_hold_time=10i,clear_mode=2i,build="17.9.4",cpu_threshold=80i,dart_is_connected=1i,ap_lag_enabled=1i,ap_keepalive_state=3i,action_ap_reload=0i,ctrl_dtls_decrypt_err=3i,ctrl_dtls_failure_type="timeout",ctrl_dtls_setup_req=4i,data_dtls_failure=1i',
                     'ie_wlc_radio_mdt,wlc=lab,site=hq,path=radio-oper-data wtp_mac="00:11:22:33:44:55",radio_slot_id="1",oper_state="run",current_channel=36i',
                     'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-9,ms_mac_address=aabbccddeef0,store_clients=1,ssid=corp,band=5 current_rate="72.2",speed=144i,most_recent_rssi=-60i,most_recent_snr=30i,policy_errs=2i,vlan_name="user vlan",mobility="local",username="alice from floor 2"',
                     'ie_wlc_client_raw,wlc=lab,site=hq,ap_name=AP-3,ms_mac_address=aabbccddeef2,wlc_role=ap,store_clients=1 most_recent_rssi=-55i',
@@ -405,8 +405,23 @@ class StarlarkDialectTests(unittest.TestCase):
         self.assertIn("noise_36=-91", text)
         self.assertIn("noise_40=-70", text)
         self.assertIn("rx_noise_channel_utilization=3", text)
-        self.assertIn("mystery_counter=5", text)
-        self.assertIn("odd_counter=9", text)
+        self.assertIn("ctrl_dtls_decrypt_err=3", text)
+        self.assertIn("data_dtls_failure=1", text)
+        self.assertNotIn("cdp_enable", text)
+        self.assertNotIn("alarms_enable", text)
+        self.assertNotIn("alarm_hold_time", text)
+        self.assertNotIn("clear_mode", text)
+        self.assertNotIn("17.9.4", text)
+        self.assertNotIn("cpu_threshold", text)
+        self.assertNotIn("dart_is_connected", text)
+        self.assertNotIn("ap_lag_enabled", text)
+        self.assertNotIn("ap_keepalive_state", text)
+        self.assertNotIn("action_ap_reload", text)
+        self.assertNotIn("failure_type", text)
+        self.assertNotIn("timeout", text)
+        self.assertNotIn("setup_req", text)
+        self.assertNotIn("mystery_counter=5", text)
+        self.assertNotIn("odd_counter=9", text)
         self.assertNotIn("rssi=-40", text)
         self.assertNotIn("noise=3", text)
         self.assertNotIn("noise=-70", text)
@@ -436,7 +451,7 @@ class StarlarkDialectTests(unittest.TestCase):
         reasons = []
         for index in range(200):
             reasons.append(
-                'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-reason-%d",odd_reason="reason-%d"'
+                'ie_wlc_ap_mdt,wlc=lab,site=hq,path=capwap-data name="AP-reason-%d",ap_state/ap_operation_state="ewlc-ap-state-registered",reboot_reason="reason-%d"'
                 % (index, index)
             )
         sample_text = "\n".join([
@@ -497,7 +512,7 @@ class StarlarkDialectTests(unittest.TestCase):
         seen = set()
         for raw in text.splitlines():
             line = raw[2:] if raw.startswith("> ") else raw
-            marker = "odd_reason="
+            marker = "reboot_reason="
             if marker not in line:
                 continue
             for part in line.replace(",", " ").split():

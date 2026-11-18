@@ -1019,7 +1019,7 @@ services:
       start_period: 40s
     deploy:
       resources:
-        limits: {memory: "${IE_TELEGRAF_WLC_RADIO_MEM:-4g}", cpus: "${IE_TELEGRAF_WLC_RADIO_CPUS:-2}"}
+        limits: {memory: "${IE_TELEGRAF_WLC_RADIO_MEM:-4g}", cpus: "${IE_TELEGRAF_WLC_RADIO_CPUS:-4}"}
         reservations: {memory: 256m}
 
   telegraf-host:

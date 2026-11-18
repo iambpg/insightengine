@@ -287,14 +287,17 @@ def client_metric(metric, blob):
 
 
 def radio_metric(metric, blob):
-    ap = tag_or_field(metric, ("ap_name", "wtp_mac", "name", "ap-name", "wtp-mac"))
-    radio = tag_or_field(metric, ("radio_slot_id", "radio", "slot_id", "radio-slot-id", "slot-id"))
+    # One walk. tag_or_field scans every leaf, and a radio row called it
+    # about fifteen times. That scan is what pinned the radio listener.
+    idx = leaf_index(metric)
+    ap = _pick(idx, ("ap_name", "wtp_mac", "name", "ap-name", "wtp-mac"))
+    radio = _pick(idx, ("radio_slot_id", "radio", "slot_id", "radio-slot-id", "slot-id"))
     if not ap:
         ap = "unknown"
     if not radio:
         radio = "0"
-    ssid = tag_or_field(metric, ("vap_ssid", "vap-ssid", "ssid"))
-    band = tag_or_field(metric, ("radio_band", "radio-band", "radio_type", "radio-type", "current_active_band", "band"))
+    ssid = _pick(idx, ("vap_ssid", "vap-ssid", "ssid"))
+    band = _pick(idx, ("radio_band", "radio-band", "radio_type", "radio-type", "current_active_band", "band"))
     if ssid:
         out = Metric("ie_wlc_ssid")
         copy_place(metric, out)
@@ -303,7 +306,7 @@ def radio_metric(metric, blob):
         out.tags["ssid"] = str(ssid)
         if band:
             out.tags["band"] = str(band)
-        clients = num(tag_or_field(metric, ("num_assoc_clients", "num-assoc-clients", "clients")))
+        clients = _first_idx(idx, ("num_assoc_clients", "num-assoc-clients", "clients"))
         if clients != None:
             out.fields["clients"] = clients
         out.time = metric.time
@@ -312,69 +315,56 @@ def radio_metric(metric, blob):
         out = Metric("ie_wlc_ethernet")
         copy_place(metric, out)
         out.tags["ap"] = str(ap)
-        iface = tag_or_field(metric, ("if_name", "if-name"))
+        iface = _pick(idx, ("if_name", "if-name"))
         if iface:
             out.tags["if"] = str(iface)
-        rx = num(tag_or_field(metric, ("rx_pkts", "rx-pkts")))
-        tx = num(tag_or_field(metric, ("tx_pkts", "tx-pkts")))
+        rx = _first_idx(idx, ("rx_pkts", "rx-pkts"))
+        tx = _first_idx(idx, ("tx_pkts", "tx-pkts"))
         if rx != None:
             out.fields["rx_pkts"] = rx
         if tx != None:
             out.fields["tx_pkts"] = tx
-        out.time = metric.time
-        return finish_fast(metric, out)
+        return finish_ether(metric, out)
     out = Metric("ie_wlc_radio")
     copy_place(metric, out)
     out.tags["ap"] = str(ap)
     out.tags["radio"] = str(radio)
     if band:
         out.tags["band"] = str(band)
-    wrote = False
-    util = num(tag_or_field(metric, ("cca_util_percentage", "channel_util", "rx_util_percentage", "cca-util-percentage", "bss_chan_util", "bss-chan-util")))
+    util = _first_idx(idx, ("cca_util_percentage", "channel_util", "rx_util_percentage", "cca-util-percentage", "bss_chan_util", "bss-chan-util"))
     # dBm only. load/rx-noise-channel-utilization is a percent and stays its own field.
     noise = noise_dbm(metric)
-    inter = num(tag_or_field(metric, ("interference", "non_wifi_inter", "non-wifi-inter", "cca_interference")))
-    clients = num(tag_or_field(metric, ("num_assoc_clients", "stations", "clients", "num-assoc-clients")))
-    channel = num(tag_or_field(metric, ("channel", "curr_freq", "curr-freq", "current_channel", "current-channel")))
-    power = num(tag_or_field(metric, ("curr_tx_power_in_dbm", "curr-tx-power-in-dbm", "tx_power_dbm")))
-    level = num(tag_or_field(metric, ("current_tx_power_level", "current-tx-power-level", "tx_power_level")))
-    width = num(tag_or_field(metric, ("chan_width", "chan-width", "channel_width")))
-    rogues = num(tag_or_field(metric, ("rogue_20_count", "rogue-20-count")))
+    inter = _first_idx(idx, ("interference", "non_wifi_inter", "non-wifi-inter", "cca_interference"))
+    clients = _first_idx(idx, ("num_assoc_clients", "stations", "clients", "num-assoc-clients"))
+    channel = _first_idx(idx, ("channel", "curr_freq", "curr-freq", "current_channel", "current-channel"))
+    power = _first_idx(idx, ("curr_tx_power_in_dbm", "curr-tx-power-in-dbm", "tx_power_dbm"))
+    level = _first_idx(idx, ("current_tx_power_level", "current-tx-power-level", "tx_power_level"))
+    width = _first_idx(idx, ("chan_width", "chan-width", "channel_width"))
+    rogues = _first_idx(idx, ("rogue_20_count", "rogue-20-count"))
     if util != None:
         out.fields["channel_util"] = util
-        wrote = True
     if noise != None:
         out.fields["noise"] = noise
-        wrote = True
     if inter != None:
         out.fields["interference"] = inter
-        wrote = True
     if clients != None:
         out.fields["clients"] = clients
-        wrote = True
     if channel != None:
         out.fields["channel"] = channel
-        wrote = True
     if power != None:
         out.fields["tx_power_dbm"] = power
         out.fields["tx_power"] = power
-        wrote = True
     if level != None:
         out.fields["tx_power_level"] = level
-        wrote = True
     if width != None:
         out.fields["width"] = width
-        wrote = True
     if rogues != None:
         out.fields["rogue_neighbors"] = rogues
-        wrote = True
-    radio_oper = tag_or_field(metric, ("oper_state", "oper-state", "radio_oper", "ap_operation_state"))
+    radio_oper = _pick(idx, ("oper_state", "oper-state", "radio_oper", "ap_operation_state"))
     radio_up = oper_up(radio_oper)
     if radio_up != None:
         out.fields["oper_up"] = radio_up
-        wrote = True
-    out.time = metric.time
-    return finish_fast(metric, out)
+    return finish_radio(metric, out)
 
 
 def ap_metric(metric):
@@ -405,12 +395,17 @@ def ap_metric(metric):
     if disconnects != None:
         out.fields["disconnects"] = disconnects
     out.time = metric.time
-    finish(metric, out)
+    rows = finish_ap(metric, out)
     remember_named(metric, str(ap))
     info = ap_info(metric, str(ap))
     if info == None:
-        return out
-    return [out, info]
+        return rows
+    if rows == None:
+        return info
+    if type(rows) == "list":
+        rows.append(info)
+        return rows
+    return [rows, info]
 
 
 def ap_info(metric, ap):
@@ -481,10 +476,11 @@ def neighbor_metric(metric):
         out.tags["switch"] = str(switch)
     if port:
         out.tags["port"] = str(port)
-    if switch or port:
-        out.fields["info"] = 1
+    if not (switch or port):
+        return None
+    out.fields["info"] = 1
     out.time = metric.time
-    return finish(metric, out)
+    return out
 
 
 def rogue_mdt(metric):
@@ -1298,6 +1294,241 @@ def attach_numbers(metric, out):
             out.fields[leaf] = value
         elif kind == "bool":
             out.fields[leaf] = 1 if value else 0
+
+
+def _starts(text, prefix):
+    n = len(prefix)
+    if len(text) < n:
+        return False
+    return text[:n] == prefix
+
+
+def leaf_index(metric):
+    # Shortest key wins, tags then fields. One pass replaces the repeated
+    # tag_or_field scans on a wide radio row.
+    found = {}
+    lengths = {}
+    _index_side(found, lengths, metric.tags)
+    _index_side(found, lengths, metric.fields)
+    return found
+
+
+def _index_side(found, lengths, table):
+    for key in table:
+        if not _history_kept(key):
+            continue
+        value = table[key]
+        if value == "":
+            continue
+        leaf = snake(key)
+        if leaf == "":
+            continue
+        size = len(key)
+        if leaf not in found or size < lengths[leaf]:
+            found[leaf] = value
+            lengths[leaf] = size
+
+
+def _pick(idx, names):
+    for name in names:
+        leaf = name.replace("-", "_")
+        if leaf in idx:
+            return idx[leaf]
+    return None
+
+
+def _first_idx(idx, names):
+    return num(_pick(idx, names))
+
+
+def config_leaf(leaf):
+    # Capwap settings. They are not counters. The UI reads inventory from
+    # ie_wlc_ap_info and up/down from ie_wlc_ap_oper_up.
+    if leaf == "enable" or leaf == "enabled":
+        return True
+    if _ends(leaf, "_enable") or _ends(leaf, "_enabled"):
+        return True
+    if _starts(leaf, "is_") or _starts(leaf, "action_"):
+        return True
+    if "threshold" in leaf:
+        return True
+    if _ends(leaf, "_hold_time") or _ends(leaf, "_intvl") or _ends(leaf, "_interval"):
+        return True
+    if leaf == "build" or leaf == "release" or leaf == "version" or leaf == "clear_mode":
+        return True
+    if leaf == "dart_is_connected" or leaf == "ap_keepalive_state" or leaf == "degree":
+        return True
+    if leaf == "floor" or leaf == "flash_sec" or leaf == "lease_time" or leaf == "join_priority":
+        return True
+    if leaf == "join_time_taken" or leaf == "max_clients_supported" or leaf == "max_power":
+        return True
+    if leaf == "mem_size" or leaf == "mdns_group_id" or leaf == "multi_window_support":
+        return True
+    if leaf == "num_ports" or leaf == "num_radio_slots" or leaf == "num_slots" or leaf == "numeric_id":
+        return True
+    if leaf == "port" or leaf == "radio_reset" or leaf == "radio_slots_in_use":
+        return True
+    if leaf == "reset_button_state" or leaf == "tot_sniffer_radio" or leaf == "usb_override":
+        return True
+    if leaf == "vlan_tag_id" or leaf == "weak_rssi" or leaf == "window_size" or leaf == "wtp_model_type":
+        return True
+    if leaf == "encryption_capabilities" or leaf == "local_dhcp" or leaf == "maint" or leaf == "support":
+        return True
+    if leaf == "trap_retx_time" or leaf == "detection_time":
+        return True
+    return False
+
+
+def _skip_ap_number(leaf):
+    if config_leaf(leaf):
+        return True
+    # Join-request accounting. Nothing in the UI, alerts or dashboards reads it.
+    if _starts(leaf, "num_") and leaf != "num_clients":
+        return True
+    if _ends(leaf, "_setup_req") or _ends(leaf, "_dtls_success"):
+        return True
+    return False
+
+
+def _dtls_error(leaf):
+    if "dtls" not in leaf:
+        return False
+    if "err" in leaf or _ends(leaf, "_failure"):
+        return True
+    return False
+
+
+def _radio_keep(leaf):
+    if leaf == "channel_util" or leaf == "noise" or leaf == "interference":
+        return True
+    if leaf == "clients" or leaf == "channel" or leaf == "width":
+        return True
+    if leaf == "tx_power" or leaf == "tx_power_dbm" or leaf == "tx_power_level":
+        return True
+    if leaf == "oper_up" or leaf == "rogue_neighbors":
+        return True
+    if leaf == "retry_count" or leaf == "tx_frame_count" or leaf == "fcs_error_count":
+        return True
+    if leaf == "rx_fragment_count" or leaf == "poor_snr_clients":
+        return True
+    if leaf == "rx_noise_channel_utilization":
+        return True
+    if _starts(leaf, "noise_"):
+        return True
+    return False
+
+
+def _radio_alias(leaf):
+    if leaf in ALIAS_OF:
+        return ALIAS_OF[leaf]
+    if leaf == "failed_count":
+        return "retry_count"
+    if leaf == "poor_coverage_clients":
+        return "poor_snr_clients"
+    return leaf
+
+
+def _ether_keep(leaf):
+    if leaf == "rx_pkts" or leaf == "tx_pkts":
+        return True
+    if leaf == "input_errors" or leaf == "output_errors":
+        return True
+    return False
+
+
+def _copy_kept(metric, out, keep):
+    for key in metric.fields:
+        if _drop_list_index(key):
+            continue
+        value = metric.fields[key]
+        kind = type(value)
+        if kind != "int" and kind != "float" and kind != "bool":
+            continue
+        leaf = snake(key)
+        if leaf == "":
+            continue
+        leaf = keep(leaf)
+        if leaf == "":
+            continue
+        if leaf in out.fields:
+            continue
+        if kind == "bool":
+            out.fields[leaf] = 1 if value else 0
+        else:
+            out.fields[leaf] = value
+
+
+def _keep_radio_leaf(leaf):
+    leaf = _radio_alias(leaf)
+    if _radio_keep(leaf):
+        return leaf
+    return ""
+
+
+def _keep_ether_leaf(leaf):
+    if _ether_keep(leaf):
+        return leaf
+    return ""
+
+
+def finish_radio(metric, out):
+    attach_channel_noise(metric, out)
+    _copy_kept(metric, out, _keep_radio_leaf)
+    if not has_field(out.fields):
+        return None
+    out.time = metric.time
+    return out
+
+
+def finish_ether(metric, out):
+    _copy_kept(metric, out, _keep_ether_leaf)
+    if not has_field(out.fields):
+        return None
+    out.time = metric.time
+    return out
+
+
+def finish_ap(metric, out):
+    # Numbers that are not settings. String leaves are not labels on the
+    # counter series. DTLS errors are a second series with only place tags,
+    # so a failure-type string cannot multiply them.
+    attach_channel_noise(metric, out)
+    dtls = None
+    for key in metric.fields:
+        if not _history_kept(key) or _unstable_index(key):
+            continue
+        leaf = field_name(key)
+        if leaf == "":
+            continue
+        if leaf == "num_clients" or leaf == "number_of_clients":
+            leaf = "clients"
+        if _skip_ap_number(leaf):
+            continue
+        value = metric.fields[key]
+        kind = type(value)
+        if kind == "bool":
+            value = 1 if value else 0
+        elif kind != "int" and kind != "float":
+            continue
+        if _dtls_error(leaf):
+            if dtls == None:
+                dtls = Metric("ie_wlc_ap")
+                copy_place(metric, dtls)
+                if "ap" in out.tags:
+                    dtls.tags["ap"] = out.tags["ap"]
+            if leaf not in dtls.fields:
+                dtls.fields[leaf] = value
+            continue
+        if leaf not in out.fields:
+            out.fields[leaf] = value
+    if dtls != None:
+        dtls.time = metric.time
+    if not has_field(out.fields):
+        return dtls
+    out.time = metric.time
+    if dtls == None:
+        return out
+    return [out, dtls]
 
 
 def finish(metric, out):
