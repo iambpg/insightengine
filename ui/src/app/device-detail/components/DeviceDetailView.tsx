@@ -129,6 +129,7 @@ export default function DeviceDetailView() {
   const [stageLocked, setStageLocked] = useState(false);
   const [addAp, setAddAp] = useState(false);
   const [cable, setCable] = useState<{ remotePort: string; localPort: string; plate: HTMLElement } | null>(null);
+  const [stackPick, setStackPick] = useState<number | null>(null);
   const healthApplied = useRef('');
   const stageRef = useRef<HTMLDivElement>(null);
   const detailScroll = useRef<HTMLDivElement>(null);
@@ -146,11 +147,17 @@ export default function DeviceDetailView() {
   const loaded = useKeyedLoad<DeviceDetailData>(deviceKey, canLoad, attempt, 'this device', (key) => api.getDevice(key));
   const device = loaded.data;
   const stackMembers = useMemo(() => (device ? stackMembersFor(device) : null), [device]);
+  const activeStackMember = useMemo(() => {
+    if (!stackMembers?.length) return undefined;
+    if (stackPick != null && stackMembers.some((member) => member.number === stackPick)) return stackPick;
+    return stackMembers.find((member) => member.master)?.number ?? stackMembers[0].number;
+  }, [stackMembers, stackPick]);
   const parentLink = device?.parent ?? null;
 
   useEffect(() => {
     setSelected(null);
     setCable(null);
+    setStackPick(null);
   }, [deviceKey]);
 
   useEffect(() => {
@@ -348,6 +355,8 @@ export default function DeviceDetailView() {
                   members={stackMembers}
                   deviceHealth={device.health}
                   deviceReason={deviceHealthReason(device.health, healthItems)}
+                  selected={activeStackMember}
+                  onSelect={setStackPick}
                 />
               )}
               <div className="flex h-full w-[8.5rem] shrink-0 flex-col gap-0.5">
@@ -459,6 +468,7 @@ export default function DeviceDetailView() {
                 <div className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'min-w-full'}>
                   <Faceplate
                     device={device.faceplate}
+                    activeMember={activeStackMember}
                     selectedPortId={selected?.id ?? null}
                     onSelectPort={setSelected}
                     caption={false}

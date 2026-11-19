@@ -6,7 +6,7 @@ import FaceplateDefs from './FaceplateDefs';
 import PortTooltip from './PortTooltip';
 import RadioTooltip from './RadioTooltip';
 import FortiGateLayout from './layouts/FortiGateLayout';
-import SwitchLayout, { SW_H, switchCanvas } from './layouts/SwitchLayout';
+import SwitchLayout, { switchCanvas } from './layouts/SwitchLayout';
 import { CHASSIS_WIDTH, FACEPLATE_HEIGHT, lockedChassis } from './size';
 
 export { FACEPLATE_HEIGHT };
@@ -26,6 +26,7 @@ interface FaceplateProps {
   caption?: boolean;
   health?: string;
   chassisLabel?: string;
+  activeMember?: number;
 }
 
 function allPorts(d: FaceplateDevice): PortInfo[] {
@@ -49,7 +50,7 @@ function memberInk(health: string | undefined): string {
   return '#94a3b8';
 }
 
-export default function Faceplate({ device, selectedPortId = null, onSelectPort, className = '', compact = false, caption = true, health, chassisLabel }: FaceplateProps) {
+export default function Faceplate({ device, selectedPortId = null, onSelectPort, className = '', compact = false, caption = true, health, chassisLabel, activeMember }: FaceplateProps) {
   const rawId = useId();
   const uid = `fp${rawId.replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -83,6 +84,12 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
   const onSelect = (p: PortInfo) => onSelectPort?.(selectedPortId === p.id ? null : p);
   const common = { uid, selectedId: selectedPortId, onHover, onSelect };
   const art = useFaceplateModel(device);
+  const shown = device.form_factor === 'switch-stack' && device.members?.length
+    ? {
+        ...device,
+        members: [device.members.find((member) => member.number === activeMember) ?? device.members[0]],
+      }
+    : device;
 
   const { vbW, vbH, body, rowCount } = useMemo(() => {
     const pad = 8;
@@ -115,7 +122,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         ),
       };
     }
-    switch (device.form_factor) {
+    switch (shown.form_factor) {
       case 'access-switch-24': case 'access-switch-48': case 'generic':
       case 'firewall': case 'branch-router': case 'wireless-controller': case 'modular-chassis': {
         const ports = device.modules?.length ? device.modules.flatMap((module) => module.ports) : (device.ports ?? []);
@@ -137,41 +144,34 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         };
       }
       case 'switch-stack': {
-        const members = device.members ?? [];
-        const rows = Math.max(members.length, 1);
-        const gap = 8;
-        const width = Math.max(1, ...members.map((member) => switchCanvas(member.ports).width));
+        const member = shown.members?.[0];
+        const ports = member?.ports ?? [];
+        const canvas = switchCanvas(ports);
         return {
-          vbW: width + pad * 2,
-          vbH: pad * 2 + rows * SW_H + Math.max(0, rows - 1) * gap,
-          rowCount: rows,
-          body: (
-            <>
-              {members.map((member, index) => (
-                <SwitchLayout
-                  key={member.id}
-                  ports={member.ports}
-                  originX={pad}
-                  originY={pad + index * (SW_H + gap)}
-                  canvasWidth={width}
-                  {...common}
-                  memberNumber={member.number}
-                  memberHealthColor={memberInk(member.health)}
-                  ledHealth={memberLed(member.health)}
-                  modelLabel={chassisLabel || device.modelName || device.model || ''}
-                />
-              ))}
-            </>
-          ),
+          vbW: canvas.width + pad * 2,
+          vbH: canvas.height + pad * 2,
+          rowCount: 1,
+          body: member ? (
+            <SwitchLayout
+              ports={member.ports}
+              originX={pad}
+              originY={pad}
+              {...common}
+              memberNumber={member.number}
+              memberHealthColor={memberInk(member.health)}
+              ledHealth={memberLed(member.health)}
+              modelLabel={chassisLabel || device.modelName || device.model || ''}
+            />
+          ) : null,
         };
       }
       default:
         return { vbW: 400, vbH: 120, rowCount: 1, body: null };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [device, art, selectedPortId, selectedRadioId, health, chassisLabel]);
+  }, [shown, art, selectedPortId, selectedRadioId, health, chassisLabel]);
 
-  const ports = allPorts(device);
+  const ports = allPorts(shown);
   const counts = countPorts(ports);
   const summary = faceplateSummaryLine(counts, device.snmpAt);
   const snmpHint = device.snmpMissing ? SNMP_MISSING_HINT : '';

@@ -101,10 +101,14 @@ export default function StackBadge({
   members,
   deviceHealth,
   deviceReason,
+  selected,
+  onSelect,
 }: {
   members: StackMemberInfo[];
   deviceHealth?: DeviceHealth;
   deviceReason?: string;
+  selected?: number;
+  onSelect?: (number: number) => void;
 }) {
   const ordered = [...members].filter((member) => member.number >= 1).sort((a, b) => a.number - b.number);
   const shown = ordered.length ? ordered : [{ number: 1, role: 'active', master: true }];
@@ -137,10 +141,12 @@ export default function StackBadge({
         const tip = memberTooltip({ ...member, healthReason: resolved.reason });
         const column = (index % cols) + 1;
         const row = Math.floor(index / cols) + 1;
+        const picked = selected === member.number;
         return (
-          <span
+          <button
             key={member.number}
-            role="img"
+            type="button"
+            aria-pressed={picked}
             data-testid={`stack-member-${memberLabel(member.number)}`}
             data-master={member.master ? 'true' : 'false'}
             data-role={member.role || 'member'}
@@ -148,6 +154,7 @@ export default function StackBadge({
             data-health={resolved.health}
             title={tip}
             aria-label={tip}
+            onClick={() => onSelect?.(member.number)}
             style={{
               gridColumn: column,
               gridRow: row,
@@ -155,7 +162,10 @@ export default function StackBadge({
               height: size,
               marginLeft: extra ? -extra / 2 : 0,
               marginTop: extra ? -extra / 2 : 0,
-              zIndex: member.master ? 30 : index + 1,
+              zIndex: picked ? 40 : member.master ? 30 : index + 1,
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
               borderRadius: '40%',
               backgroundColor: tone.mid,
               backgroundImage: `linear-gradient(180deg, rgba(255,255,255,.75) 0%, rgba(255,255,255,0) 32%), linear-gradient(180deg, ${tone.light} 0%, ${tone.mid} 48%, ${tone.deep} 100%)`,
@@ -163,6 +173,7 @@ export default function StackBadge({
                 'inset 0 1px 0 rgba(255,255,255,.9)',
                 '0 1px 2px rgba(15,23,42,.2)',
                 member.role === 'standby' ? '0 0 0 1.5px #0f172a' : '',
+                picked ? '0 0 0 2px #ffffff, 0 0 0 4px #0f172a' : '',
               ].filter(Boolean).join(', '),
               display: 'flex',
               alignItems: 'center',
@@ -176,7 +187,7 @@ export default function StackBadge({
             }}
           >
             {memberLabel(member.number)}
-          </span>
+          </button>
         );
       })}
     </div>

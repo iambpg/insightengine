@@ -27,26 +27,26 @@ function stack(count: number, masterNumber: number, extra?: (number: number) => 
 }
 
 function widthOf(label: string): number {
-  return parseFloat(screen.getByRole('img', { name: new RegExp(`Member ${label}\\b`) }).style.width);
+  return parseFloat(screen.getByRole('button', { name: new RegExp(`Member ${label}\\b`) }).style.width);
 }
 
 describe('stack badge', () => {
   it('shows one tile for a standalone switch', () => {
     render(<StackBadge members={stack(1, 1)} />);
-    const tile = screen.getByRole('img', { name: /Member 01/ });
+    const tile = screen.getByRole('button', { name: /Member 01/ });
     expect(tile).toHaveTextContent('01');
     expect(tile).toHaveAttribute('data-master', 'true');
     expect(tile).toHaveAttribute('data-tone', 'green');
     expect(tile).toHaveAttribute('data-health', 'healthy');
     expect(tile).toHaveAttribute('title', expect.stringContaining('Member state is ready'));
-    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(memberTooltip(stack(1, 1)[0])).toBe('Member 01 · active · C9300-1 · SER01 · ready');
   });
 
   it('draws member 01 larger when it is the master of a stack of two', () => {
     render(<StackBadge members={stack(2, 1)} />);
-    expect(screen.getByRole('img', { name: /Member 01/ })).toHaveTextContent('01');
-    expect(screen.getByRole('img', { name: /Member 02/ })).toHaveTextContent('02');
+    expect(screen.getByRole('button', { name: /Member 01/ })).toHaveTextContent('01');
+    expect(screen.getByRole('button', { name: /Member 02/ })).toHaveTextContent('02');
     expect(screen.getByTestId('stack-member-01')).toHaveAttribute('data-master', 'true');
     expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-master', 'false');
     expect(widthOf('01') / widthOf('02')).toBeCloseTo(1.3, 1);
@@ -73,7 +73,7 @@ describe('stack badge', () => {
 
   it('fits a stack of eight with member 05 on top', () => {
     render(<StackBadge members={stack(8, 5)} />);
-    expect(screen.getAllByRole('img')).toHaveLength(8);
+    expect(screen.getAllByRole('button')).toHaveLength(8);
     for (let number = 1; number <= 8; number += 1) {
       const label = String(number).padStart(2, '0');
       expect(screen.getByTestId(`stack-member-${label}`)).toHaveTextContent(label);
@@ -102,8 +102,8 @@ describe('stack badge', () => {
       { number: 1, role: 'active', model: 'C9300-48P', serial: '', state: '', master: true },
     ]);
     render(<StackBadge members={members || []} />);
-    expect(screen.getByRole('img', { name: /Member 01/ })).toHaveTextContent('01');
-    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Member 01/ })).toHaveTextContent('01');
+    expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
   it('colours a member that is not ready red, and uses device health when no member was checked', () => {
@@ -132,14 +132,14 @@ describe('stack badge', () => {
     expect(screen.getByTestId('stack-member-03')).toHaveAttribute('data-health', 'critical');
     expect(screen.getByTestId('stack-member-04')).toHaveAttribute('data-health', 'unknown');
     expect(screen.getByTestId('stack-member-04')).toHaveAttribute('data-tone', 'grey');
-    expect(screen.getByRole('img', { name: /CPU is above the 80% threshold/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /CPU is above the 80% threshold/ })).toBeInTheDocument();
     expect(widthOf('01') / widthOf('02')).toBeCloseTo(1.3, 1);
   });
 
   it('gives a standby member a ring and hides the badge on other devices', () => {
     render(<StackBadge members={[member(1, true), member(2, false, { role: 'standby' })]} />);
     expect(screen.getByTestId('stack-member-02').style.boxShadow).toContain('0 0 0 1.5px');
-    expect(screen.getByRole('img', { name: /Member 02 · standby/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Member 02 · standby/ })).toBeInTheDocument();
     expect(stackMembersFor({ role: 'Firewall', faceplate: { form_factor: 'firewall' } })).toBeNull();
     expect(stackMembersFor({ role: 'Wireless controller', faceplate: { form_factor: 'wireless-controller' } })).toBeNull();
   });
