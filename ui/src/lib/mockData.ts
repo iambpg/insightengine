@@ -575,6 +575,8 @@ export function buildDeviceDetail(formKey: string): DeviceDetailData {
     'branch-router': 'rtr-bre07-01', 'modular-chassis': 'chs-rot01-core', generic: 'dev-lei02-17',
   };
   const stack = form === 'switch-stack';
+  const platePorts = fp.ports || fp.members?.[0]?.ports || [];
+  const uplink = platePorts.find((item) => /\/1\/\d+$/.test(item.name) && item.neighbour) || platePorts.find((item) => item.neighbour);
   const health: DeviceHealth = form === 'switch-stack' || form === 'firewall' || form === 'modular-chassis' ? 'critical' : form === 'access-switch-24' || form === 'ceiling-ap' ? 'warning' : 'healthy';
   return {
     id: 'dev-00417',
@@ -589,6 +591,15 @@ export function buildDeviceDetail(formKey: string): DeviceDetailData {
     firmware: 'v17.9.4-build.221',
     serialMasked: 'FDO••••••82K',
     faceplate: fp,
+    parent: uplink?.neighbour
+      ? {
+          id: 'parent',
+          hostname: uplink.neighbour.device,
+          parentInterface: uplink.neighbour.port,
+          uplinkInterface: uplink.name,
+          formFactor: 'access-switch-48' as const,
+        }
+      : null,
     checkRunAt: '2026-10-27 14:36:41',
     issues:
       health === 'healthy'
