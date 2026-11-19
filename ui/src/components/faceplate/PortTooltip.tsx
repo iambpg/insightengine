@@ -56,6 +56,10 @@ export default function PortTooltip({ port, left, top }: Props) {
           <dd className="font-mono-data">{port.speed}</dd>
         </div>
         <div className="flex justify-between">
+          <dt className="text-down">VLAN</dt>
+          <dd className="font-mono-data">{port.vlan || '—'}</dd>
+        </div>
+        <div className="flex justify-between">
           <dt className="text-down">In</dt>
           <dd className="font-mono-data">{fmtBps(port.inBps)}</dd>
         </div>

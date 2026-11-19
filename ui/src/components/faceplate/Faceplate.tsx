@@ -6,7 +6,7 @@ import FaceplateDefs from './FaceplateDefs';
 import PortTooltip from './PortTooltip';
 import RadioTooltip from './RadioTooltip';
 import FortiGateLayout from './layouts/FortiGateLayout';
-import SwitchLayout from './layouts/SwitchLayout';
+import SwitchLayout, { SW_H, switchCanvas } from './layouts/SwitchLayout';
 import { CHASSIS_WIDTH, FACEPLATE_HEIGHT, lockedChassis } from './size';
 
 export { FACEPLATE_HEIGHT };
@@ -24,6 +24,8 @@ interface FaceplateProps {
   className?: string;
   compact?: boolean;
   caption?: boolean;
+  health?: string;
+  chassisLabel?: string;
 }
 
 function allPorts(d: FaceplateDevice): PortInfo[] {
@@ -33,14 +35,27 @@ function allPorts(d: FaceplateDevice): PortInfo[] {
 }
 
 // Reusable faceplate. Everything is drawn from the JSON description; nothing is a fixed image.
-export default function Faceplate({ device, selectedPortId = null, onSelectPort, className = '', compact = false, caption = true }: FaceplateProps) {
+function memberLed(health: string | undefined): string {
+  if (health === 'fault' || health === 'critical') return 'critical';
+  if (health === 'warning') return 'warning';
+  if (health === 'healthy') return 'healthy';
+  return 'unknown';
+}
+
+function memberInk(health: string | undefined): string {
+  if (health === 'fault' || health === 'critical') return '#ef4444';
+  if (health === 'warning') return '#f59e0b';
+  if (health === 'healthy') return '#22c55e';
+  return '#94a3b8';
+}
+
+export default function Faceplate({ device, selectedPortId = null, onSelectPort, className = '', compact = false, caption = true, health, chassisLabel }: FaceplateProps) {
   const rawId = useId();
   const uid = `fp${rawId.replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ port: PortInfo; left: number; top: number } | null>(null);
   const [radioHover, setRadioHover] = useState<{ radio: RadioInfo; left: number; top: number } | null>(null);
   const [selectedRadioId, setSelectedRadioId] = useState<string | null>(null);
-  const [activeMember, setActiveMember] = useState<number | null>(null);
 
   const onHover = (port: PortInfo | null, el: SVGGElement | null) => {
     if (!port || !el) {
@@ -69,16 +84,17 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
   const common = { uid, selectedId: selectedPortId, onHover, onSelect };
   const art = useFaceplateModel(device);
 
-  const { vbW, vbH, body } = useMemo(() => {
+  const { vbW, vbH, body, rowCount } = useMemo(() => {
     const pad = 8;
     const frame = lockedChassis(pad);
     if (device.form_factor === 'ceiling-ap') {
       const scale = Math.min(frame.innerW / AP_W, frame.innerH / AP_H);
       const x = pad + (frame.innerW - AP_W * scale) / 2;
       const y = pad + (frame.innerH - AP_H * scale) / 2;
-      return {
+        return {
         vbW: frame.vbW,
         vbH: frame.vbH,
+        rowCount: 1,
         body: (
           <g transform={`translate(${x} ${y}) scale(${scale})`}>
             <ApLayout ports={device.ports ?? []} radios={device.radios ?? []} apState={device.apState ?? 'up'} selectedRadioId={selectedRadioId} onRadioHover={onRadioHover} onRadioSelect={onRadioSelect} {...common} />
@@ -88,9 +104,10 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
     }
     if (art && (isFortiGateModel(art) || isFortiSwitchModel(art)) && art.ports.length > 0) {
       const ports = device.modules?.length ? device.modules.flatMap((module) => module.ports) : (device.ports ?? []);
-      return {
+        return {
         vbW: frame.vbW,
         vbH: frame.vbH,
+        rowCount: 1,
         body: (
           <g transform={`translate(${pad} ${pad})`}>
             <FortiGateLayout model={art} ports={ports} {...common} />
@@ -102,127 +119,94 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
       case 'access-switch-24': case 'access-switch-48': case 'generic':
       case 'firewall': case 'branch-router': case 'wireless-controller': case 'modular-chassis': {
         const ports = device.modules?.length ? device.modules.flatMap((module) => module.ports) : (device.ports ?? []);
-        return { vbW: frame.vbW, vbH: frame.vbH, body: <SwitchLayout ports={ports} originX={pad} originY={pad} {...common} /> };
-      }
-      case 'switch-stack': {
-        const members = device.members ?? [];
-        const current = members.find((m) => m.number === activeMember) ?? members[0];
-        if (!current) return { vbW: frame.vbW, vbH: frame.vbH, body: null };
+        const canvas = switchCanvas(ports);
         return {
-          vbW: frame.vbW,
-          vbH: frame.vbH,
+          vbW: canvas.width + pad * 2,
+          vbH: canvas.height + pad * 2,
+          rowCount: 1,
           body: (
             <SwitchLayout
-              ports={current.ports}
+              ports={ports}
               originX={pad}
               originY={pad}
               {...common}
-              memberNumber={current.number}
-              memberHealthColor={
-                current.health === 'healthy' ? 'var(--success)' : current.health === 'warning' ? 'var(--warning)' : 'var(--destructive)'
-              }
-              stackPorts
+              ledHealth={health}
+              modelLabel={chassisLabel || device.modelName || device.model || ''}
             />
           ),
         };
       }
+      case 'switch-stack': {
+        const members = device.members ?? [];
+        const rows = Math.max(members.length, 1);
+        const gap = 8;
+        const width = Math.max(1, ...members.map((member) => switchCanvas(member.ports).width));
+        return {
+          vbW: width + pad * 2,
+          vbH: pad * 2 + rows * SW_H + Math.max(0, rows - 1) * gap,
+          rowCount: rows,
+          body: (
+            <>
+              {members.map((member, index) => (
+                <SwitchLayout
+                  key={member.id}
+                  ports={member.ports}
+                  originX={pad}
+                  originY={pad + index * (SW_H + gap)}
+                  canvasWidth={width}
+                  {...common}
+                  memberNumber={member.number}
+                  memberHealthColor={memberInk(member.health)}
+                  ledHealth={memberLed(member.health)}
+                  modelLabel={chassisLabel || device.modelName || device.model || ''}
+                />
+              ))}
+            </>
+          ),
+        };
+      }
       default:
-        return { vbW: 400, vbH: 120, body: null };
+        return { vbW: 400, vbH: 120, rowCount: 1, body: null };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [device, art, selectedPortId, activeMember, selectedRadioId]);
+  }, [device, art, selectedPortId, selectedRadioId, health, chassisLabel]);
 
   const ports = allPorts(device);
   const counts = countPorts(ports);
   const summary = faceplateSummaryLine(counts, device.snmpAt);
   const snmpHint = device.snmpMissing ? SNMP_MISSING_HINT : '';
 
-  const stackMembers = device.form_factor === 'switch-stack' ? device.members ?? [] : [];
   const selectedRadio = (device.radios ?? []).find((r) => r.id === selectedRadioId) ?? null;
-  const shownMember = stackMembers.find((m) => m.number === activeMember) ?? stackMembers[0];
-  const memberCounts = (shownMember?.ports ?? []).reduce<Record<string, number>>((acc, p) => {
-    acc[p.state] = (acc[p.state] ?? 0) + 1;
-    return acc;
-  }, {});
-  const memberSummary = (['up', 'down', 'not-connected', 'warning', 'fault', 'disabled', 'unknown'] as const)
-    .filter((s) => memberCounts[s])
-    .map((s) => `${memberCounts[s]} ${STATE_LABEL[s].toLowerCase()}`)
-    .join(' · ');
+  const stackRows = rowCount || 1;
 
-  const stackSwitcher = stackMembers.length > 0 ? (
-    <div className="flex shrink-0 flex-col items-center justify-center gap-1.5" aria-label="Stack members">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Stack</span>
-      <div className="grid grid-cols-4 gap-1.5" role="tablist" aria-label="Stack members">
-        {stackMembers.map((m, i) => {
-          const active = shownMember?.number === m.number;
-          const color = m.health === 'healthy' ? 'var(--success)' : m.health === 'warning' ? 'var(--warning)' : 'var(--destructive)';
-          return (
-            <button
-              key={m.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              aria-label={`Stack member ${m.number}${i === 0 ? ' (master)' : ''}, ${m.health}`}
-              title={`Member ${m.number}${i === 0 ? ' (master)' : ''} · ${m.note}`}
-              onClick={() => {
-                setActiveMember(m.number);
-                onSelectPort?.(null);
-              }}
-              className={`flex h-7 w-7 items-center justify-center rounded border text-xs font-bold font-mono-data transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                active ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground hover:bg-muted'
-              }`}
-              style={{ borderColor: color }}
-            >
-              {m.number}
-            </button>
-          );
-        })}
-      </div>
-      {shownMember && (
-        <p className="mt-1 max-w-[150px] text-center text-[10px] leading-snug text-muted-foreground">
-          Member {shownMember.number} · {shownMember.ports.length} ports
-          {memberSummary ? <><br />{memberSummary}</> : null}
-        </p>
-      )}
-    </div>
-  ) : null;
-
-  // A photo or stencil is shown only when its port map sat on the cages in the
-  // picture. Anything else, including a failed alignment, uses the drawn faceplate.
-  // A stack uses the same faceplate for the member that is selected.
-  const pictured = shownMember
-    ? { ...device, members: undefined, modules: undefined, ports: shownMember.ports }
-    : device;
-  if (art && art.front && art.source !== 'drawn' && !compact && !isFortiGateModel(art) && device.form_factor !== 'ceiling-ap') {
+  if (art && art.front && art.source !== 'drawn' && !compact && !isFortiGateModel(art) && device.form_factor !== 'ceiling-ap' && device.form_factor !== 'switch-stack') {
     return (
       <div ref={wrapRef} className={`relative w-full min-w-0 ${className}`}>
-        <div className={stackSwitcher ? 'flex w-full min-w-0 items-stretch gap-3' : 'w-full min-w-0'}>
-          <div className="min-w-0 flex-1">
-            <RealisticFaceplate device={pictured} model={art} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} caption={caption} />
-          </div>
-          {stackSwitcher}
-        </div>
+        <RealisticFaceplate device={device} model={art} selectedPortId={selectedPortId} onHover={onHover} onSelect={onSelect} caption={caption} />
         {hover && <PortTooltip port={hover.port} left={hover.left} top={hover.top} />}
         {radioHover && <RadioTooltip radio={radioHover.radio} left={radioHover.left} top={radioHover.top} />}
       </div>
     );
   }
 
+  // The panel stays 168px. This slot is the metal; the strip below it is the parent cable.
+  const chassisSlot = FACEPLATE_HEIGHT - 26;
+  const drawnHeight = stackRows > 4 ? Math.round((stackRows / 4) * chassisSlot) : chassisSlot;
+
   return (
-    <div ref={wrapRef} className={`relative w-full min-w-0 ${className}`}>
-      <div className={stackMembers.length > 0 ? 'flex w-full min-w-0 items-stretch gap-3' : 'w-full min-w-0'}>
+    <div ref={wrapRef} className={`relative w-full min-w-0 ${className}`} style={stackRows > 4 ? { height: chassisSlot, overflowY: 'auto' } : undefined}>
+      <div className="w-full min-w-0">
         <svg
           viewBox={`0 0 ${vbW} ${vbH}`}
           role="group"
           aria-label={`${device.role} faceplate, ${ports.length} ports: ${summary}${snmpHint ? `. ${snmpHint}` : ''}. Use Tab to move between ports and Enter to open the port graph.`}
-          className={`block h-auto min-w-0 ${stackMembers.length > 0 ? 'flex-1' : 'w-full'} ${compact ? 'max-h-24 w-full' : ''}`}
-          style={compact ? undefined : { aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}`, width: '100%' }}
+          className={`block min-w-0 w-full ${compact ? 'max-h-24' : ''}`}
+          style={compact ? undefined : device.form_factor === 'ceiling-ap' ? { aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}`, width: '100%' } : { width: '100%', height: drawnHeight }}
           preserveAspectRatio="xMidYMid meet"
         >
           <FaceplateDefs uid={uid} />
           {body}
         </svg>
-        {stackSwitcher}
       </div>
       {hover && <PortTooltip port={hover.port} left={hover.left} top={hover.top} />}
       {radioHover && <RadioTooltip radio={radioHover.radio} left={radioHover.left} top={radioHover.top} />}

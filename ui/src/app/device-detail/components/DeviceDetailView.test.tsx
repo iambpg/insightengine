@@ -286,6 +286,32 @@ describe('DeviceDetailView client navigation', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('shows only the parent box and never a downstream device', async () => {
+    queryState.value = 'id=42';
+    vi.mocked(api.getDevice).mockResolvedValue({
+      ...device('42', 'edge-42'),
+      parent: { id: '9', hostname: 'dist-sw-02', parentInterface: 'Te1/0/13', uplinkInterface: 'Te1/1/1', formFactor: 'access-switch-48' },
+      children: [{ id: '3', hostname: 'edge-child', parentInterface: 'Gi1/0/4', uplinkInterface: 'Gi1/0/1', formFactor: 'access-switch-24' }],
+    });
+    render(<DeviceDetailView />);
+    expect(await screen.findByText('Parent Device')).toBeInTheDocument();
+    expect(screen.getByText('dist-sw-02')).toBeInTheDocument();
+    expect(screen.getByText('Te1/0/13')).toBeInTheDocument();
+    const jack = document.querySelector('[data-port-name="Te1/0/13"]');
+    expect(jack?.closest('[data-testid="parent-port"]')?.querySelector('rect[stroke="#22c55e"]')).toBeTruthy();
+    expect(jack?.parentElement?.nextElementSibling?.textContent).toBe('Te1/0/13');
+    expect(screen.queryByText('edge-child')).toBeNull();
+    expect(screen.queryByText('Child')).toBeNull();
+  });
+
+  it('says no parent was detected when the device has none', async () => {
+    queryState.value = 'id=42';
+    vi.mocked(api.getDevice).mockResolvedValue(device('42', 'edge-42'));
+    render(<DeviceDetailView />);
+    expect(await screen.findByText('No parent detected')).toBeInTheDocument();
+    expect(screen.queryByText('Child')).toBeNull();
+  });
+
   it('adds an Access Points tab for a wireless controller', async () => {
     queryState.value = 'id=42';
     vi.mocked(api.getDevice).mockResolvedValue({

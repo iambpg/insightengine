@@ -29,6 +29,7 @@ export interface PortInfo {
   label?: string;
   names?: string[];
   description?: string;
+  vlan?: string;
 }
 
 export interface RadioInfo {

@@ -8,18 +8,27 @@ interface ChassisProps {
   uid: string;
   rx?: number;
   ears?: boolean;
+  charcoal?: boolean;
   children?: React.ReactNode;
 }
 
 // Rack-mount body: brushed dark metal, bevel highlight, rack ears and soft shadow.
-export default function ChassisBody({ x, y, w, h, uid, rx = 5, ears = true, children }: ChassisProps) {
+export default function ChassisBody({ x, y, w, h, uid, rx = 5, ears = true, charcoal = false, children }: ChassisProps) {
+  const corner = charcoal ? 8 : rx;
   return (
     <g data-chassis="" transform={`translate(${x} ${y})`}>
+      {charcoal ? (
+        <linearGradient id={`${uid}-charcoal`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#3d4858" />
+          <stop offset="0.42" stopColor="#242c38" />
+          <stop offset="1" stopColor="#141a22" />
+        </linearGradient>
+      ) : null}
       <g filter={`url(#${uid}-shadow)`}>
-        <rect width={w} height={h} rx={rx} fill={`url(#${uid}-metal)`} />
+        <rect width={w} height={h} rx={corner} fill={charcoal ? `url(#${uid}-charcoal)` : `url(#${uid}-metal)`} />
       </g>
-      <rect width={w} height={h} rx={rx} fill={`url(#${uid}-brush)`} />
-      <rect x={0.5} y={0.5} width={w - 1} height={h - 1} rx={rx} fill="none" stroke="var(--metal-hi)" strokeOpacity={0.6} />
+      {charcoal ? null : <rect width={w} height={h} rx={rx} fill={`url(#${uid}-brush)`} />}
+      <rect x={1} y={1} width={w - 2} height={h - 2} rx={corner} fill="none" stroke={charcoal ? '#9aa6b5' : 'var(--metal-hi)'} strokeOpacity={charcoal ? 0.85 : 0.6} strokeWidth={charcoal ? 1.1 : 1} />
       <rect x={1.5} y={h - 3} width={w - 3} height={1.6} rx={0.8} fill="var(--navy)" opacity={0.7} />
       {ears && (
         <>
