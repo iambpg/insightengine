@@ -2646,7 +2646,11 @@ class FleetService:
             suffixes=self._suffixes(),
         )
         snmp_neighbors = list(detail.get("_snmp_neighbors") or [])
-        detail["neighbors"] = merge_neighbors(snap.get("neighbors") or [], snmp_neighbors)
+        detail["neighbors"] = _stamp_netbox_ids(
+            merge_neighbors(snap.get("neighbors") or [], snmp_neighbors),
+            rows,
+            self._suffixes(),
+        )
         if snap.get("available") and not snap.get("device"):
             detail["neighborNote"] = snap.get("reason") or "Netdisco has not discovered this device yet"
         else:
@@ -5023,6 +5027,11 @@ def netdisco_snapshot(database_url: str, ip: str = "", name: str = "", suffixes:
                 "remoteName": remote_name,
                 "protocol": item["protocol"],
                 "source": "netdisco",
+                "remoteDeviceId": str(remote_id or ""),
+                "remoteType": str(remote_type or ""),
+                "remotePlatform": "" if str(remote_type or "").lower() in ("", "cdp", "lldp") else str(remote_type or ""),
+                "remoteCapabilities": "",
+                "lastSeen": "",
             })
     device["dns"] = strip_hostname(device.get("dns") or "", suffixes)
     device["name"] = strip_hostname(device.get("name") or "", suffixes)
@@ -5134,6 +5143,22 @@ def _annotate_interfaces(interfaces: list[dict], prom_ports: list[dict]) -> None
             row["names"] = fields["names"]
         if fields["description"]:
             row["description"] = fields["description"]
+
+
+def _stamp_netbox_ids(neighbors: list[dict], rows: list[dict], suffixes: list[str] | None = None) -> list[dict]:
+    """Point a neighbour at its NetBox device when the name or address matches."""
+    suffixes = list(suffixes or [])
+    for item in neighbors:
+        if item.get("netboxId"):
+            continue
+        remote = str(item.get("remoteName") or "")
+        remote_ip = str(item.get("remoteAddress") or "")
+        match = _match_record(rows, remote, name_key="hostname", ip_key="mgmtIp", suffixes=suffixes) if remote else None
+        if match is None and remote_ip:
+            match = _match_record(rows, remote_ip, name_key="hostname", ip_key="mgmtIp", suffixes=suffixes)
+        if match and match.get("id"):
+            item["netboxId"] = str(match["id"])
+    return neighbors
 
 
 def _overlay_neighbours(ports: list[dict], nd_ports: list[dict], rows: list[dict], snmp_neighbors: list[dict] | None = None, suffixes: list[str] | None = None) -> list[dict]:

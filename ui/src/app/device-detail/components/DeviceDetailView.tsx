@@ -13,7 +13,6 @@ import ParentPortPicture from '@/components/faceplate/ParentPort';
 import { FACEPLATE_HEIGHT } from '@/components/faceplate/size';
 import { namesMatch } from '@/components/faceplate/library/ifname';
 import { cableFlow, portIsUplink, rectsOverlap, type CableFlow } from './uplinkCable';
-import { portNameLine } from '@/components/faceplate/portText';
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
 import { isApiError } from '@/lib/apiError';
@@ -27,6 +26,7 @@ import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
 import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
+import CdpNeighbourPanel from './CdpNeighbourPanel';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
 import HealthChecks from './HealthChecks';
 import HardwareHealth from './HardwareHealth';
@@ -635,45 +635,7 @@ function Inventory({ device }: { device: DeviceDetailData }) {
           ))}
         </ul>
       ) : null}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div>
-          <h2 className="text-sm font-semibold">Interfaces and addresses</h2>
-          {(device.interfaces ?? []).length === 0 && (device.addresses ?? []).length === 0 ? (
-            <p className="mt-1 text-sm text-muted-foreground">NetBox did not return interfaces or IP addresses for this device.</p>
-          ) : (
-            <ul className="mt-2 max-h-72 space-y-1 overflow-auto font-mono-data text-xs">
-              {(device.interfaces ?? []).map((row) => (
-                <li key={row.name}>
-                  {portNameLine(row)}
-                  {row.description ? ` · ${row.description}` : ''}
-                  {' · '}{row.enabled ? 'enabled' : 'disabled'} · {row.type || '—'}
-                </li>
-              ))}
-              {(device.addresses ?? []).slice(0, 20).map((row) => (
-                <li key={row.address}>{row.address}{row.interface ? ` on ${row.interface}` : ''}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div>
-          <h2 className="text-sm font-semibold">Neighbours</h2>
-          {device.neighborNote ? (
-            <p className="mt-1 text-sm text-muted-foreground">{device.neighborNote}</p>
-          ) : null}
-          {(device.neighbors ?? []).length === 0 ? (
-            device.neighborNote ? null : <p className="mt-1 text-sm text-muted-foreground">No Netdisco LLDP or CDP neighbours were returned.</p>
-          ) : (
-            <ul className="mt-2 space-y-1 font-mono-data text-xs">
-              {(device.neighbors ?? []).map((row) => (
-                <li key={`${row.localPort}-${row.remoteName}-${row.remotePort}-${row.source || ''}`}>
-                  {row.localPort} → {row.remoteName || row.remoteAddress || 'unknown'} {row.remotePort}
-                  {row.source ? <span className="text-muted-foreground"> · {row.source}</span> : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+      <CdpNeighbourPanel device={device} />
     </div>
   );
 }

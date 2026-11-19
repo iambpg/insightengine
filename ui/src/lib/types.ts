@@ -354,6 +354,12 @@ export interface DeviceNeighbor {
   remoteAddress: string;
   protocol: string;
   source?: string;
+  remotePlatform?: string;
+  remoteCapabilities?: string;
+  remoteType?: string;
+  remoteDeviceId?: string;
+  netboxId?: string;
+  lastSeen?: string;
 }
 
 export interface DeviceBackup {

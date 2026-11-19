@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/apiError';
@@ -276,7 +276,7 @@ describe('DeviceDetailView client navigation', () => {
     expect(screen.queryByRole('tab', { name: 'Access Points' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Radio performance' })).toBeNull();
     expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute('aria-selected', 'true');
-    await user.click(screen.getByRole('tab', { name: 'Interfaces' }));
+    await user.click(within(screen.getByRole('tablist', { name: 'Device sections' })).getByRole('tab', { name: 'Interfaces' }));
     await user.click(screen.getByRole('cell', { name: 'GigabitEthernet1/0/1' }));
     const drawer = await screen.findByRole('dialog', { name: /GigabitEthernet1\/0\/1/ });
     expect(drawer).toHaveClass('fixed', 'right-0');

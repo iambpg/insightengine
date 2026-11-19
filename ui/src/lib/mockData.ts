@@ -2,6 +2,7 @@ import type {
   AlertItem,
   ChassisModule,
   DeviceDetailData,
+  DeviceNeighbor,
   DeviceHealth,
   DeviceRow,
   FaceplateDevice,
@@ -565,6 +566,42 @@ export function buildAlerts(count = 64): AlertItem[] {
 export { DISCOVERED_SEED as DISCOVERED } from '@/lib/mock/discoveredSeed';
 
 // ---------- device detail ----------
+function detailNeighbors(ports: PortInfo[]): DeviceNeighbor[] {
+  const seen = new Set<string>();
+  const rows: DeviceNeighbor[] = [];
+  for (const port of ports) {
+    const remote = port.neighbour;
+    if (!remote?.device) continue;
+    const key = remote.device.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const name = remote.device;
+    const platform = /rtr|router/.test(name)
+      ? 'Cisco ISR4451 Router'
+      : /^ap-/.test(name)
+        ? 'C9120AXI-E'
+        : /voip|phone/.test(name)
+          ? 'CP-8841'
+          : /fw|firewall/.test(name)
+            ? 'PA-460'
+            : /sw|switch/.test(name)
+              ? 'WS-C9300-48P'
+              : '';
+    rows.push({
+      localPort: port.name,
+      remoteName: name,
+      remotePort: remote.port,
+      remoteAddress: '',
+      protocol: 'cdp',
+      source: 'cdp',
+      remotePlatform: platform,
+      remoteDeviceId: name,
+      lastSeen: '2026-11-19 12:00 UTC',
+    });
+  }
+  return rows;
+}
+
 export function buildDeviceDetail(formKey: string): DeviceDetailData {
   const fp = buildFaceplateFor(formKey);
   const form: FormFactor = fp.form_factor;
@@ -635,6 +672,7 @@ export function buildDeviceDetail(formKey: string): DeviceDetailData {
       { id: 'h6', name: 'Flash storage', kind: 'storage', status: 'ok', value: '38%', detail: 'Used of 8 GB, threshold 90%' },
     ],
     healthPanel: healthPanelFor(form),
+    neighbors: detailNeighbors(platePorts),
   };
 }
 
