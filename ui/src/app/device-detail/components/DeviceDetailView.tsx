@@ -464,8 +464,8 @@ export default function DeviceDetailView() {
               </div>
             ) : null}
             <div ref={greyRef} className="relative flex items-stretch gap-0 overflow-hidden rounded-md bg-gradient-to-b from-secondary to-background p-1" style={{ height: FACEPLATE_HEIGHT }}>
-              <div ref={localPlateRef} className="flex min-w-0 flex-1 items-start overflow-x-auto">
-                <div className={device.faceplate.form_factor === 'ceiling-ap' ? 'w-full' : 'min-w-full'}>
+              <div ref={localPlateRef} className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
+                <div className="w-full min-w-0">
                   <Faceplate
                     device={device.faceplate}
                     activeMember={activeStackMember}

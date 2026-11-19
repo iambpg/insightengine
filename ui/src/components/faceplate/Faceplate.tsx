@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useMemo, useRef, useState } from 'react';
+import React, { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FaceplateDevice, PortInfo, RadioInfo } from '@/lib/types';
 import FaceplateDefs from './FaceplateDefs';
 import PortTooltip from './PortTooltip';
@@ -27,6 +27,8 @@ interface FaceplateProps {
   health?: string;
   chassisLabel?: string;
   activeMember?: number;
+  /** Pixel width of the grey panel up to the parent divider. The chassis fills it. */
+  spanWidth?: number;
 }
 
 function allPorts(d: FaceplateDevice): PortInfo[] {
@@ -50,10 +52,11 @@ function memberInk(health: string | undefined): string {
   return '#94a3b8';
 }
 
-export default function Faceplate({ device, selectedPortId = null, onSelectPort, className = '', compact = false, caption = true, health, chassisLabel, activeMember }: FaceplateProps) {
+export default function Faceplate({ device, selectedPortId = null, onSelectPort, className = '', compact = false, caption = true, health, chassisLabel, activeMember, spanWidth = 0 }: FaceplateProps) {
   const rawId = useId();
   const uid = `fp${rawId.replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState(0);
   const [hover, setHover] = useState<{ port: PortInfo; left: number; top: number } | null>(null);
   const [radioHover, setRadioHover] = useState<{ radio: RadioInfo; left: number; top: number } | null>(null);
   const [selectedRadioId, setSelectedRadioId] = useState<string | null>(null);
@@ -81,6 +84,17 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
   };
   const onRadioSelect = (radio: RadioInfo) => setSelectedRadioId((cur) => (cur === radio.id ? null : radio.id));
 
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el || spanWidth > 0) return undefined;
+    const read = () => setMeasured(el.clientWidth);
+    read();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [spanWidth, device.form_factor, activeMember]);
+
   const onSelect = (p: PortInfo) => onSelectPort?.(selectedPortId === p.id ? null : p);
   const common = { uid, selectedId: selectedPortId, onHover, onSelect };
   const art = useFaceplateModel(device);
@@ -91,9 +105,19 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
       }
     : device;
 
+  const span = spanWidth > 0 ? spanWidth : measured;
   const { vbW, vbH, body, rowCount } = useMemo(() => {
     const pad = 8;
     const frame = lockedChassis(pad);
+    // The drawn chassis fills the grey panel from its left edge to the parent divider.
+    const fit = (naturalWidth: number, naturalHeight: number) => {
+      const boxH = naturalHeight + pad * 2;
+      const natural = naturalWidth + pad * 2;
+      const slotH = FACEPLATE_HEIGHT - 26;
+      const filled = span > 8 ? (span / slotH) * boxH : natural;
+      const width = Math.max(natural, filled);
+      return { vbW: width, vbH: boxH, canvasWidth: width - pad * 2 };
+    };
     if (device.form_factor === 'ceiling-ap') {
       const scale = Math.min(frame.innerW / AP_W, frame.innerH / AP_H);
       const x = pad + (frame.innerW - AP_W * scale) / 2;
@@ -127,15 +151,17 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
       case 'firewall': case 'branch-router': case 'wireless-controller': case 'modular-chassis': {
         const ports = device.modules?.length ? device.modules.flatMap((module) => module.ports) : (device.ports ?? []);
         const canvas = switchCanvas(ports);
+        const box = fit(canvas.width, canvas.height);
         return {
-          vbW: canvas.width + pad * 2,
-          vbH: canvas.height + pad * 2,
+          vbW: box.vbW,
+          vbH: box.vbH,
           rowCount: 1,
           body: (
             <SwitchLayout
               ports={ports}
               originX={pad}
               originY={pad}
+              canvasWidth={box.canvasWidth}
               {...common}
               ledHealth={health}
               modelLabel={chassisLabel || device.modelName || device.model || ''}
@@ -147,15 +173,17 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         const member = shown.members?.[0];
         const ports = member?.ports ?? [];
         const canvas = switchCanvas(ports);
+        const box = fit(canvas.width, canvas.height);
         return {
-          vbW: canvas.width + pad * 2,
-          vbH: canvas.height + pad * 2,
+          vbW: box.vbW,
+          vbH: box.vbH,
           rowCount: 1,
           body: member ? (
             <SwitchLayout
               ports={member.ports}
               originX={pad}
               originY={pad}
+              canvasWidth={box.canvasWidth}
               {...common}
               memberNumber={member.number}
               memberHealthColor={memberInk(member.health)}
@@ -169,7 +197,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         return { vbW: 400, vbH: 120, rowCount: 1, body: null };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, art, selectedPortId, selectedRadioId, health, chassisLabel]);
+  }, [shown, art, selectedPortId, selectedRadioId, health, chassisLabel, span]);
 
   const ports = allPorts(shown);
   const counts = countPorts(ports);
@@ -202,7 +230,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
           aria-label={`${device.role} faceplate, ${ports.length} ports: ${summary}${snmpHint ? `. ${snmpHint}` : ''}. Use Tab to move between ports and Enter to open the port graph.`}
           className={`block min-w-0 w-full ${compact ? 'max-h-24' : ''}`}
           style={compact ? undefined : device.form_factor === 'ceiling-ap' ? { aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}`, width: '100%' } : { width: '100%', height: drawnHeight }}
-          preserveAspectRatio="xMidYMid meet"
+          preserveAspectRatio="xMinYMid meet"
         >
           <FaceplateDefs uid={uid} />
           {body}

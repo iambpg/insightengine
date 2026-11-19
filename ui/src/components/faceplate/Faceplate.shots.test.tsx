@@ -47,6 +47,9 @@ function tiles(count: number, master: number): StackMemberInfo[] {
   });
 }
 
+// Grey panel content is 1192px. The divider and the parent column take 193px, so the chassis fills the rest.
+const PANEL_SPAN = 1200 - 8 - 1 - 16 - 176;
+
 function frame(device: FaceplateDevice, parent: string | null, activeMember?: number, tileCount?: number) {
   const uplinkMember = device.form_factor === 'switch-stack' ? (activeMember || 1) : 1;
   return (
@@ -62,8 +65,8 @@ function frame(device: FaceplateDevice, parent: string | null, activeMember?: nu
       data-parent-port={parent ? 'Te1/0/13' : ''}
       style={{ position: 'relative', display: 'flex', alignItems: 'stretch', width: 1200, height: 168, background: '#f8fafc', boxSizing: 'border-box', padding: 4, overflow: 'hidden' }}
     >
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start' }}>
-        <Faceplate device={device} activeMember={activeMember} caption={false} health={parent ? 'healthy' : 'unknown'} chassisLabel={device.form_factor === 'access-switch-48' ? 'C9300-48P' : 'C9300-24P'} />
+      <div style={{ width: PANEL_SPAN, minWidth: 0, display: 'flex', alignItems: 'flex-start' }}>
+        <Faceplate device={device} activeMember={activeMember} spanWidth={PANEL_SPAN} caption={false} health={parent ? 'healthy' : 'unknown'} chassisLabel={device.form_factor === 'access-switch-48' ? 'C9300-48P' : 'C9300-24P'} />
       </div>
       <div style={{ width: 1, background: '#e2e8f0', margin: '0 8px' }} />
       <aside style={{ width: 176, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '4px 8px' }}>
@@ -141,6 +144,14 @@ describe('stack faceplate', () => {
     expect(container.querySelectorAll('[data-chassis]')).toHaveLength(1);
     expect(container.querySelector('[aria-label="Stack member 2"]')).toBeTruthy();
     expect(container.querySelector('[aria-label="Stack member 1"]')).toBeNull();
+  });
+
+  it('draws the chassis across the grey panel up to the parent divider', () => {
+    const { container } = render(<Faceplate device={stack(2)} caption={false} spanWidth={PANEL_SPAN} />);
+    const metal = container.querySelector('[data-chassis] rect');
+    expect(metal).toBeTruthy();
+    expect(Number(metal?.getAttribute('width'))).toBeGreaterThan(900);
+    expect(container.querySelectorAll('[data-chassis]')).toHaveLength(1);
   });
 });
 
