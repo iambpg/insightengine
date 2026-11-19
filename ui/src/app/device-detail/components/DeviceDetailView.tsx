@@ -9,6 +9,7 @@ import ExampleDataBanner from '@/components/ui/ExampleDataBanner';
 import { HealthBadge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Faceplate from '@/components/faceplate/Faceplate';
+import ParentPortPicture from '@/components/faceplate/ParentPort';
 import { FACEPLATE_HEIGHT } from '@/components/faceplate/size';
 import { namesMatch } from '@/components/faceplate/library/ifname';
 import { portNameLine } from '@/components/faceplate/portText';
@@ -475,7 +476,7 @@ export default function DeviceDetailView() {
                       {parentLink.hostname}
                     </Link>
                     <div ref={parentPortRef} data-relation-id={parentLink.id} className="mt-2">
-                      <ParentPortPicture name={parentLink.parentInterface} />
+                      <ParentPortPicture name={parentLink.parentInterface} up={!parentLink.parentDown} />
                     </div>
                   </>
                 ) : (
@@ -987,7 +988,10 @@ function outsideCable(port: DOMRect, chassis: DOMRect, remotePort: DOMRect | nul
   const hug = 6;
   const laneY = Math.min(grey.height - hug, chassis.bottom - grey.top + hug);
   const endX = remotePort ? localX(remotePort) : remoteBox.left - grey.left + remoteBox.width / 2;
-  const rawEndY = remotePort ? localY(remotePort) : remoteBox.top - grey.top + remoteBox.height / 2;
+  // A short marker sits on the bottom edge of the jack. Stop inside that edge so the line enters the port and misses the label beside it.
+  const rawEndY = remotePort
+    ? (remotePort.height <= 12 ? remotePort.top - grey.top + 2 : remotePort.bottom - grey.top - 4)
+    : remoteBox.top - grey.top + remoteBox.height / 2;
   const endY = Math.max(hug, Math.min(grey.height - hug, rawEndY));
   return cablePath([
     { x, y },
@@ -1056,23 +1060,6 @@ function UplinkCable({
       <path d={path} fill="none" stroke="#1e293b" strokeWidth={7} strokeLinejoin="miter" strokeLinecap="butt" />
       <path d={path} fill="none" stroke="#3b82f6" strokeWidth={3} strokeLinejoin="miter" strokeLinecap="butt" />
     </svg>
-  );
-}
-
-function ParentPortPicture({ name }: { name: string }) {
-  const fiber = /te|hu|fo|twe|sfp|uplink/i.test(name);
-  return (
-    <div data-port-name={name} data-testid="parent-port" className="flex w-full flex-col items-center gap-1">
-      <div
-        className={fiber
-          ? 'h-8 w-14 rounded-[3px] border border-slate-400 bg-slate-800 shadow-sm'
-          : 'h-10 w-8 rounded-[3px] border-2 border-slate-400 bg-slate-900 shadow-sm'}
-        aria-hidden="true"
-      >
-        <div className={fiber ? 'mx-auto mt-1.5 h-3 w-8 rounded-sm bg-slate-500' : 'mx-auto mt-1 h-4 w-5 rounded-sm bg-slate-600'} />
-      </div>
-      <span className="max-w-full text-center font-mono-data text-[11px] leading-tight text-foreground" title={name}>{name}</span>
-    </div>
   );
 }
 

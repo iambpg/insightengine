@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { FaceplateDevice, StackMember } from '@/lib/types';
 import { buildFaceplateFor } from '@/lib/mockData';
 import Faceplate from './Faceplate';
+import ParentPortPicture from './ParentPort';
 
 function renumber(device: FaceplateDevice, member: number): StackMember['ports'] {
   return (device.ports || []).map((port) => ({
@@ -49,9 +50,8 @@ function frame(device: FaceplateDevice, parent: string | null) {
         {parent ? (
           <>
             <div style={{ marginTop: 6, font: '600 14px/1.2 ui-monospace, monospace', color: '#0f172a' }}>{parent}</div>
-            <div data-port-name="Te1/0/13" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ width: 56, height: 32, border: '1px solid #94a3b8', borderRadius: 3, background: '#1e293b', boxSizing: 'border-box' }} />
-              <div style={{ marginTop: 4, font: '500 11px/1.2 ui-monospace, monospace', color: '#0f172a' }}>Te1/0/13</div>
+            <div style={{ marginTop: 8 }}>
+              <ParentPortPicture name="Te1/0/13" up />
             </div>
           </>
         ) : (
@@ -84,7 +84,7 @@ const CABLE_SCRIPT = `<script>
   var y = port.top - grey.top + port.height / 2;
   var lane = Math.min(grey.height - 8, chassisBottom - grey.top + 8);
   var endX = far.left - grey.left + far.width / 2;
-  var endY = far.top - grey.top + far.height / 2;
+  var endY = far.height <= 12 ? far.top - grey.top + 2 : far.bottom - grey.top - 4;
   var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 ' + grey.width + ' ' + grey.height);
   svg.setAttribute('style', 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none');

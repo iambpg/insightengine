@@ -297,6 +297,9 @@ describe('DeviceDetailView client navigation', () => {
     expect(await screen.findByText('Parent Device')).toBeInTheDocument();
     expect(screen.getByText('dist-sw-02')).toBeInTheDocument();
     expect(screen.getByText('Te1/0/13')).toBeInTheDocument();
+    const jack = document.querySelector('[data-port-name="Te1/0/13"]');
+    expect(jack?.closest('[data-testid="parent-port"]')?.querySelector('rect[stroke="#22c55e"]')).toBeTruthy();
+    expect(jack?.parentElement?.nextElementSibling?.textContent).toBe('Te1/0/13');
     expect(screen.queryByText('edge-child')).toBeNull();
     expect(screen.queryByText('Child')).toBeNull();
   });
