@@ -12,6 +12,7 @@ import Faceplate from '@/components/faceplate/Faceplate';
 import ParentPortPicture from '@/components/faceplate/ParentPort';
 import { FACEPLATE_HEIGHT } from '@/components/faceplate/size';
 import { namesMatch } from '@/components/faceplate/library/ifname';
+import { cableFlow, portIsUplink, rectsOverlap, type CableFlow } from './uplinkCable';
 import { portNameLine } from '@/components/faceplate/portText';
 import { DeviceDiscoveryStatus, usePolledDeviceDiscovery } from '@/components/DeviceDiscoveryStatus';
 import { api } from '@/lib/apiClient';
@@ -153,12 +154,28 @@ export default function DeviceDetailView() {
     return stackMembers.find((member) => member.master)?.number ?? stackMembers[0].number;
   }, [stackMembers, stackPick]);
   const parentLink = device?.parent ?? null;
+  const [faceplateBottom, setFaceplateBottom] = useState(0);
 
   useEffect(() => {
     setSelected(null);
     setCable(null);
     setStackPick(null);
   }, [deviceKey]);
+
+  useEffect(() => {
+    if (!selected) return undefined;
+    const place = () => {
+      const panel = greyRef.current;
+      setFaceplateBottom(panel ? Math.max(0, Math.round(panel.getBoundingClientRect().bottom)) : 0);
+    };
+    place();
+    window.addEventListener('resize', place);
+    document.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      document.removeEventListener('scroll', place, true);
+    };
+  }, [selected, device?.id]);
 
   useEffect(() => {
     const plate = parentPortRef.current;
@@ -493,7 +510,9 @@ export default function DeviceDetailView() {
                   <p className="mt-1 text-sm text-muted-foreground">No parent detected</p>
                 )}
               </aside>
-              {cable ? <UplinkCable localRef={localPlateRef} greyRef={greyRef} remote={cable.plate} localPortName={cable.localPort} remotePortName={cable.remotePort} /> : null}
+              {cable && portIsUplink(selected, cable.localPort) ? (
+                <UplinkCable localRef={localPlateRef} greyRef={greyRef} remote={cable.plate} localPortName={cable.localPort} remotePortName={cable.remotePort} flow={cableFlow(selected)} />
+              ) : null}
             </div>
             {device.faceplate.form_factor === 'ceiling-ap' ? <ApRadioBoards device={device} /> : null}
           </section>
@@ -576,12 +595,12 @@ export default function DeviceDetailView() {
         </div>
       ) : null}
 
-      {selected ? <PortDrawer port={selected} deviceId={device?.id} onClose={() => setSelected(null)} /> : null}
+      {selected ? <PortDrawer port={selected} deviceId={device?.id} top={faceplateBottom} onClose={() => setSelected(null)} /> : null}
     </div>
   );
 }
 
-function PortDrawer({ port, deviceId, onClose }: { port: PortInfo; deviceId?: string; onClose: () => void }) {
+function PortDrawer({ port, deviceId, top, onClose }: { port: PortInfo; deviceId?: string; top: number; onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -591,7 +610,7 @@ function PortDrawer({ port, deviceId, onClose }: { port: PortInfo; deviceId?: st
   }, [onClose]);
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <div className="drawer-in fixed inset-y-0 right-0 z-[90] flex w-full max-w-[420px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl" role="dialog" aria-modal="false" aria-label={`Port ${port.name} details`}>
+    <div className="drawer-in fixed right-0 bottom-0 z-[90] flex w-full max-w-[420px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl" style={{ top }} role="dialog" aria-modal="false" aria-label={`Port ${port.name} details`}>
       <PortSidePanel port={port} onClose={onClose} />
       <div className="px-4 pb-4">
         <PortThroughputGraph port={port} deviceId={deviceId} />
@@ -1011,21 +1030,32 @@ function outsideCable(port: DOMRect, chassis: DOMRect, remotePort: DOMRect | nul
   ]);
 }
 
-function UplinkCable({
+export function UplinkCable({
   localRef,
   greyRef,
   remote,
   localPortName,
   remotePortName,
+  flow,
 }: {
   localRef: React.RefObject<HTMLDivElement | null>;
   greyRef: React.RefObject<HTMLDivElement | null>;
   remote: HTMLElement;
   localPortName: string;
   remotePortName: string;
+  flow: CableFlow | null;
 }) {
   const [path, setPath] = useState('');
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return undefined;
+    const apply = () => setReduceMotion(media.matches);
+    apply();
+    media.addEventListener?.('change', apply);
+    return () => media.removeEventListener?.('change', apply);
+  }, []);
   useEffect(() => {
     const local = localRef.current;
     const grey = greyRef.current;
@@ -1039,11 +1069,11 @@ function UplinkCable({
         return;
       }
       const portBox = localPort.getBoundingClientRect();
-      if (portBox.width < 1 && portBox.height < 1) {
+      const localBox = local.getBoundingClientRect();
+      if ((portBox.width < 1 && portBox.height < 1) || !rectsOverlap(portBox, localBox)) {
         setPath('');
         return;
       }
-      const localBox = local.getBoundingClientRect();
       const metals = local.querySelectorAll('[data-chassis]');
       const metal = metals.length ? metals[metals.length - 1] : null;
       const remoteBox = remote.getBoundingClientRect();
@@ -1065,10 +1095,18 @@ function UplinkCable({
     };
   }, [localRef, greyRef, remote, localPortName, remotePortName]);
   if (!path || size.w <= 0) return null;
+  const moving = Boolean(flow) && !reduceMotion;
+  const travel = (towardParent: boolean) => (moving ? {
+    animation: `ie-cable-flow ${flow!.seconds}s linear infinite`,
+    animationDirection: towardParent ? 'normal' : 'reverse',
+  } as const : undefined);
   return (
-    <svg data-testid="uplink-cable" width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} style={{ position: 'absolute', left: 0, top: 0, zIndex: 5, pointerEvents: 'none' }} aria-hidden="true">
+    <svg data-testid="uplink-cable" data-cable-flow={moving ? 'live' : 'idle'} width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} style={{ position: 'absolute', left: 0, top: 0, zIndex: 5, pointerEvents: 'none' }} aria-hidden="true">
+      <style>{'@keyframes ie-cable-flow { to { stroke-dashoffset: -32; } }'}</style>
       <path d={path} fill="none" stroke="#1e293b" strokeWidth={7} strokeLinejoin="miter" strokeLinecap="butt" />
       <path d={path} fill="none" stroke="#3b82f6" strokeWidth={3} strokeLinejoin="miter" strokeLinecap="butt" />
+      {moving && flow!.outbound ? <path data-testid="cable-flow-out" d={path} fill="none" stroke="#e0f2fe" strokeWidth={1.6} strokeDasharray="4 12" strokeLinecap="round" style={travel(true)} /> : null}
+      {moving && flow!.inbound ? <path data-testid="cable-flow-in" d={path} fill="none" stroke="#bbf7d0" strokeWidth={1.6} strokeDasharray="4 12" strokeLinecap="round" style={travel(false)} /> : null}
     </svg>
   );
 }

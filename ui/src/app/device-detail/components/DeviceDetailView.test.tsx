@@ -300,6 +300,7 @@ describe('DeviceDetailView client navigation', () => {
     const jack = document.querySelector('[data-port-name="Te1/0/13"]');
     expect(jack?.closest('[data-testid="parent-port"]')?.querySelector('rect[stroke="#22c55e"]')).toBeTruthy();
     expect(jack?.parentElement?.nextElementSibling?.textContent).toBe('Te1/0/13');
+    expect(screen.queryByTestId('uplink-cable')).toBeNull();
     expect(screen.queryByText('edge-child')).toBeNull();
     expect(screen.queryByText('Child')).toBeNull();
   });
