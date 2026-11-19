@@ -7,6 +7,7 @@ from ie_config.fleet import (
     _overlay_port_state,
     _port_state,
     _present_port,
+    _stamp_netbox_ids,
     parse_system_metrics,
 )
 from ie_config.ifnames import canonical_iface, names_match
@@ -207,7 +208,7 @@ def test_cdp_neighbours_merge_with_netdisco_and_normalised_ports():
         [{"metric": {"cdpCacheDeviceId": "dist.pnp.co.za (FOC1234)", "cdpCacheIfIndex": "10021", "cdpCacheDeviceIndex": "1"}, "value": [1, "1"]}],
         [{"metric": {"cdpCacheDevicePort": "Gi1/0/1", "cdpCacheIfIndex": "10021", "cdpCacheDeviceIndex": "1"}, "value": [1, "1"]}],
         [{"metric": {"cdpCacheAddress": "0x0A812001", "cdpCacheIfIndex": "10021", "cdpCacheDeviceIndex": "1"}, "value": [1, "1"]}],
-        [],
+        [{"metric": {"cdpCachePlatform": "cisco WS-C9300-48P", "cdpCacheIfIndex": "10021", "cdpCacheDeviceIndex": "1"}, "value": [1710000000, "1"]}],
         prom,
         [".pnp.co.za"],
     )
@@ -215,6 +216,9 @@ def test_cdp_neighbours_merge_with_netdisco_and_normalised_ports():
     assert cdp[0]["remoteName"] == "dist"
     assert cdp[0]["remoteAddress"] == "10.129.32.1"
     assert cdp[0]["source"] == "cdp"
+    assert cdp[0]["remotePlatform"] == "cisco WS-C9300-48P"
+    assert cdp[0]["remoteDeviceId"] == "dist.pnp.co.za (FOC1234)"
+    assert cdp[0]["lastSeen"] == "2024-03-09 16:00 UTC"
     assert parse_snmp_address("0a:81:20:01") == "10.129.32.1"
     netdisco = [{
         "localPort": "FastEthernet0/21",
@@ -250,6 +254,8 @@ def test_cdp_neighbours_merge_with_netdisco_and_normalised_ports():
     assert ports[1]["neighbour"]["deviceId"] == ""
     assert ports[1]["neighbour"]["device"] == "ap-hall"
     assert ports[1]["neighbour"]["source"] == "cdp"
+    stamped = _stamp_netbox_ids(merged, [{"id": "9", "hostname": "dist", "mgmtIp": "10.129.32.1"}], [".pnp.co.za"])
+    assert stamped[0]["netboxId"] == "9"
 
 
 def test_lldp_uses_local_port_id_and_management_address():

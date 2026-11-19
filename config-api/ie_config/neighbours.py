@@ -7,6 +7,7 @@ the same device on the same local port.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 from .hostnames import strip_device_label
 from .ifnames import canonical_iface, iface_match_keys
@@ -56,8 +57,33 @@ def _index_strings(samples, label: str, key_fn) -> dict:
         text = _label(metric, label)
         if not text:
             continue
-        found[key_fn(metric)] = {"text": text, "metric": metric}
+        found[key_fn(metric)] = {"text": text, "metric": metric, "value": sample.get("value")}
     return found
+
+
+def _seen(*entries: dict | None) -> str:
+    """Latest Prometheus sample time, when a series carried a unix timestamp."""
+    stamp = 0.0
+    for entry in entries:
+        value = (entry or {}).get("value")
+        if not isinstance(value, (list, tuple)) or not value:
+            continue
+        try:
+            candidate = float(value[0])
+        except (TypeError, ValueError):
+            continue
+        if candidate > stamp:
+            stamp = candidate
+    if stamp < 1_000_000_000:
+        return ""
+    try:
+        return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except (OverflowError, OSError, ValueError):
+        return ""
+
+
+def _filled(**fields: str) -> dict:
+    return {key: value for key, value in fields.items() if value}
 
 
 def _cdp_key(metric: dict) -> tuple[str, str]:
@@ -104,16 +130,22 @@ def neighbors_from_cdp(device_ids, ports, addresses, platforms, prom_ports=None,
     by_id = _index_strings(device_ids, "cdpCacheDeviceId", _cdp_key)
     by_port = _index_strings(ports, "cdpCacheDevicePort", _cdp_key)
     by_addr = _index_strings(addresses, "cdpCacheAddress", _cdp_key)
-    keys = set(by_id) | set(by_port) | set(by_addr)
+    by_plat = _index_strings(platforms, "cdpCachePlatform", _cdp_key)
+    keys = set(by_id) | set(by_port) | set(by_addr) | set(by_plat)
     rows = []
     for key in keys:
         ifindex, _device = key
-        remote = strip_device_label((by_id.get(key) or {}).get("text") or "", suffixes)
+        identity = by_id.get(key) or {}
+        raw_id = identity.get("text") or ""
+        remote = strip_device_label(raw_id, suffixes)
         remote_port = (by_port.get(key) or {}).get("text") or ""
         remote_ip = parse_snmp_address((by_addr.get(key) or {}).get("text") or "")
         if not remote and not remote_ip:
             continue
-        metric = (by_id.get(key) or by_port.get(key) or by_addr.get(key) or {}).get("metric") or {}
+        entry = identity or by_port.get(key) or by_addr.get(key) or by_plat.get(key) or {}
+        metric = entry.get("metric") or {}
+        platform = (by_plat.get(key) or {}).get("text") or ""
+        capabilities = _label(metric, "cdpCacheCapabilities")
         local = _local_name(ifindex, metric, prom_ports)
         rows.append({
             "localPort": local or ifindex,
@@ -122,6 +154,13 @@ def neighbors_from_cdp(device_ids, ports, addresses, platforms, prom_ports=None,
             "remoteAddress": remote_ip,
             "protocol": "cdp",
             "source": "cdp",
+            **_filled(
+                remoteDeviceId=raw_id,
+                remotePlatform=platform,
+                remoteCapabilities=capabilities,
+                remoteType="cdp",
+                lastSeen=_seen(identity, by_port.get(key), by_addr.get(key), by_plat.get(key)),
+            ),
         })
     rows.sort(key=lambda row: (row["localPort"].lower(), row["remoteName"].lower(), row["remoteAddress"]))
     return rows
@@ -156,7 +195,8 @@ def neighbors_from_lldp(names, port_ids, port_descs, man_addrs, loc_ports, prom_
     rows = []
     for key in set(by_name) | set(by_port) | set(addrs):
         _mark, local_num, _index = key
-        remote = strip_device_label((by_name.get(key) or {}).get("text") or "", suffixes)
+        raw_id = (by_name.get(key) or {}).get("text") or ""
+        remote = strip_device_label(raw_id, suffixes)
         remote_port = (by_port.get(key) or {}).get("text") or (by_desc.get(key) or {}).get("text") or ""
         remote_ip = addrs.get(key) or ""
         if not remote and not remote_ip:
@@ -172,6 +212,7 @@ def neighbors_from_lldp(names, port_ids, port_descs, man_addrs, loc_ports, prom_
             "remoteAddress": remote_ip,
             "protocol": "lldp",
             "source": "lldp",
+            **_filled(remoteDeviceId=raw_id, remoteType="lldp", lastSeen=_seen(by_name.get(key), by_port.get(key))),
         })
     rows.sort(key=lambda row: (row["localPort"].lower(), row["remoteName"].lower(), row["remoteAddress"]))
     return rows
