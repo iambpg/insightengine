@@ -69,4 +69,39 @@ describe('faceplate numbers follow the interface', () => {
     expect(zero?.textContent).toContain('0');
     expect(one?.compareDocumentPosition(zero!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it('draws larger jacks when the chassis is wide', () => {
+    const ports = [
+      ...Array.from({ length: 24 }, (_, index) => port(`GigabitEthernet1/0/${index + 1}`)),
+      ...Array.from({ length: 4 }, (_, index) => port(`TenGigabitEthernet1/1/${index + 1}`, 'SFP+')),
+    ];
+    const { container } = render(
+      <svg>
+        <SwitchLayout uid="wide" ports={ports} canvasWidth={1000} selectedId={null} onHover={() => undefined} onSelect={() => undefined} />
+      </svg>,
+    );
+    const copper = container.querySelectorAll('[data-port-name="GigabitEthernet1/0/1"] rect');
+    const fiber = container.querySelectorAll('[data-port-name="TenGigabitEthernet1/1/1"] rect');
+    expect(Number(copper[1]?.getAttribute('width'))).toBeGreaterThan(22);
+    expect(Number(fiber[1]?.getAttribute('width'))).toBeGreaterThan(22);
+  });
+
+  it('keeps a 48-port row from overlapping after the jacks grow', () => {
+    const ports = [
+      ...Array.from({ length: 48 }, (_, index) => port(`GigabitEthernet1/0/${index + 1}`)),
+      port('TenGigabitEthernet1/1/1', 'SFP+'),
+    ];
+    const { container } = render(
+      <svg>
+        <SwitchLayout uid="dense" ports={ports} canvasWidth={1000} selectedId={null} onHover={() => undefined} onSelect={() => undefined} />
+      </svg>,
+    );
+    const first = container.querySelector('[data-port-name="GigabitEthernet1/0/1"]');
+    const next = container.querySelector('[data-port-name="GigabitEthernet1/0/3"]');
+    const width = Number(first?.querySelectorAll('rect')[1]?.getAttribute('width'));
+    const x1 = Number(first?.getAttribute('transform')?.match(/translate\(([-\d.]+)/)?.[1]);
+    const x2 = Number(next?.getAttribute('transform')?.match(/translate\(([-\d.]+)/)?.[1]);
+    expect(width).toBeGreaterThan(16);
+    expect(x1 + width).toBeLessThan(x2);
+  });
 });
