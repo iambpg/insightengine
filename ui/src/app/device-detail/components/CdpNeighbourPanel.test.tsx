@@ -6,7 +6,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { DeviceDetailData, DeviceNeighbor } from '@/lib/types';
-import CdpNeighbourPanel from './CdpNeighbourPanel';
+import CdpNeighbourPanel, { formatCapabilities } from './CdpNeighbourPanel';
 
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
@@ -29,7 +29,7 @@ function neighbour(index: number, extra: Partial<DeviceNeighbor> = {}): DeviceNe
     source: index % 5 === 4 ? 'lldp' : 'cdp',
     remotePlatform: sample.remotePlatform,
     remoteDeviceId: sample.remoteName,
-    remoteCapabilities: sample.remotePlatform,
+    remoteCapabilities: ['Switch', 'Router, Switch, IGMP', 'Trans-Bridge', 'Host'][index % 4],
     lastSeen: '2026-11-19 12:00 UTC',
     ...extra,
   };
@@ -123,10 +123,32 @@ describe('CDP neighbour panel', () => {
     const panel = screen.getByTestId('cdp-neighbour-panel');
     expect(within(panel).getAllByTestId(/cdp-node-/)).toHaveLength(12);
     expect(within(panel).getByTestId('cdp-more')).toHaveTextContent('+1 more');
+    expect(within(panel).getByTestId('cdp-preview').querySelectorAll('li')).toHaveLength(5);
+    expect(within(panel).getByTestId('cdp-preview-more')).toHaveTextContent('+8');
     expect(within(panel).getByRole('tab', { name: 'Neighbors (13)' })).toBeInTheDocument();
     const dashed = container.querySelector('line[stroke-dasharray]');
     expect(dashed).toBeTruthy();
     expect(dashed).toHaveAttribute('stroke', '#94a3b8');
+  });
+
+  it('fills Capabilities from the CDP field and leaves the platform on its own row', async () => {
+    const user = userEvent.setup();
+    render(frame([
+      neighbour(1, { remoteCapabilities: '' }),
+      neighbour(1, { remoteName: 'edge-rtr', remoteCapabilities: 'Cisco ISR4451 Router', remoteAddress: '10.9.9.9', remotePort: 'Gi0/1', localPort: 'Gi1/0/8' }),
+      neighbour(0, { remoteCapabilities: '0x29', remoteAddress: '10.8.8.8', localPort: 'Gi1/0/9' }),
+    ]));
+    const panel = screen.getByTestId('cdp-neighbour-panel');
+    await user.click(within(panel).getByTestId('cdp-node-0'));
+    expect(within(panel).getByTestId('cdp-capabilities')).toHaveTextContent('—');
+    expect(within(panel).getAllByText('Cisco ISR4451 Router').length).toBeGreaterThan(0);
+    await user.click(within(panel).getByTestId('cdp-node-1'));
+    expect(within(panel).getByTestId('cdp-capabilities')).toHaveTextContent('—');
+    await user.click(within(panel).getByTestId('cdp-node-2'));
+    expect(within(panel).getByTestId('cdp-capabilities')).toHaveTextContent('Router, Switch, IGMP');
+    expect(formatCapabilities('Switch, Router')).toBe('Switch, Router');
+    expect(formatCapabilities('Phone')).toBe('Phone');
+    expect(formatCapabilities('Trans-Bridge')).toBe('Trans-Bridge');
   });
 
   it('keeps a neighbour note in place of the empty sentence', () => {
