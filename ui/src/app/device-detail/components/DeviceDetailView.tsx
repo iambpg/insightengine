@@ -349,7 +349,7 @@ export default function DeviceDetailView() {
                 <Meta label="Last poll" value={device.lastPoll} mono />
                 <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
-            <div data-testid="device-header-actions" className="ml-auto flex h-[5.375rem] shrink-0 items-center gap-1.5">
+            <div data-testid="device-header-actions" className="ml-auto flex h-[6.375rem] shrink-0 items-center gap-1.5">
               {stackMembers && (
                 <StackBadge
                   members={stackMembers}
@@ -359,7 +359,7 @@ export default function DeviceDetailView() {
                   onSelect={setStackPick}
                 />
               )}
-              <div className="flex h-full w-[8.5rem] shrink-0 flex-col gap-0.5">
+              <div className="flex h-full w-[10.2rem] shrink-0 flex-col gap-0.5">
               <button
                 type="button"
                 disabled={rediscovering || !device.mgmtIp}
@@ -373,9 +373,9 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setRediscovering(false));
                 }}
-                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[11px] font-medium leading-none transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-none transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
               >
-                <Icon name="MagnifyingGlassIcon" size={12} />
+                <Icon name="MagnifyingGlassIcon" size={14} />
                 {rediscovering ? 'Rediscovering…' : 'Rediscover'}
               </button>
               <button
@@ -384,9 +384,9 @@ export default function DeviceDetailView() {
                   setRerun(true);
                   setTimeout(() => setRerun(false), 1100);
                 }}
-                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[11px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
+                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
               >
-                <Icon name="ArrowPathIcon" size={12} className={rerun ? 'animate-spin' : ''} />
+                <Icon name="ArrowPathIcon" size={14} className={rerun ? 'animate-spin' : ''} />
                 {rerun ? 'Running checks…' : 'Re-run health check'}
               </button>
               <button
@@ -408,9 +408,9 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setSyncing(false));
                 }}
-                className={`inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-transparent px-1.5 text-center text-[11px] font-medium leading-none text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
+                className={`inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-transparent px-1.5 text-center text-[13px] font-medium leading-none text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
               >
-                <Icon name="ArrowsRightLeftIcon" size={12} />
+                <Icon name="ArrowsRightLeftIcon" size={14} />
                 {syncing ? 'Syncing…' : 'NetBox Sync'}
               </button>
               <Link
@@ -419,9 +419,9 @@ export default function DeviceDetailView() {
                     ? `/device-cli?form=${encodeURIComponent(form)}`
                     : `/device-cli?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
                 }
-                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[11px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
+                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
               >
-                <Icon name="CommandLineIcon" size={12} />
+                <Icon name="CommandLineIcon" size={14} />
                 Open device
               </Link>
               </div>
@@ -1093,11 +1093,11 @@ function Meta({ label, value, mono, link, shade }: { label: string; value: strin
   return (
     <div
       data-testid="header-fact"
-      className="flex h-10 w-[7.75rem] shrink-0 flex-col justify-center overflow-hidden rounded-md border border-border bg-muted/40 px-1.5"
+      className="flex h-12 w-[9.3rem] shrink-0 flex-col justify-center overflow-hidden rounded-md border border-border bg-muted/40 px-1.5"
       style={color ? { boxShadow: `inset 3px 0 0 ${color}` } : undefined}
     >
-      <dt className="truncate text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={`truncate text-[11px] leading-tight ${mono ? 'font-mono-data' : 'font-medium'}`} title={value}>
+      <dt className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className={`truncate text-[13px] leading-tight ${mono ? 'font-mono-data' : 'font-medium'}`} title={value}>
         {link ? <Link href={link} className="hover:text-primary hover:underline">{value}</Link> : value}
       </dd>
     </div>

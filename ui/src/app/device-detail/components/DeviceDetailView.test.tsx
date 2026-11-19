@@ -393,11 +393,11 @@ describe('DeviceDetailView client navigation', () => {
     });
     render(<DeviceDetailView />);
     const actions = await screen.findByTestId('device-header-actions');
-    expect(actions).toHaveClass('h-[5.375rem]', 'shrink-0');
+    expect(actions).toHaveClass('h-[6.375rem]', 'shrink-0');
     expect(actions.querySelector('.flex-col')).toBeTruthy();
     const facts = screen.getAllByTestId('header-fact');
     expect(facts).toHaveLength(8);
-    expect(facts[0]).toHaveClass('w-[7.75rem]');
+    expect(facts[0]).toHaveClass('h-12', 'w-[9.3rem]');
     expect(screen.getByTestId('device-header-facts').compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(actions).toContainElement(screen.getByTestId('stack-member-02'));
     expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-master', 'true');
