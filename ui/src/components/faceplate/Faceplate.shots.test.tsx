@@ -105,6 +105,18 @@ const CABLE_SCRIPT = `<script>
 })();
 </script>`;
 
+describe('stack faceplate', () => {
+  it('draws the master chassis until another member number is selected', () => {
+    const { container, rerender } = render(<Faceplate device={stack(2)} caption={false} />);
+    expect(container.querySelectorAll('[data-chassis]')).toHaveLength(1);
+    expect(container.querySelector('[aria-label="Stack member 1"]')).toBeTruthy();
+    rerender(<Faceplate device={stack(2)} caption={false} activeMember={2} />);
+    expect(container.querySelectorAll('[data-chassis]')).toHaveLength(1);
+    expect(container.querySelector('[aria-label="Stack member 2"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Stack member 1"]')).toBeNull();
+  });
+});
+
 describe('faceplate screenshots', () => {
   it('writes the panel frames when IE_FACEPLATE_SHOTS is set', () => {
     if (process.env.IE_FACEPLATE_SHOTS !== '1') return;
