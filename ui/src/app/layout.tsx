@@ -1,18 +1,26 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import '../styles/tailwind.css';
 
-const plexSans = IBM_Plex_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+// Bundled IBM Plex files. next/font/google fetches fonts.gstatic.com at build time, and that response sometimes has no file extension, which crashes `next build`.
+const plexSans = localFont({
+  src: [
+    { path: './fonts/ibm-plex-sans-400.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/ibm-plex-sans-500.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/ibm-plex-sans-600.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/ibm-plex-sans-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-ibm-plex-sans',
   display: 'swap',
 });
 
-const plexMono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const plexMono = localFont({
+  src: [
+    { path: './fonts/ibm-plex-mono-400.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/ibm-plex-mono-500.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/ibm-plex-mono-600.woff2', weight: '600', style: 'normal' },
+  ],
   variable: '--font-ibm-plex-mono',
   display: 'swap',
 });
