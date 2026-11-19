@@ -35,6 +35,10 @@ const BOTTOM_Y = 70;
 
 const CABLE_TYPES = new Set(['RJ45', 'SFP', 'SFP+', 'QSFP', 'MGMT']);
 
+// Jacks grow with the stretched chassis, and stop before the two rows or the silk overlap.
+const PORT_MAX = 32;
+const FIBER_COL = 42;
+
 /** The number printed on the jack: Gi0/1, Fa0/1 and Gi1/0/1 are all face port 1. */
 export function faceNumber(name: string): number | null {
   const found = name.match(/\d+/g);
@@ -108,7 +112,7 @@ export function switchCanvas(ports: PortInfo[]) {
   const cols = Math.max(1, Math.ceil(copper.length / 2));
   const groups = Math.ceil(cols / 6);
   const fiberCols = Math.max(1, Math.ceil(fiber.length / 2));
-  const fiberW = fiber.length ? fiberCols * 26 + 12 : 8;
+  const fiberW = fiber.length ? fiberCols * FIBER_COL + 12 : 8;
   const width = START_X + cols * PITCH + Math.max(0, groups - 1) * GROUP_GAP + fiberW + 8;
   return { width, height: SW_H, cols, groups, fiberCols, fiberW, copper, fiber };
 }
@@ -130,7 +134,8 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
   const W = canvasWidth && canvasWidth > canvas.width ? canvasWidth : canvas.width;
   const usable = Math.max(PITCH, W - START_X - fiberW - GROUP_GAP * Math.max(0, canvas.groups - 1));
   const pitch = usable / cols;
-  const glyph = Math.min(18, Math.max(11, pitch - 8));
+  const glyph = Math.min(PORT_MAX, Math.max(11, pitch - 8));
+  const fiberSize = Math.min(glyph, (FIBER_COL - 6) / 1.25);
   const colX = (c: number) => START_X + c * pitch + Math.floor(c / 6) * GROUP_GAP + Math.max(0, (pitch - glyph) / 2);
   const led = ledFill(ledHealth);
   const accent = memberHealthColor || led;
@@ -182,7 +187,7 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
         {fiber.map((port, index) => {
           const column = index % fiberCols;
           const row = Math.floor(index / fiberCols);
-          const x = W - fiberW + 6 + column * 26;
+          const x = W - fiberW + 6 + column * FIBER_COL;
           const y = row === 0 ? TOP_Y : BOTTOM_Y;
           return (
             <PortGlyph
@@ -190,7 +195,7 @@ export default function SwitchLayout({ ports, uid, selectedId, onHover, onSelect
               port={port}
               x={x}
               y={y}
-              size={14}
+              size={fiberSize}
               uid={uid}
               selected={selectedId === port.id}
               onHover={onHover}
