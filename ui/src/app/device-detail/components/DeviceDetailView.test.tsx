@@ -39,7 +39,7 @@ vi.mock('@/lib/apiClient', () => ({
 vi.mock('./DeviceGraphs', () => ({ default: () => null }));
 vi.mock('@/components/charts/GraphPanel', () => ({ default: () => null }));
 vi.mock('@/components/faceplate/Faceplate', () => ({
-  default: () => null,
+  default: ({ activeMember }: { activeMember?: number }) => <div data-testid="faceplate-member" data-active-member={activeMember ?? ''} />,
   FaceplateLegend: () => null,
 }));
 
@@ -403,5 +403,36 @@ describe('DeviceDetailView client navigation', () => {
     expect(screen.getByTestId('stack-member-02')).toHaveAttribute('data-master', 'true');
     expect(screen.getByTestId('device-faceplate')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Rediscover/ })).toBeInTheDocument();
+  });
+
+  it('shows the master switch until a stack number is clicked', async () => {
+    const user = userEvent.setup();
+    queryState.value = 'id=42';
+    vi.mocked(api.getDevice).mockResolvedValue({
+      ...device('42', 'edge-42'),
+      faceplate: {
+        form_factor: 'switch-stack',
+        role: 'Switch stack',
+        members: [
+          { id: 'm1', number: 1, health: 'healthy', note: '', ports: [] },
+          { id: 'm2', number: 2, health: 'warning', note: '', ports: [] },
+        ],
+      },
+      stack: {
+        source: 'snmp',
+        members: [
+          { number: 1, role: 'active', master: true, state: 'ready' },
+          { number: 2, role: 'member', master: false, state: 'ready' },
+        ],
+      },
+    });
+    render(<DeviceDetailView />);
+    const plate = await screen.findByTestId('faceplate-member');
+    expect(plate).toHaveAttribute('data-active-member', '1');
+    expect(screen.getByTestId('stack-member-01')).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByTestId('stack-member-02'));
+    expect(plate).toHaveAttribute('data-active-member', '2');
+    expect(screen.getByTestId('stack-member-02')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('stack-member-01')).toHaveAttribute('aria-pressed', 'false');
   });
 });

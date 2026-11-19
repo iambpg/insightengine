@@ -4,8 +4,9 @@ import os from 'os';
 import path from 'path';
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { FaceplateDevice, StackMember } from '@/lib/types';
+import type { FaceplateDevice, StackMember, StackMemberInfo } from '@/lib/types';
 import { buildFaceplateFor } from '@/lib/mockData';
+import StackBadge from '@/app/device-detail/components/StackBadge';
 import Faceplate from './Faceplate';
 import ParentPortPicture from './ParentPort';
 
@@ -33,16 +34,36 @@ function stack(count: number): FaceplateDevice {
   };
 }
 
-function frame(device: FaceplateDevice, parent: string | null) {
+function tiles(count: number, master: number): StackMemberInfo[] {
+  return Array.from({ length: count }, (_, index) => {
+    const number = index + 1;
+    return {
+      number,
+      role: number === master ? 'active' : 'member',
+      master: number === master,
+      state: 'ready',
+      health: 'healthy',
+    };
+  });
+}
+
+function frame(device: FaceplateDevice, parent: string | null, activeMember?: number, tileCount?: number) {
+  const uplinkMember = device.form_factor === 'switch-stack' ? (activeMember || 1) : 1;
   return (
-    <div
+    <div style={{ width: 1200, background: '#f8fafc' }}>
+      {tileCount ? (
+        <div style={{ display: 'flex', alignItems: 'center', height: 72, padding: '0 12px', boxSizing: 'border-box' }}>
+          <StackBadge members={tiles(tileCount, 1)} selected={activeMember || 1} />
+        </div>
+      ) : null}
+      <div
       data-faceplate-panel=""
-      data-uplink={parent ? 'Te1/1/1' : ''}
+      data-uplink={parent ? `Te${uplinkMember}/1/1` : ''}
       data-parent-port={parent ? 'Te1/0/13' : ''}
       style={{ position: 'relative', display: 'flex', alignItems: 'stretch', width: 1200, height: 168, background: '#f8fafc', boxSizing: 'border-box', padding: 4, overflow: 'hidden' }}
     >
       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start' }}>
-        <Faceplate device={device} caption={false} health={parent ? 'healthy' : 'unknown'} chassisLabel={device.form_factor === 'access-switch-48' ? 'C9300-48P' : 'C9300-24P'} />
+        <Faceplate device={device} activeMember={activeMember} caption={false} health={parent ? 'healthy' : 'unknown'} chassisLabel={device.form_factor === 'access-switch-48' ? 'C9300-48P' : 'C9300-24P'} />
       </div>
       <div style={{ width: 1, background: '#e2e8f0', margin: '0 8px' }} />
       <aside style={{ width: 176, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '4px 8px' }}>
@@ -59,10 +80,16 @@ function frame(device: FaceplateDevice, parent: string | null) {
         )}
       </aside>
     </div>
+    </div>
   );
 }
 
-const SHOT_CSS = `:root{--navy:#0b1220;--metal-1:#2a3140;--metal-2:#1b212d;--metal-3:#12161f;--metal-hi:#4a5468;--down:#d5deea;--font-mono:ui-monospace,monospace;--success:#17a672;--warning:#e8a317;--destructive:#d93a46;--cyan:#36cfff}`;
+const SHOT_CSS = `:root{--navy:#0b1220;--metal-1:#2a3140;--metal-2:#1b212d;--metal-3:#12161f;--metal-hi:#4a5468;--down:#d5deea;--font-mono:ui-monospace,monospace;--success:#17a672;--warning:#e8a317;--destructive:#d93a46;--cyan:#36cfff}
+[data-tone="green"]{background-color:#22c55e;background-image:linear-gradient(180deg,rgba(255,255,255,.75) 0%,rgba(255,255,255,0) 32%),linear-gradient(180deg,#dcfce7 0%,#22c55e 48%,#15803d 100%)}
+[data-tone="amber"]{background-color:#f59e0b;background-image:linear-gradient(180deg,rgba(255,255,255,.75) 0%,rgba(255,255,255,0) 32%),linear-gradient(180deg,#fef3c7 0%,#f59e0b 48%,#b45309 100%)}
+[data-tone="red"]{background-color:#ef4444;background-image:linear-gradient(180deg,rgba(255,255,255,.75) 0%,rgba(255,255,255,0) 32%),linear-gradient(180deg,#fecaca 0%,#ef4444 48%,#991b1b 100%)}
+[data-tone="grey"]{background-color:#94a3b8;background-image:linear-gradient(180deg,rgba(255,255,255,.75) 0%,rgba(255,255,255,0) 32%),linear-gradient(180deg,#f8fafc 0%,#94a3b8 48%,#64748b 100%)}
+button{font-family:ui-sans-serif,system-ui,sans-serif}`;
 
 const CABLE_SCRIPT = `<script>
 (function () {
@@ -105,20 +132,37 @@ const CABLE_SCRIPT = `<script>
 })();
 </script>`;
 
+describe('stack faceplate', () => {
+  it('draws the master chassis until another member number is selected', () => {
+    const { container, rerender } = render(<Faceplate device={stack(2)} caption={false} />);
+    expect(container.querySelectorAll('[data-chassis]')).toHaveLength(1);
+    expect(container.querySelector('[aria-label="Stack member 1"]')).toBeTruthy();
+    rerender(<Faceplate device={stack(2)} caption={false} activeMember={2} />);
+    expect(container.querySelectorAll('[data-chassis]')).toHaveLength(1);
+    expect(container.querySelector('[aria-label="Stack member 2"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Stack member 1"]')).toBeNull();
+  });
+});
+
 describe('faceplate screenshots', () => {
   it('writes the panel frames when IE_FACEPLATE_SHOTS is set', () => {
     if (process.env.IE_FACEPLATE_SHOTS !== '1') return;
-    const cases: Array<[string, FaceplateDevice, string | null]> = [
-      ['24-port', buildFaceplateFor('access-switch-24'), 'dist-sw-02'],
-      ['48-port', buildFaceplateFor('access-switch-48'), 'dist-sw-02'],
-      ['stack-2', stack(2), 'dist-sw-02'],
-      ['stack-4', stack(4), 'dist-sw-02'],
-      ['no-parent', buildFaceplateFor('access-switch-24'), null],
+    const stack4 = stack(4);
+    const member3 = {
+      ...stack4,
+      members: stack4.members?.map((member) => (member.number === 3 ? { ...member, health: 'fault' as const } : member)),
+    };
+    const cases: Array<[string, FaceplateDevice, string | null, number | undefined, number | undefined]> = [
+      ['standalone', buildFaceplateFor('access-switch-24'), 'dist-sw-02', undefined, undefined],
+      ['stack-2', stack(2), 'dist-sw-02', 1, 2],
+      ['stack-2-member-02', stack(2), 'dist-sw-02', 2, 2],
+      ['stack-4', member3, 'dist-sw-02', 3, 4],
+      ['no-parent', buildFaceplateFor('access-switch-24'), null, undefined, undefined],
     ];
     const dir = process.env.IE_FACEPLATE_SHOT_DIR || path.join(os.tmpdir(), 'faceplate-shots');
     fs.mkdirSync(dir, { recursive: true });
-    for (const [name, device, parent] of cases) {
-      const { container, unmount } = render(frame(device, parent));
+    for (const [name, device, parent, activeMember, tileCount] of cases) {
+      const { container, unmount } = render(frame(device, parent, activeMember, tileCount));
       const html = `<!doctype html><html><head><meta charset="utf-8"><style>${SHOT_CSS}</style></head><body style="margin:0;background:#f8fafc">${container.innerHTML}${CABLE_SCRIPT}</body></html>`;
       fs.writeFileSync(path.join(dir, `${name}.html`), html);
       unmount();

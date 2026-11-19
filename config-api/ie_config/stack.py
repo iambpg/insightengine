@@ -1,13 +1,15 @@
 """Stack-badge members for a switch.
 
 The member number is the chassis number the faceplate already uses
-(GigabitEthernet2/0/1 is member 2). NetBox vc_position and
-cswSwitchNumCurrent are that same number. Nothing here renumbers them.
+(GigabitEthernet2/0/1 is member 2). NetBox vc_position is that number.
+CISCO-STACKWISE-MIB indexes cswSwitchInfoTable by entPhysicalIndex;
+the chassis number is the value of cswSwitchNumCurrent, and role and
+state join on that same index. Nothing here renumbers a chassis.
 
 NetBox virtual chassis wins. virtual_chassis.master is the active member.
-With no chassis, CISCO-STACKWISE-MIB samples from Prometheus are used.
-With neither, the switch is one tile numbered 1. A collector that has no
-stack fields (including a Zabbix-only install) takes that same fallback.
+With no chassis, those SNMP samples are used. With neither, the switch
+is one tile numbered 1. A collector that has no stack fields (including
+a Zabbix-only install) takes that same fallback.
 """
 
 from __future__ import annotations
@@ -104,8 +106,8 @@ def stack_from_netbox(device: dict, peers: list[dict]) -> dict | None:
     return {"source": "netbox", "members": members}
 
 
-def _sample_number(metric: dict) -> int | None:
-    return _position(metric.get("cswSwitchNumCurrent"))
+def _entity_index(metric: dict) -> int | None:
+    return _position(metric.get("entPhysicalIndex"))
 
 
 def _sample_value(sample: dict) -> int | None:
@@ -118,34 +120,46 @@ def _sample_value(sample: dict) -> int | None:
         return None
 
 
-def stack_from_snmp(role_samples, state_samples) -> dict | None:
-    """One member per cswSwitchNumCurrent. Role 1 is the active master."""
-    roles: dict[int, int] = {}
-    states: dict[int, int] = {}
-    for sample in role_samples or []:
+def _by_index(samples) -> dict[int, int]:
+    found: dict[int, int] = {}
+    for sample in samples or []:
         if not isinstance(sample, dict):
             continue
         metric = sample.get("metric") if isinstance(sample.get("metric"), dict) else {}
-        number = _sample_number(metric)
+        index = _entity_index(metric)
         value = _sample_value(sample)
-        if number is None or value is None:
+        if index is None or value is None:
             continue
-        roles[number] = value
-    for sample in state_samples or []:
-        if not isinstance(sample, dict):
+        found[index] = value
+    return found
+
+
+def stack_from_snmp(role_samples, state_samples, number_samples=None) -> dict | None:
+    """One member per cswSwitchNumCurrent value, joined on entPhysicalIndex.
+
+    Indexes 1000 and 1001 that both report chassis 1 are the same member.
+    Role 1 is the active master.
+    """
+    numbers = _by_index(number_samples)
+    roles = _by_index(role_samples)
+    states = _by_index(state_samples)
+    by_member: dict[int, dict] = {}
+    for index, raw_number in numbers.items():
+        number = _position(raw_number)
+        if number is None:
             continue
-        metric = sample.get("metric") if isinstance(sample.get("metric"), dict) else {}
-        number = _sample_number(metric)
-        value = _sample_value(sample)
-        if number is None or value is None:
-            continue
-        states[number] = value
-    if not roles and not states:
+        slot = by_member.setdefault(number, {"role": None, "state": None})
+        if slot["role"] is None and index in roles:
+            slot["role"] = roles[index]
+        if slot["state"] is None and index in states:
+            slot["state"] = states[index]
+    if not by_member:
         return None
     members = []
-    for number in sorted(set(roles) | set(states)):
-        role = _ROLE.get(roles.get(number), "member")
-        members.append(_member(number, role, "", "", _STATE.get(states.get(number), ""), role == "active"))
+    for number in sorted(by_member):
+        info = by_member[number]
+        role = _ROLE.get(info["role"], "member")
+        members.append(_member(number, role, "", "", _STATE.get(info["state"], ""), role == "active"))
     return {"source": "snmp", "members": members}
 
 
@@ -154,6 +168,7 @@ def resolve_stack(
     peers: list[dict],
     role_samples=None,
     state_samples=None,
+    number_samples=None,
     *,
     role_slug: str = "",
     form_factor: str = "",
@@ -163,7 +178,7 @@ def resolve_stack(
     device = device or {}
     if str(device.get("vc_id") or "").strip():
         return stack_from_netbox(device, peers)
-    snmp = stack_from_snmp(role_samples, state_samples)
+    snmp = stack_from_snmp(role_samples, state_samples, number_samples)
     if snmp is not None:
         return snmp
     return standalone_stack(str(device.get("model") or ""), str(device.get("serial") or ""))
