@@ -16,6 +16,7 @@ import HealthStrip from './HealthStrip';
 import DeviceFilters from './DeviceFilters';
 import DeviceTable from './DeviceTable';
 import ColumnMenu, { COLUMNS, type ColumnKey } from './ColumnMenu';
+import { formatClock } from '@/lib/clock';
 
 export default function DeviceListView() {
   const canWrite = allowOperate(useKnownRole());
@@ -39,12 +40,7 @@ export default function DeviceListView() {
   const [visible, setVisible] = useState<ColumnKey[]>(COLUMNS.map((c) => c.key));
   const [reload, setReload] = useState(0);
   const [roles, setRoles] = useState<string[] | undefined>();
-  const stamp = () => {
-    const d = new Date();
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
-  };
-  const [updated, setUpdated] = useState(stamp);
+  const [updated, setUpdated] = useState(() => formatClock());
 
   useEffect(() => {
     let cancelled = false;
@@ -158,13 +154,13 @@ export default function DeviceListView() {
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Icon name="ClockIcon" size={14} />
-            Updated <span className="font-mono-data text-foreground" suppressHydrationWarning>{updated} UTC</span>
+            Updated <span className="font-mono-data text-foreground" suppressHydrationWarning>{updated}</span>
           </span>
           <button
             type="button"
             onClick={() => {
               setReload((n) => n + 1);
-              setUpdated(stamp());
+              setUpdated(formatClock());
             }}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium transition-all hover:bg-muted active:scale-95"
           >

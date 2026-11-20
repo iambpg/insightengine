@@ -17,6 +17,7 @@ import { GROUP_LABEL, GROUP_ORDER } from '@/lib/contract';
 import type { RoleName } from '@/lib/types';
 import { canSeeApplications } from '@/lib/settings/access';
 import AppEditor from './AppEditor';
+import { formatWhen } from '@/lib/clock';
 
 export default function ApplicationsPanel({ role }: { role: RoleName | null }) {
   const [apps, setApps] = useState<SettingsApp[] | null>(null);
@@ -280,9 +281,7 @@ function Group({
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Last reload{' '}
-                {extra?.lastReloadAt
-                  ? extra.lastReloadAt.replace('T', ' ').slice(0, 16) + ' UTC'
-                  : '—'}
+                {formatWhen(extra?.lastReloadAt)}
               </p>
               {extra?.lastError ? (
                 <p className="mt-1 text-xs text-destructive">{extra.lastError}</p>

@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ie_config.site_briefing import build_briefing, classify_logs, fortigate_limits, link_points, sla_points, talkers_from
+from ie_config.site_briefing import build_briefing, classify_logs, fortigate_limits, link_points, sla_points, talkers_from, window_label
 
 
 def _device(name, role, form, health="healthy"):
@@ -117,6 +117,13 @@ def test_fortigate_limits_keep_each_interface_and_drop_zeros():
     assert limits["interfaces"][0]["outMbps"] == 102.4
     assert limits["limiterInMbps"] == 71.68
     assert limits["limiterOutMbps"] == 122.88
+
+
+def test_short_windows_are_named_in_minutes():
+    assert window_label("5m", 5) == "the past 5 minutes"
+    assert window_label("15m", 15) == "the past 15 minutes"
+    assert window_label("custom", 5) == "the past 5 minutes"
+    assert window_label("1h", 60) == "the past hour"
 
 
 def test_link_points_keep_each_interface_apart():

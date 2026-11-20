@@ -350,7 +350,7 @@ export default function DeviceDetailView() {
                 <Meta label="Last poll" value={device.lastPoll} mono />
                 <Meta label="Firmware" value={device.firmware} mono shade={toneShade(syncTones.tones.firmware)} />
               </dl>
-            <div data-testid="device-header-actions" className="ml-auto flex h-[6.375rem] shrink-0 items-center gap-1.5">
+            <div data-testid="device-header-actions" className="ml-auto flex shrink-0 items-start gap-1.5">
               {stackMembers && (
                 <StackBadge
                   members={stackMembers}
@@ -360,7 +360,7 @@ export default function DeviceDetailView() {
                   onSelect={setStackPick}
                 />
               )}
-              <div className="flex h-full w-[10.2rem] shrink-0 flex-col gap-0.5">
+              <div className="flex w-[12.5rem] shrink-0 flex-col gap-1">
               <button
                 type="button"
                 disabled={rediscovering || !device.mgmtIp}
@@ -374,7 +374,7 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setRediscovering(false));
                 }}
-                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-none transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 py-1.5 text-center text-[13px] font-medium leading-snug transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
               >
                 <Icon name="MagnifyingGlassIcon" size={14} />
                 {rediscovering ? 'Rediscovering…' : 'Rediscover'}
@@ -385,7 +385,7 @@ export default function DeviceDetailView() {
                   setRerun(true);
                   setTimeout(() => setRerun(false), 1100);
                 }}
-                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 py-1.5 text-center text-[13px] font-medium leading-snug transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="ArrowPathIcon" size={14} className={rerun ? 'animate-spin' : ''} />
                 {rerun ? 'Running checks…' : 'Re-run health check'}
@@ -409,7 +409,7 @@ export default function DeviceDetailView() {
                     })
                     .finally(() => setSyncing(false));
                 }}
-                className={`inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-transparent px-1.5 text-center text-[13px] font-medium leading-none text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
+                className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-center text-[13px] font-medium leading-snug text-white transition-all active:scale-95 disabled:opacity-50 ${syncTones.synced ? 'bg-[#15803d] hover:bg-[#166534]' : 'bg-[#c2410c] hover:bg-[#9a3412]'}`}
               >
                 <Icon name="ArrowsRightLeftIcon" size={14} />
                 {syncing ? 'Syncing…' : 'NetBox Sync'}
@@ -420,7 +420,7 @@ export default function DeviceDetailView() {
                     ? `/device-cli?form=${encodeURIComponent(form)}`
                     : `/device-cli?id=${encodeURIComponent(device?.id || id)}&form=${encodeURIComponent(form)}`
                 }
-                className="inline-flex min-h-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card px-1.5 text-center text-[13px] font-medium leading-none transition-all hover:bg-muted active:scale-95"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-border bg-card px-2 py-1.5 text-center text-[13px] font-medium leading-snug transition-all hover:bg-muted active:scale-95"
               >
                 <Icon name="CommandLineIcon" size={14} />
                 Open device
