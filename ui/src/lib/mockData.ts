@@ -18,6 +18,7 @@ import type {
   WebhookDelivery,
 } from './types';
 import { FW_MODELS, FW_MODEL_LIST } from '@/components/faceplate/layouts/FirewallModels';
+import { formatTick } from '@/lib/clock';
 
 // ---------- deterministic pseudo-random (SSR/CSR safe) ----------
 function seeded(seed: number) {
@@ -718,35 +719,28 @@ function healthPanelFor(form: string) {
 }
 
 // ---------- time series ----------
-export type RangeKey = '1h' | '6h' | '24h' | '7d' | 'custom';
-const RANGE_CFG: Record<Exclude<RangeKey, 'custom'>, { points: number; stepMin: number }> = {
-  '1h': { points: 60, stepMin: 1 },
-  '6h': { points: 72, stepMin: 5 },
-  '24h': { points: 96, stepMin: 15 },
-  '7d': { points: 84, stepMin: 120 },
+export type RangeKey = '5m' | '15m' | '1h' | '6h' | '24h' | '7d' | 'custom';
+const RANGE_CFG: Record<Exclude<RangeKey, 'custom'>, { points: number; stepMs: number }> = {
+  '5m': { points: 30, stepMs: 10_000 },
+  '15m': { points: 30, stepMs: 30_000 },
+  '1h': { points: 60, stepMs: 60_000 },
+  '6h': { points: 72, stepMs: 5 * 60_000 },
+  '24h': { points: 96, stepMs: 15 * 60_000 },
+  '7d': { points: 84, stepMs: 2 * 60 * 60_000 },
 };
 
-const NOW_MS = Date.UTC(2026, 9, 27, 14, 38, 0);
-
-function fmtLabel(ms: number, range: RangeKey): string {
-  const d = new Date(ms);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  if (range === '7d') {
-    const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
-    return `${day} ${hh}:${mm}`;
-  }
-  return `${hh}:${mm}`;
-}
-
 export function buildSeries(range: RangeKey, seed: number, scale = 1, customMin = 180): SeriesPoint[] {
-  const cfg = range === 'custom' ? { points: 90, stepMin: Math.max(1, Math.round(customMin / 90)) } : RANGE_CFG[range];
+  const cfg = range === 'custom'
+    ? { points: 90, stepMs: Math.max(1000, Math.round((customMin * 60_000) / 90)) }
+    : RANGE_CFG[range];
   const rnd = seeded(seed + cfg.points);
   const out: SeriesPoint[] = [];
   const gapStart = Math.floor(cfg.points * 0.58);
   const gapEnd = gapStart + Math.max(2, Math.floor(cfg.points * 0.05));
+  const end = Date.now();
+  const span = cfg.points * cfg.stepMs;
   for (let i = 0; i < cfg.points; i++) {
-    const t = NOW_MS - (cfg.points - 1 - i) * cfg.stepMin * 60000;
+    const t = end - (cfg.points - 1 - i) * cfg.stepMs;
     const wave = Math.sin(i / (cfg.points / 6)) * 0.25 + Math.sin(i / (cfg.points / 17)) * 0.1;
     const spike = i === Math.floor(cfg.points * 0.31) ? 0.45 : i === Math.floor(cfg.points * 0.82) ? 0.6 : 0;
     const base = 0.45 + wave + spike + (rnd() - 0.5) * 0.12;
@@ -755,18 +749,19 @@ export function buildSeries(range: RangeKey, seed: number, scale = 1, customMin 
     const isGap = i >= gapStart && i < gapEnd;
     out.push({
       t,
-      label: fmtLabel(t, range),
+      label: formatTick(t, span),
       inBps: isGap ? null : Math.round(inBps * 10) / 10,
       outBps: isGap ? null : Math.round(outBps * 10) / 10,
       errors: isGap ? null : Math.max(0, Math.round((spike > 0 ? 80 + rnd() * 90 : rnd() * 9) * 10) / 10),
+      discards: isGap ? null : Math.max(0, Math.round((spike > 0 ? 12 + rnd() * 8 : rnd() * 2) * 10) / 10),
       util: isGap ? null : Math.min(99, Math.max(2, Math.round((base * 100 + (rnd() - 0.5) * 8) * 10) / 10)),
     });
   }
   return out;
 }
 
-export function buildResourceSeries(range: RangeKey, seed: number) {
-  const base = buildSeries(range, seed, 1);
+export function buildResourceSeries(range: RangeKey, seed: number, customMin = 180) {
+  const base = buildSeries(range, seed, 1, customMin);
   const rnd = seeded(seed * 3 + 1);
   return base.map((p, i) => ({
     t: p.t,

@@ -7,6 +7,7 @@ import { api } from '@/lib/apiClient';
 import { reportLoadError } from '@/lib/loadError';
 import type { SeriesDef } from '@/components/charts/ZoomableChart';
 import type { SiteSlaSeries } from '@/lib/types';
+import { epochMs, formatClock } from '@/lib/clock';
 
 const ZoomableChart = dynamic(() => import('@/components/charts/ZoomableChart'), {
   ssr: false,
@@ -88,7 +89,7 @@ export default function SiteSla({ siteId }: { siteId: string }) {
       if (sameLimit != null) series.push({ key: limitKey, label: `${link.name} limit`, color, dash: '2 2' });
       peak = Math.max(peak, link.inMbps ?? 0, link.outMbps ?? 0);
       for (const point of link.points) {
-        const row = rows.get(point.t) ?? { label: clockLabel(point.t) };
+        const row = rows.get(point.t) ?? { t: epochMs(point.t) ?? point.t, label: clockLabel(point.t) };
         row[inKey] = point.inMbps;
         row[outKey] = point.outMbps;
         if (sameLimit != null) row[limitKey] = sameLimit;
@@ -102,7 +103,7 @@ export default function SiteSla({ siteId }: { siteId: string }) {
       yMax: peak > 0 ? Math.ceil(peak * 1.1) : undefined,
     };
   }, [links]);
-  const clock = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const clock = formatClock(now);
 
   return (
     <article className="rounded-md border border-border bg-card p-4 shadow-card" aria-label="Performance SLA">

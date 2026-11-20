@@ -22,7 +22,7 @@ export default function DeviceGraphs({ deviceId, profile }: { deviceId: string; 
       <GraphPanel
         id="agg-throughput"
         title="Aggregate throughput"
-        subtitle="All uplinks combined, Mbps"
+        subtitle="Traffic in and out of the uplinks, in megabits per second."
         unit="Mbps"
         kind="area"
         series={[
@@ -35,10 +35,13 @@ export default function DeviceGraphs({ deviceId, profile }: { deviceId: string; 
       <GraphPanel
         id="err-rate"
         title="Errors and discards"
-        subtitle="Frames per minute across all ports"
-        unit="err/min"
+        subtitle="Input errors and discarded frames per minute, across every port."
+        unit="/min"
         kind="line"
-        series={[{ key: 'errors', label: 'Errors', color: 'var(--destructive)' }]}
+        series={[
+          { key: 'errors', label: 'Errors', color: 'var(--destructive)' },
+          { key: 'discards', label: 'Discards', color: 'var(--warning)' },
+        ]}
         deps={deviceId}
         fetcher={async (r, c) => (await api.getThroughput(r, throughputId(29), c)) as unknown as Rec}
       />
@@ -46,13 +49,13 @@ export default function DeviceGraphs({ deviceId, profile }: { deviceId: string; 
       <GraphPanel
         id="resources"
         title={profile === 'ios-basic' ? 'CPU and memory' : 'CPU, memory and temperature'}
-        subtitle={profile === 'ios-basic' ? 'Control plane load and RAM' : 'Control plane load and chassis temperature'}
-        unit=""
+        subtitle={profile === 'ios-basic' ? 'Control-plane CPU and memory in use, as a percent of the device.' : 'Control-plane CPU and memory as a percent. Temperature is degrees Celsius on the same scale.'}
+        unit={profile === 'ios-basic' ? '%' : ''}
         kind="line"
         series={profile === 'ios-basic'
           ? [
-              { key: 'cpu', label: 'CPU %', color: 'var(--primary)' },
-              { key: 'mem', label: 'Memory %', color: 'var(--info)' },
+              { key: 'cpu', label: 'CPU', color: 'var(--primary)' },
+              { key: 'mem', label: 'Memory', color: 'var(--info)' },
             ]
           : [
               { key: 'cpu', label: 'CPU %', color: 'var(--primary)' },
@@ -61,7 +64,7 @@ export default function DeviceGraphs({ deviceId, profile }: { deviceId: string; 
             ]}
         yMax={100}
         deps={deviceId}
-        fetcher={async (r) => (await api.getResources(r, resourceId)) as unknown as Rec}
+        fetcher={async (r, c) => (await api.getResources(r, resourceId, c)) as unknown as Rec}
       />
     </div>
   );

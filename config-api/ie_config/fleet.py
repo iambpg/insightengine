@@ -1303,6 +1303,10 @@ def _member_health(ports: list[dict]) -> str:
 
 
 def _range_window(range_key: str, custom_min: int) -> tuple[int, int]:
+    if range_key == "5m":
+        return 300, 10
+    if range_key == "15m":
+        return 900, 30
     if range_key == "1h":
         return 3600, 60
     if range_key == "6h":
@@ -1313,15 +1317,22 @@ def _range_window(range_key: str, custom_min: int) -> tuple[int, int]:
         return 7 * 86400, 7200
     if range_key == "custom":
         window = max(60, int(custom_min) * 60)
-        return window, max(60, int(window / 90))
-    raise ApiError(400, "bad_query", "range must be 1h, 6h, 24h, 7d or custom")
+        return window, max(10, int(window / 90))
+    raise ApiError(400, "bad_query", "range must be 5m, 15m, 1h, 6h, 24h, 7d or custom")
+
+
+def _rate_range(window_s: int) -> str:
+    """Short graphs need a shorter rate or every point is the same 5 minute average."""
+    if window_s <= 15 * 60:
+        return "1m"
+    return "5m"
 
 
 def _label_for(ts: float, window_s: int) -> str:
     moment = datetime.fromtimestamp(ts, timezone.utc)
-    clock = moment.strftime("%H:%M")
-    if window_s >= 6 * 86400:
-        return "%s %s" % (_WEEKDAYS[moment.weekday()], clock)
+    clock = moment.strftime("%H:%M:%S") if window_s <= 15 * 60 else moment.strftime("%H:%M")
+    if window_s > 24 * 3600:
+        return "%s %s %s" % (moment.strftime("%d %b"), _WEEKDAYS[moment.weekday()], clock)
     return clock
 
 
@@ -3673,10 +3684,16 @@ class FleetService:
     def _throughput(self, client, selector: str, start, end, step, window) -> list[dict]:
         if not selector:
             return []
-        inbound = self._align(self._prom_range(client, "sum(rate(ifHCInOctets%s[5m])) * 8 / 1000000" % selector, start, end, step))
-        outbound = self._align(self._prom_range(client, "sum(rate(ifHCOutOctets%s[5m])) * 8 / 1000000" % selector, start, end, step))
-        errors = self._align(self._prom_range(client, "sum(rate(ifInErrors%s[5m])) * 60" % selector, start, end, step))
-        return _series(inbound, outbound, errors, window, ("inBps", "outBps", "errors"))
+        rate = _rate_range(window)
+        inbound = self._align(self._prom_range(client, "sum(rate(ifHCInOctets%s[%s])) * 8 / 1000000" % (selector, rate), start, end, step))
+        outbound = self._align(self._prom_range(client, "sum(rate(ifHCOutOctets%s[%s])) * 8 / 1000000" % (selector, rate), start, end, step))
+        errors = self._align(self._prom_range(client, "sum(rate(ifInErrors%s[%s])) * 60" % (selector, rate), start, end, step))
+        discards = self._align(self._prom_range(
+            client,
+            "sum(rate(ifInDiscards%s[%s]) + rate(ifOutDiscards%s[%s])) * 60" % (selector, rate, selector, rate),
+            start, end, step,
+        ))
+        return _series(inbound, outbound, errors, window, ("inBps", "outBps", "errors"), {"discards": discards})
 
     def _resources(self, client, selector: str, start, end, step, window) -> list[dict]:
         if not selector:
@@ -3736,9 +3753,10 @@ class FleetService:
 
     def _port_series(self, client, selector: str, port_id: str, start, end, step, window) -> list[dict]:
         matcher = _port_matcher(selector, port_id)
-        inbound = self._align(self._prom_range(client, "sum(rate(ifHCInOctets%s[5m])) * 8 / 1000000" % matcher, start, end, step))
-        outbound = self._align(self._prom_range(client, "sum(rate(ifHCOutOctets%s[5m])) * 8 / 1000000" % matcher, start, end, step))
-        errors = self._align(self._prom_range(client, "sum(rate(ifInErrors%s[5m])) * 60" % matcher, start, end, step))
+        rate = _rate_range(window)
+        inbound = self._align(self._prom_range(client, "sum(rate(ifHCInOctets%s[%s])) * 8 / 1000000" % (matcher, rate), start, end, step))
+        outbound = self._align(self._prom_range(client, "sum(rate(ifHCOutOctets%s[%s])) * 8 / 1000000" % (matcher, rate), start, end, step))
+        errors = self._align(self._prom_range(client, "sum(rate(ifInErrors%s[%s])) * 60" % (matcher, rate), start, end, step))
         speed_samples = self._prom(client, "max(ifHighSpeed%s)" % matcher)
         speed = _first_value(speed_samples) or 0
         points = _series(inbound, outbound, errors, window, ("inBps", "outBps", "errors"))
@@ -5562,18 +5580,24 @@ def _matchers(labels: dict) -> list[dict]:
     return matchers
 
 
-def _series(inbound: dict, outbound: dict, errors: dict, window: int, keys: tuple[str, str, str]) -> list[dict]:
-    stamps = sorted(set(inbound) | set(outbound) | set(errors))
+def _series(inbound: dict, outbound: dict, errors: dict, window: int, keys: tuple[str, str, str], extras: dict | None = None) -> list[dict]:
+    extras = extras or {}
+    stamps = set(inbound) | set(outbound) | set(errors)
+    for series in extras.values():
+        stamps |= set(series)
     points = []
-    for ts in stamps:
-        points.append({
+    for ts in sorted(stamps):
+        point = {
             "t": int(ts * 1000),
             "label": _label_for(ts, window),
             keys[0]: _round(inbound.get(ts)),
             keys[1]: _round(outbound.get(ts)),
             keys[2]: _round(errors.get(ts)),
             "util": None,
-        })
+        }
+        for name, series in extras.items():
+            point[name] = _round(series.get(ts))
+        points.append(point)
     return points
 
 

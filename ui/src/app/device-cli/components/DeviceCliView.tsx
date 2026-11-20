@@ -14,6 +14,7 @@ import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { CliCatalog, DeviceDetailData } from '@/lib/types';
+import { formatClock } from '@/lib/clock';
 
 interface CliCommand {
   id: string;
@@ -155,10 +156,7 @@ function resolveTyped(raw: string, d: DeviceDetailData): string | null {
     if (!IPV4.test(target)) return `% Unrecognized host or address: ${target}`;
     return `Tracing the route to ${target}\n  1  10.22.14.1   1 msec  1 msec  1 msec\n  2  ${target}   3 msec  2 msec  3 msec`;
   }
-  if (typed === 'show clock') {
-    const n = new Date();
-    return `${[n.getHours(), n.getMinutes(), n.getSeconds()].map((x) => String(x).padStart(2, '0')).join(':')} UTC`;
-  }
+  if (typed === 'show clock') return formatClock();
   if (typed === 'show hostname' || typed === 'hostname') return d.hostname;
   if (typed === 'show ip' || typed === 'show management-ip') return d.mgmtIp;
   if (typed === 'help' || typed === '?') {

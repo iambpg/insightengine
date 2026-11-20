@@ -7,6 +7,7 @@ import Modal from '@/components/ui/Modal';
 import { api } from '@/lib/apiClient';
 import { ApiError, isApiError } from '@/lib/apiError';
 import { reportLoadError } from '@/lib/loadError';
+import { formatWhen } from '@/lib/clock';
 import type {
   ActionResult,
   DiffResult,
@@ -53,12 +54,6 @@ function validationOf(error: ApiError): ValidateResult | null {
   return details as ValidateResult;
 }
 
-function formatWhen(value?: string | null): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-}
 
 export default function AppEditor({ app, overview, role, onOpenApp, onDirty }: AppEditorProps) {
   const [fileId, setFileId] = useState(app.files[0]?.id ?? '');

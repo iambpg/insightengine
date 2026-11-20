@@ -11,6 +11,7 @@ import { isApiError } from '@/lib/apiError';
 import type { DirectoryUser, UserAuditEntry } from '@/lib/contract';
 import { canManageUsers } from '@/lib/settings/access';
 import { useSession } from '@/lib/useSession';
+import { formatWhen } from '@/lib/clock';
 
 const ROLES = ['Administrator', 'Engineer', 'Operator', 'Read-only'] as const;
 type MatrixRole = (typeof ROLES)[number];
@@ -38,10 +39,7 @@ const ROLE_TONE: Record<string, 'destructive' | 'info' | 'cyan' | 'neutral'> = {
 };
 
 function stamp(value: string | null | undefined): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  return formatWhen(value);
 }
 
 function message(cause: unknown, fallback: string): string {

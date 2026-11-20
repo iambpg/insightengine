@@ -3,6 +3,7 @@ import Icon from '@/components/ui/AppIcon';
 import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type { HealthCheck } from '@/lib/types';
+import { formatWhen } from '@/lib/clock';
 
 const RES = {
   pass: { icon: 'CheckCircleIcon', label: 'Pass', cls: 'text-success' },
@@ -17,7 +18,7 @@ export default function HealthChecks({ checks, runAt, running }: { checks: Healt
     <CollapsiblePanel
       title="Automatic health check"
       titleId="hc-title"
-      subtitle={runAt ? `Last run ${runAt} UTC` : 'Running…'}
+      subtitle={runAt ? `Last run ${formatWhen(runAt)}` : 'Running…'}
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-card"
       bodyClassName="scroll-thin min-h-0 flex-1 overflow-y-auto"
       meta={

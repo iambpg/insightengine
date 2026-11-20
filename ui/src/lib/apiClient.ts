@@ -138,8 +138,8 @@ export const api = {
   },
 
   // BACKEND: GET /api/v1/devices/{id}/metrics/resources?range=
-  async getResources(range: RangeKey, seed: string | number) {
-    return (await backend()).getResources(range, seed);
+  async getResources(range: RangeKey, seed: string | number, customMin?: number) {
+    return (await backend()).getResources(range, seed, customMin);
   },
 
   // BACKEND: GET /api/v1/devices/{id}/ports/top?metric=util

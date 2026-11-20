@@ -192,9 +192,9 @@ export async function getDeviceLogs(_deviceId: string, hostname: string) {
   return { hostname, lines: [] as { at: string; severity: string; message: string }[], reason: 'Example data has no syslog lines.' };
 }
 
-export async function getResources(range: RangeKey, seed: string | number) {
+export async function getResources(range: RangeKey, seed: string | number, customMin?: number) {
   await delay(220);
-  return buildResourceSeries(range, asSeed(seed));
+  return buildResourceSeries(range, asSeed(seed), customMin);
 }
 
 export async function getTopPorts(seed: string | number, _range?: RangeKey, _customMin?: number) {

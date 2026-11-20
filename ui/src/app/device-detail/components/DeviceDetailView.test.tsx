@@ -398,7 +398,8 @@ describe('DeviceDetailView client navigation', () => {
     });
     render(<DeviceDetailView />);
     const actions = await screen.findByTestId('device-header-actions');
-    expect(actions).toHaveClass('h-[6.375rem]', 'shrink-0');
+    expect(actions).not.toHaveClass('h-[6.375rem]');
+    expect(screen.getByRole('button', { name: /Re-run health check/ })).toHaveClass('min-h-10', 'leading-snug');
     expect(actions.querySelector('.flex-col')).toBeTruthy();
     const facts = screen.getAllByTestId('header-fact');
     expect(facts).toHaveLength(8);

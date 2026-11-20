@@ -9,6 +9,7 @@ import ThemeMenu from '@/components/ThemeMenu';
 import { reportLoadError } from '@/lib/loadError';
 import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
 import { allowSettings } from '@/lib/settings/access';
+import { formatClock } from '@/lib/clock';
 
 interface TopbarProps {
   onOpenMobile: () => void;
@@ -25,11 +26,7 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fmt = () => {
-      const d = new Date();
-      const p = (n: number) => String(n).padStart(2, '0');
-      setNow(`${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} UTC`);
-    };
+    const fmt = () => setNow(formatClock());
     fmt();
     const id = setInterval(fmt, 1000);
     return () => clearInterval(id);
@@ -119,7 +116,7 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
           </span>
           Live
           <span className="font-mono-data text-foreground" suppressHydrationWarning>
-            {now || '--:--:-- UTC'}
+            {now || '--:--:--'}
           </span>
         </div>
         <ThemeMenu />

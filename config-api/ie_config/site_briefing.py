@@ -60,6 +60,10 @@ def bytes_to_mbps(value, window_s: int):
 
 
 def window_label(range_key: str, custom_min: int) -> str:
+    if range_key == "5m":
+        return "the past 5 minutes"
+    if range_key == "15m":
+        return "the past 15 minutes"
     if range_key == "1h":
         return "the past hour"
     if range_key == "6h":
@@ -68,7 +72,10 @@ def window_label(range_key: str, custom_min: int) -> str:
         return "the past 24 hours"
     if range_key == "7d":
         return "the past 7 days"
-    hours = max(1, int(custom_min or 60) // 60)
+    minutes = max(1, int(custom_min or 60))
+    if minutes < 60:
+        return "the past %d minutes" % minutes
+    hours = max(1, minutes // 60)
     if hours == 1:
         return "the past hour"
     return "the past %d hours" % hours

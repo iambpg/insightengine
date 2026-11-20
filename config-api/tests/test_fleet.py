@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from ie_config.app import create_app
 from ie_config.fleet import (
-    FleetService, classify_device, classify_health, form_factor_for, inventory_patch, is_form_key,
+    FleetService, _range_window, classify_device, classify_health, form_factor_for, inventory_patch, is_form_key,
     live_inventory, mask_serial,
 )
 from ie_config.settings import Settings
@@ -42,6 +42,13 @@ def _sample(host, ip, value, **extra):
     metric = {"hostname": host, "instance": ip}
     metric.update(extra)
     return {"metric": metric, "value": [NOW, str(value)]}
+
+
+def test_graph_ranges_include_five_and_fifteen_minutes():
+    assert _range_window("5m", 180) == (300, 10)
+    assert _range_window("15m", 180) == (900, 30)
+    assert _range_window("1h", 180) == (3600, 60)
+    assert _range_window("custom", 5) == (300, 10)
 
 
 def _fleet_vector(query: str):

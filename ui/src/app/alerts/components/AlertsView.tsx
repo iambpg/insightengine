@@ -17,6 +17,7 @@ import { readSession } from '@/lib/session';
 import { allowOperate } from '@/lib/settings/access';
 import { useKnownRole } from '@/lib/useSession';
 import type { AlertItem, AlertSeverity } from '@/lib/types';
+import { formatWhen } from '@/lib/clock';
 
 type SevFilter = AlertSeverity | 'all';
 type StatusFilter = 'open' | 'acknowledged' | 'all';
@@ -131,9 +132,7 @@ export default function AlertsView() {
     setBusy(true);
     try {
       await api.acknowledgeAlerts(ids);
-      const at = isMockMode()
-        ? '2026-10-27 17:25'
-        : new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+      const at = formatWhen(new Date());
       const by = isMockMode() ? 'Marit van der Berg' : readSession()?.email || 'you';
       setAlerts((cur) => cur?.map((a) => (ids.includes(a.id) ? { ...a, status: 'acknowledged', acknowledgedBy: by, acknowledgedAt: at } : a)) ?? cur);
       setSelected((s) => s.filter((x) => !ids.includes(x)));

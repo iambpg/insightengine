@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import RangeSelector from '@/components/charts/RangeSelector';
+import RangeSelector, { rangeWindowLabel } from '@/components/charts/RangeSelector';
 import { Skeleton } from '@/components/ui/Skeleton';
 import Icon from '@/components/ui/AppIcon';
 import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
@@ -72,7 +72,7 @@ export default function GraphPanel({ id, title, subtitle, unit, kind, series, yM
         ) : data === null ? (
           <Skeleton className="w-full" />
         ) : (
-          <ZoomableChart data={data} series={series} kind={kind} unit={unit} yMax={yMax} gradientId={`${id}-grad`} height={height} />
+          <ZoomableChart data={data} series={series} kind={kind} unit={unit} yMax={yMax} gradientId={`${id}-grad`} height={height} subject={subtitle} windowLabel={rangeWindowLabel(range, customMin)} />
         )}
       </div>
       {hasGap && (

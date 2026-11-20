@@ -329,6 +329,7 @@ export interface SeriesPoint {
   inBps: number | null;
   outBps: number | null;
   errors: number | null;
+  discards?: number | null;
   util: number | null;
 }
 

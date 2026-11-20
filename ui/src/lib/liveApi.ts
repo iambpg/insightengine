@@ -122,9 +122,11 @@ export async function getDeviceLogs(deviceId: string, hostname: string) {
   );
 }
 
-export async function getResources(range: RangeKey, deviceId: string | number) {
+export async function getResources(range: RangeKey, deviceId: string | number, customMin?: number) {
+  const params = new URLSearchParams({ range });
+  if (customMin !== undefined) params.set('custom_min', String(customMin));
   return request(
-    `${API}/devices/${encodeURIComponent(String(deviceId))}/metrics/resources?range=${encodeURIComponent(range)}`
+    `${API}/devices/${encodeURIComponent(String(deviceId))}/metrics/resources?${params}`
   );
 }
 

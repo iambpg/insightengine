@@ -18,7 +18,7 @@ export default function TopPortsPanel({ deviceId }: { deviceId: string }) {
   useEffect(() => {
     setData(null);
     const seed = isMockMode()
-      ? { '1h': 1, '6h': 2, '24h': 3, '7d': 4, custom: 5 }[range] + customMin
+      ? { '5m': 0, '15m': 1, '1h': 2, '6h': 3, '24h': 4, '7d': 5, custom: 6 }[range] + customMin
       : deviceId;
     api.getTopPorts(seed, range, customMin).then(setData);
   }, [range, customMin, deviceId]);
