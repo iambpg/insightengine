@@ -46,7 +46,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
-      <body className={plexSans.className}>{children}
+      <body className={plexSans.className}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('ie-theme');if(t==='night'||t==='ocean'||t==='sand')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
+          }}
+        />
+        {children}
 
         <script type="module" async src="https://static.rocket.new/rocket-web.js?_cfg=https%3A%2F%2Finsighteng5486back.builtwithrocket.new&_be=https%3A%2F%2Fappanalytics.rocket.new&_v=0.1.21" />
         <script type="module" defer src="https://static.rocket.new/rocket-shot.js?v=0.0.3" /></body>

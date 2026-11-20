@@ -279,9 +279,13 @@ describe('DeviceDetailView client navigation', () => {
     await user.click(within(screen.getByRole('tablist', { name: 'Device sections' })).getByRole('tab', { name: 'Interfaces' }));
     await user.click(screen.getByRole('cell', { name: 'GigabitEthernet1/0/1' }));
     const drawer = await screen.findByRole('dialog', { name: /GigabitEthernet1\/0\/1/ });
-    expect(drawer).toHaveClass('fixed', 'right-0');
+    expect(drawer).toHaveClass('fixed', 'inset-y-0', 'right-0', 'h-dvh');
     expect(screen.getByRole('button', { name: 'Close port panel' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'edge-42' })).toBeInTheDocument();
+    await user.click(screen.getByRole('heading', { level: 1, name: 'edge-42' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await user.click(screen.getByRole('cell', { name: 'GigabitEthernet1/0/1' }));
+    expect(await screen.findByRole('dialog', { name: /GigabitEthernet1\/0\/1/ })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close port panel' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
