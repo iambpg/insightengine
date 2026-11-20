@@ -10,6 +10,7 @@ import ToastHost from '@/components/ui/Toast';
 import { api } from '@/lib/apiClient';
 import { redirectForSetup } from '@/lib/setupRedirect';
 import { DEMO_ACCOUNTS, type DemoAccount } from '@/lib/mock/mockAuth';
+import ThemeMenu from '@/components/ThemeMenu';
 import BrandPanel from './BrandPanel';
 import CredentialsBox from './CredentialsBox';
 
@@ -91,7 +92,10 @@ export default function LoginScreenView() {
     <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
       <BrandPanel />
 
-      <main className="flex items-center justify-center bg-background px-5 py-10 sm:px-10">
+      <main className="relative flex items-center justify-center bg-background px-5 py-10 sm:px-10">
+        <div className="absolute right-4 top-4">
+          <ThemeMenu />
+        </div>
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <AppLogo size={40} />

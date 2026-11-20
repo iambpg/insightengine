@@ -91,6 +91,7 @@ export default function PortTable({ ports, selectedId, onSelect }: { ports: Port
               {pageRows.map((p) => (
                 <tr
                   key={p.id}
+                  data-port-id={p.id}
                   onClick={() => onSelect(p)}
                   className={`cursor-pointer border-b border-border transition-colors even:bg-muted/20 hover:bg-accent/10 ${selectedId === p.id ? 'bg-accent/20' : ''}`}
                 >

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Icon from '@/components/ui/AppIcon';
 import { api } from '@/lib/apiClient';
 import AppsLauncher from '@/components/AppsLauncher';
+import ThemeMenu from '@/components/ThemeMenu';
 import { reportLoadError } from '@/lib/loadError';
 import { displayInitials, displayName, readSession, subscribeSession } from '@/lib/session';
 import { allowSettings } from '@/lib/settings/access';
@@ -121,6 +122,7 @@ export default function Topbar({ onOpenMobile, onOpenSearch }: TopbarProps) {
             {now || '--:--:-- UTC'}
           </span>
         </div>
+        <ThemeMenu />
         <div className="relative">
           <button
             type="button"

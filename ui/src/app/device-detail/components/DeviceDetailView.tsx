@@ -154,28 +154,12 @@ export default function DeviceDetailView() {
     return stackMembers.find((member) => member.master)?.number ?? stackMembers[0].number;
   }, [stackMembers, stackPick]);
   const parentLink = device?.parent ?? null;
-  const [faceplateBottom, setFaceplateBottom] = useState(0);
 
   useEffect(() => {
     setSelected(null);
     setCable(null);
     setStackPick(null);
   }, [deviceKey]);
-
-  useEffect(() => {
-    if (!selected) return undefined;
-    const place = () => {
-      const panel = greyRef.current;
-      setFaceplateBottom(panel ? Math.max(0, Math.round(panel.getBoundingClientRect().bottom)) : 0);
-    };
-    place();
-    window.addEventListener('resize', place);
-    document.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      document.removeEventListener('scroll', place, true);
-    };
-  }, [selected, device?.id]);
 
   useEffect(() => {
     const plate = parentPortRef.current;
@@ -595,22 +579,33 @@ export default function DeviceDetailView() {
         </div>
       ) : null}
 
-      {selected ? <PortDrawer port={selected} deviceId={device?.id} top={faceplateBottom} onClose={() => setSelected(null)} /> : null}
+      {selected ? <PortDrawer port={selected} deviceId={device?.id} onClose={() => setSelected(null)} /> : null}
     </div>
   );
 }
 
-function PortDrawer({ port, deviceId, top, onClose }: { port: PortInfo; deviceId?: string; top: number; onClose: () => void }) {
+function PortDrawer({ port, deviceId, onClose }: { port: PortInfo; deviceId?: string; onClose: () => void }) {
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || panel.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-port-id]')) return;
+      onClose();
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('click', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('click', onClick);
+    };
   }, [onClose]);
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <div className="drawer-in fixed right-0 bottom-0 z-[90] flex w-full max-w-[420px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl" style={{ top }} role="dialog" aria-modal="false" aria-label={`Port ${port.name} details`}>
+    <div ref={panel} className="drawer-in fixed inset-y-0 right-0 z-[90] flex h-dvh w-full max-w-[420px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl" role="dialog" aria-modal="false" aria-label={`Port ${port.name} details`}>
       <PortSidePanel port={port} onClose={onClose} />
       <div className="px-4 pb-4">
         <PortThroughputGraph port={port} deviceId={deviceId} />

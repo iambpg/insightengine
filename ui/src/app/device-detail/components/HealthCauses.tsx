@@ -135,6 +135,7 @@ export default function HealthCauses({
                       {port && onSelectPort ? (
                         <button
                           type="button"
+                          data-port-id={port.id}
                           onClick={() => onSelectPort(port)}
                           className="mt-2 text-sm font-semibold text-primary hover:underline"
                         >
