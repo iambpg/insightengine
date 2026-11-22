@@ -1141,6 +1141,13 @@ def test_netbox_access_point_reads_radio_telemetry(stack):
             "platform": None,
         },
     ]
+    def refuse_catalog(*_args, **_kwargs):
+        raise AssertionError("the site list must not build the full radio catalog")
+
+    stack["fleet"].list_access_points = refuse_catalog
+    stack["fleet"].cache.drop("ap-snapshot")
+    sites = stack["client"].get("/api/v1/sites?page=1&page_size=50")
+    assert sites.status_code == 200, sites.text
     stack["fleet"].cache.put("ap-snapshot", {"degraded": False, "rows": [
         {
             "name": "ap-lobby", "serial": "FGL2345AB12", "wlc": "wlc-rot-01",
