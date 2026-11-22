@@ -51,7 +51,8 @@ def test_access_point_panel_says_not_supported():
     assert all(group["value"] == NOT_SUPPORTED for group in panel["groups"])
     assert panel["interfacesSupported"] is False
     assert panel["accessPoint"]["status"] == "up"
-    assert "Telegraf" in panel["accessPoint"]["note"]
+    assert "MDT" in panel["accessPoint"]["note"]
+    assert "SNMP" not in panel["accessPoint"]["note"]
 
 
 def test_compact_cisco_switches_omit_environment_groups():

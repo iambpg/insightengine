@@ -691,7 +691,7 @@ function healthPanelFor(form: string) {
       interfacesNote: 'not supported by this device',
       wlc: null,
       accessPoint: {
-        note: 'This AP has no SNMP agent. Status, radios, channel utilization, clients and uptime are collected by Telegraf from its wireless controller.',
+        note: "Status, radios, channel utilization, clients and uptime come from the wireless controller's MDT telemetry.",
         status: 'up',
         clients: 18,
         uptimeSeconds: 86400,
