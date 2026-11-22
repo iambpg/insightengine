@@ -1190,6 +1190,24 @@ def test_netbox_access_point_reads_radio_telemetry(stack):
     assert cafe_body["faceplate"].get("snmpMissing") is not True
     assert not any("SNMP" in item["name"] for item in cafe_body["checks"])
 
+    stack["fleet"].cache.drop("ap-snapshot")
+    stack["fleet"].cache.drop("detail:30")
+    seen = []
+
+    def prom(_client, query):
+        seen.append(query)
+        if "ie_wlc_ap_info" in query and "ap-lobby" in query:
+            return [{"metric": {"__name__": "ie_wlc_ap_info", "ap": "ap-lobby", "ap_name": "ap-lobby", "mac": "00:a2:89:10:11:44"}, "value": [NOW, "1"]}]
+        if "ie_wlc_radio_channel" in query and "00:a2:89:10:11:44" in query:
+            return [{"metric": {"__name__": "ie_wlc_radio_channel", "slot": "0", "ap": "00:a2:89:10:11:44", "mac": "00:a2:89:10:11:44"}, "value": [NOW, "11"]}]
+        return []
+
+    stack["fleet"]._prom = prom
+    again = stack["client"].get("/api/v1/devices/30")
+    assert again.status_code == 200, again.text
+    assert again.json()["healthPanel"]["accessPoint"]["radios"][0]["channel"] == 11
+    assert not any("ie_wlc_radio_channel{" in query and "ap=" not in query for query in seen)
+
 
 def _switch(id_, name, ip, position=None, master=None, vc=None):
     row = {

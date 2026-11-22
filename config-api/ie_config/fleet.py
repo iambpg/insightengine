@@ -2735,7 +2735,9 @@ class FleetService:
         selector = self._selector(device) if device else ""
         history = []
         history_error = ""
-        if selector:
+        # Access points have no interface table. Skip the ifTable range query.
+        ap_page = str(found.get("formFactor") or "") == "ceiling-ap"
+        if selector and not ap_page:
             try:
                 history = self._throughput(client, selector, self._now() - 3600, self._now(), 60, 3600)
             except UpstreamError:
@@ -3821,6 +3823,8 @@ class FleetService:
                             return []
                         raise ApiError(404, "not_found", "unknown device")
                     device = found
+                if device and device.get("formFactor") == "ceiling-ap":
+                    return []
                 selector = self._selector(device["_device"]) if device else ""
                 end = self._now()
                 start = end - window
@@ -4016,25 +4020,26 @@ class FleetService:
         wanted = (hostname or "").strip()
         if not wanted:
             return None
+        # A cached catalog is optional. Never build the full radio catalog
+        # for one access point: that is what left the device page blank.
         cached = self.cache.get("ap-snapshot")
-        if cached is None:
-            try:
-                self.list_access_points(page=1, page_size=1, q="", wlc="", site="", status="")
-            except Exception:
-                cached = None
-            cached = self.cache.get("ap-snapshot") or cached
         matched = None
-        for row in (cached or {}).get("rows") or []:
-            if _ap_row_hit(row, wanted, self._suffixes()):
-                matched = self._with_sibling_radios(row)
-                if matched.get("radios"):
-                    return {
-                        "status": matched.get("status") or "",
-                        "clients": matched.get("clients"),
-                        "uptimeSeconds": matched.get("uptimeSeconds"),
-                        "radios": list(matched.get("radios") or []),
-                    }
-                break
+        if isinstance(cached, dict):
+            for row in cached.get("rows") or []:
+                if _ap_row_hit(row, wanted, self._suffixes()):
+                    matched = self._with_sibling_radios(row)
+                    if matched.get("radios"):
+                        return {
+                            "status": matched.get("status") or "",
+                            "clients": matched.get("clients"),
+                            "uptimeSeconds": matched.get("uptimeSeconds"),
+                            "radios": list(matched.get("radios") or []),
+                        }
+                    break
+        if matched is None:
+            one = self.cache.get("ap-one:" + wanted.lower())
+            if isinstance(one, dict):
+                matched = one
         idents = []
         for value in (wanted, (matched or {}).get("name"), (matched or {}).get("mac")):
             text = str(value or "").strip()
@@ -4042,20 +4047,40 @@ class FleetService:
             for item in (text, short):
                 if item and item not in idents:
                     idents.append(item)
+
         def labeled(metric: str) -> str:
             parts = []
             for item in idents:
                 safe = prom_escape(item)
                 parts.append('%s{ap="%s"}' % (metric, safe))
                 parts.append('%s{ap_name="%s"}' % (metric, safe))
+                parts.append('%s{mac="%s"}' % (metric, safe))
             return " or ".join(parts)
+
+        if not any(canon_mac(item) for item in idents):
+            info = self._prom(client, _wlc_recent(
+                "%s or %s" % (labeled("ie_wlc_ap_info"), labeled("ie_wlc_ap_info_info"))
+            ))
+            for sample in info or []:
+                metric = sample.get("metric") or {}
+                mac = canon_mac(str(metric.get("mac") or metric.get("wtp_mac") or metric.get("ap") or ""))
+                if mac and mac not in idents:
+                    idents.append(mac)
+                    break
         safe = prom_escape(idents[0] if idents else wanted)
-        clients = self._prom(client, labeled("ie_wlc_ap_clients") + ' or sum(ie_wlc_radio_clients{ap_name="%s"})' % safe)
-        uptime = self._prom(client, 'ie_wlc_ap_uptime_centiseconds{ap_name="%s"} or ie_wlc_ap_uptime_centiseconds{ap="%s"}' % (safe, safe))
+        clients = self._prom(client, _wlc_recent(
+            labeled("ie_wlc_ap_clients") + ' or sum(ie_wlc_radio_clients{ap_name="%s"})' % safe
+        ))
+        uptime = self._prom(client, _wlc_recent(
+            'ie_wlc_ap_uptime_centiseconds{ap_name="%s"} or ie_wlc_ap_uptime_centiseconds{ap="%s"}' % (safe, safe)
+        ))
         radios = self._join_ap_radios(
-            self._prom(client, labeled("ie_wlc_radio_channel")),
-            self._prom(client, labeled("ie_wlc_radio_channel_util")),
-            self._prom(client, labeled("ie_wlc_radio_clients")),
+            self._prom(client, _wlc_recent(labeled("ie_wlc_radio_channel"))),
+            self._prom(client, _wlc_recent(labeled("ie_wlc_radio_channel_util"))),
+            self._prom(client, _wlc_recent(labeled("ie_wlc_radio_clients"))),
+            self._prom(client, _wlc_recent(labeled("ie_wlc_client_radio_snr_avg"))),
+            self._prom(client, _wlc_recent(labeled("ie_wlc_client_radio_rssi_avg"))),
+            self._prom(client, _wlc_recent(labeled("ie_wlc_radio_oper_up"))),
         )
         seconds = _first_value(uptime)
         if seconds is not None:
@@ -4069,26 +4094,34 @@ class FleetService:
             "radios": radios or list(base.get("radios") or []),
         }
 
-    def _join_ap_radios(self, channels, utils, clients) -> list[dict]:
+    def _join_ap_radios(self, channels, utils, clients, snr=None, rssi=None, oper=None) -> list[dict]:
         by_slot: dict[str, dict] = {}
 
         def slot_of(sample: dict) -> str:
             metric = sample.get("metric") or {}
             return str(metric.get("slot") or metric.get("radio") or metric.get("index") or "")
 
+        def ensure(sample: dict) -> dict:
+            key = slot_of(sample)
+            return by_slot.setdefault(key, {
+                "slot": key, "channel": None, "utilization": None, "clients": None,
+                "snrAvg": None, "rssiAvg": None, "operUp": None,
+            })
+
         for sample in channels or []:
-            key = slot_of(sample)
-            by_slot.setdefault(key, {"slot": key, "channel": None, "utilization": None, "clients": None})
-            by_slot[key]["channel"] = _sample_value(sample)
+            ensure(sample)["channel"] = _sample_value(sample)
         for sample in utils or []:
-            key = slot_of(sample)
-            by_slot.setdefault(key, {"slot": key, "channel": None, "utilization": None, "clients": None})
             value = _sample_value(sample)
-            by_slot[key]["utilization"] = None if value is None else round(float(value) / 100.0, 4)
+            ensure(sample)["utilization"] = None if value is None else round(float(value) / 100.0, 4)
         for sample in clients or []:
-            key = slot_of(sample)
-            by_slot.setdefault(key, {"slot": key, "channel": None, "utilization": None, "clients": None})
-            by_slot[key]["clients"] = _sample_value(sample)
+            ensure(sample)["clients"] = _sample_value(sample)
+        for sample in snr or []:
+            ensure(sample)["snrAvg"] = _sample_value(sample)
+        for sample in rssi or []:
+            ensure(sample)["rssiAvg"] = _sample_value(sample)
+        for sample in oper or []:
+            value = _sample_value(sample)
+            ensure(sample)["operUp"] = None if value is None else bool(float(value) >= 1)
         return [by_slot[key] for key in sorted(by_slot)]
 
     def list_access_points(self, *, page: int, page_size: int, q: str, wlc: str, site: str, status: str) -> dict:
