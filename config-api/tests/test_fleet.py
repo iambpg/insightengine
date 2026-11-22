@@ -1116,6 +1116,57 @@ def test_ap_online_from_info_without_oper_metric(stack):
     assert radio["interference"] == 8
 
 
+def test_netbox_access_point_reads_radio_telemetry(stack):
+    """A NetBox AP uses the controller telemetry already in Prometheus.
+
+    The role slug is often access-points, and the device name is not always
+    the telemetry name. Radios still come from the WLC sample, not from SSH.
+    """
+    _auth(stack)
+    stack["up"].devices = [
+        {
+            "id": 30, "name": "ap-lobby", "serial": "FGL2345AB12", "last_updated": "2026-10-27T14:00:00Z",
+            "role": {"name": "Access Points", "slug": "access-points"},
+            "site": {"id": 1, "name": "Rotterdam", "slug": "rotterdam"},
+            "device_type": {"model": "C9120AXI-E", "manufacturer": {"name": "Cisco"}},
+            "primary_ip4": {"address": "10.20.30.44/32"},
+            "platform": {"name": "IOS-XE"},
+        },
+        {
+            "id": 31, "name": "closet-ap", "serial": "FGL998877665", "last_updated": "2026-10-27T14:00:00Z",
+            "role": {"name": "Device", "slug": "device"},
+            "site": {"id": 1, "name": "Rotterdam", "slug": "rotterdam"},
+            "device_type": {"model": "CW9166I-E", "manufacturer": {"name": "Cisco"}},
+            "primary_ip4": {"address": "10.20.30.45/32"},
+            "platform": None,
+        },
+    ]
+    stack["fleet"].cache.put("ap-snapshot", {"degraded": False, "rows": [
+        {
+            "name": "ap-lobby", "serial": "FGL2345AB12", "wlc": "wlc-rot-01",
+            "mac": "00:a2:89:10:11:44", "ip": "10.20.30.44", "status": "up", "clients": 4,
+            "radios": [
+                {"slot": "0", "channel": 6, "snrAvg": 28, "rssiAvg": -62, "clients": 2, "operUp": True},
+                {"slot": "1", "channel": 36, "snrAvg": 31, "rssiAvg": -58, "clients": 2, "operUp": True},
+            ],
+        },
+        {
+            "name": "ap-cafe", "serial": "FGL998877665", "wlc": "wlc-rot-01",
+            "mac": "00:b4:c1:20:30:40", "status": "up",
+            "radios": [{"slot": "0", "channel": 1, "snrAvg": 20, "rssiAvg": -67, "clients": 1, "operUp": True}],
+        },
+    ]})
+    lobby = stack["client"].get("/api/v1/devices/30")
+    assert lobby.status_code == 200, lobby.text
+    body = lobby.json()
+    assert body["faceplate"]["form_factor"] == "ceiling-ap"
+    assert body["healthPanel"]["profile"] == "ap"
+    assert [item["channel"] for item in body["healthPanel"]["accessPoint"]["radios"]] == [6, 36]
+    cafe = stack["client"].get("/api/v1/devices/31")
+    assert cafe.status_code == 200, cafe.text
+    assert cafe.json()["healthPanel"]["accessPoint"]["radios"][0]["channel"] == 1
+
+
 def _switch(id_, name, ip, position=None, master=None, vc=None):
     row = {
         "id": id_, "name": name, "serial": "SER%s" % id_, "last_updated": "2026-10-27T14:00:00Z",

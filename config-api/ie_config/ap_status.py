@@ -102,13 +102,16 @@ def ap_identity(metric: dict) -> tuple[str, str, str, str]:
     """
     if not isinstance(metric, dict):
         return "", "", "", ""
-    raw_name = str(
-        metric.get("ap")
-        or metric.get("ap_name")
-        or metric.get("bsnAPName")
-        or metric.get("cLApName")
-        or ""
-    ).strip()
+    # `ap` is often the radio MAC. ap_name is the hostname the controller uses.
+    # A hostname wins so the radio sample joins the access-point row.
+    raw_name = ""
+    for item in (metric.get("ap_name"), metric.get("bsnAPName"), metric.get("cLApName"), metric.get("ap")):
+        text = str(item or "").strip()
+        if text and not looks_like_mac(text):
+            raw_name = text
+            break
+    if not raw_name:
+        raw_name = str(metric.get("ap") or metric.get("ap_name") or metric.get("bsnAPName") or metric.get("cLApName") or "").strip()
     raw_mac = str(
         metric.get("mac")
         or metric.get("wtp_mac")
@@ -123,7 +126,7 @@ def ap_identity(metric: dict) -> tuple[str, str, str, str]:
         index = str(metric.get("index") or "")
         if canon_mac(index):
             raw_mac = index
-    mac = canon_mac(raw_mac) or canon_mac(raw_name)
+    mac = canon_mac(raw_mac) or canon_mac(str(metric.get("ap") or "")) or canon_mac(raw_name)
     name = "" if looks_like_mac(raw_name) else raw_name
     wlc = str(metric.get("wlc") or metric.get("source") or metric.get("agent_host") or "").strip()
     site = str(metric.get("site") or "").strip()

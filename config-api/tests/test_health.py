@@ -39,6 +39,9 @@ def test_profiles_cover_the_supported_device_types():
     assert classify_profile("wireless-controller", "aireos", "Cisco", "AIR-CT8540") == "aireos"
     assert classify_profile("wireless-controller", "ios-xe", "Cisco", "C9800-80") == "iosxe-wlc"
     assert classify_profile("access-point", "ios-xe", "Cisco", "C9120AXI") == "ap"
+    assert classify_profile("access-points", "ios-xe", "Cisco", "C9120AXI-E") == "ap"
+    assert classify_profile("access_points", "", "Cisco", "CW9166I-E") == "ap"
+    assert classify_profile("device", "", "Cisco", "C9120AXI") == "ap"
     assert classify_profile("sdwan", "fortigate", "Fortinet", "FG-60F") == "fortigate"
     assert classify_profile("core-firewall", "pan-os", "Palo Alto", "PA-820") == "paloalto"
 
