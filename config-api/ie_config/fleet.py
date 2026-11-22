@@ -2006,12 +2006,13 @@ class FleetService:
             if alert.get("status") != "open":
                 continue
             by_host.setdefault(str(alert.get("deviceHostname") or "").lower(), []).append(alert)
-        ap_index = None
+        # Use a snapshot the access-point page already built. Do not query
+        # the full radio catalog here: that is ~160k series and it holds the
+        # site list, the device list and the summary until it finishes.
+        ap_index = self._cached_ap_rows() if any(row.get("formFactor") == "ceiling-ap" for row in built) else None
         for row in built:
-            if row.get("formFactor") != "ceiling-ap":
+            if row.get("formFactor") != "ceiling-ap" or not ap_index:
                 continue
-            if ap_index is None:
-                ap_index = self._ap_rows()
             found = None
             for key in (row.get("hostname"), (row.get("_device") or {}).get("serial"), row.get("mgmtIp")):
                 text = str(key or "").strip()
@@ -2392,6 +2393,12 @@ class FleetService:
             if _ap_row_hit(row, text, suffixes):
                 return row
         return None
+
+    def _cached_ap_rows(self) -> list:
+        cached = self.cache.get("ap-snapshot")
+        if not isinstance(cached, dict):
+            return []
+        return list(cached.get("rows") or [])
 
     def _ap_rows(self) -> list:
         cached = self.cache.get("ap-snapshot")
