@@ -1,0 +1,8 @@
+Number of APs.................................... 2
+
+Global AP User Name.............................. Not Configured
+
+AP Name             Slots  AP Model              Ethernet MAC       Location          Country  IP Address       Clients
+------------------  -----  --------------------  -----------------  ----------------  -------  ---------------  -------
+AP-CAFE-3           2      AIR-AP2802I-E-K9      00:b4:c1:20:30:40  Cafe              ZA       10.20.30.45      7
+AP-LOBBY-12         2      AIR-CAP3702I-E-K9     00:a2:89:10:11:44  Floor 2           ZA       10.20.30.44      11

@@ -74,12 +74,17 @@ _PANOS = (
     ("Layer 2 and 3", "lldp", "LLDP neighbors", "show lldp neighbors all"),
     ("System", "clock", "Clock", "show clock"),
 )
+_AIREOS = (
+    ("System", "sysinfo", "System info", "show sysinfo"),
+    ("System", "time", "Clock", "show time"),
+)
 
 PLATFORMS = {
     "ios": {"label": "Cisco IOS", "prep": ("terminal length 0",), "commands": _IOS},
     "nxos": {"label": "Cisco NX-OS", "prep": ("terminal length 0",), "commands": _NXOS},
     "fortigate": {"label": "FortiGate", "prep": (), "commands": _FORTIGATE},
     "panos": {"label": "PAN-OS", "prep": ("set cli pager off",), "commands": _PANOS},
+    "aireos": {"label": "Cisco AireOS", "prep": ("config paging disable",), "commands": _AIREOS},
 }
 
 
@@ -92,6 +97,9 @@ def platform_for(platform_name: str, manufacturer: str) -> str:
         return "panos"
     if any(word in blob for word in ("nx-os", "nxos", "nexus")):
         return "nxos"
+    # "aireos" contains "ios", so this has to be decided before the IOS rule.
+    if any(word in blob for word in ("aireos", "air-ct", "cisco controller")):
+        return "aireos"
     if any(word in blob for word in ("ios", "catalyst", "cisco")):
         return "ios"
     return ""
@@ -117,7 +125,7 @@ def resolve_command(platform: str, text: str) -> str:
         raise ApiError(
             409,
             "unsupported_platform",
-            "This device platform has no allowlisted CLI. Supported platforms are Cisco IOS, NX-OS, FortiGate and PAN-OS.",
+            "This device platform has no allowlisted CLI. Supported platforms are Cisco IOS, NX-OS, AireOS, FortiGate and PAN-OS.",
         )
     wanted = normalize_command(text).lower()
     for _group, _cid, _label, command in spec["commands"]:
@@ -217,7 +225,8 @@ def _host_ok(ip: str) -> bool:
 class ParamikoRunner:
     """One allowlisted command over SSH. Prep commands are fixed per platform."""
 
-    def run(self, host: str, username: str, password: str, prep: tuple, command: str, timeout: float) -> str:
+    def run(self, host: str, username: str, password: str, prep: tuple, command: str, timeout: float, aireos_login: bool = False, limit: int | None = None) -> str:
+        cap = _OUTPUT_LIMIT if not limit else int(limit)
         try:
             import paramiko
         except ImportError:
@@ -238,35 +247,71 @@ class ParamikoRunner:
             )
             channel = client.invoke_shell(width=200, height=80)
             channel.settimeout(0.4)
-            _drain(channel, timeout)
+            if aireos_login:
+                _aireos_sign_in(channel, username, password, timeout)
+            else:
+                _drain(channel, timeout, limit=cap)
             for item in prep:
                 channel.send(item + "\n")
-                _drain(channel, timeout)
+                _drain(channel, timeout, limit=cap)
             channel.send(command + "\n")
-            output = _drain(channel, timeout)
+            output = _drain(channel, timeout, limit=cap)
         except ApiError:
             raise
-        except Exception:
+        except Exception as exc:
             # paramiko exceptions can echo the username. The password must not be added.
+            if aireos_login and "Authentication" in type(exc).__name__:
+                raise ApiError(502, "wlc_auth_failed", "SSH authentication to the wireless controller failed. Check the saved username and password.")
+            if aireos_login:
+                raise ApiError(502, "wlc_unreachable", "SSH to the wireless controller failed. TCP 22 timed out or was refused.")
             raise ApiError(502, "ssh_failed", "SSH to this device failed. Check the address, the credentials and that TCP 22 is reachable.")
         finally:
             client.close()
         if "(config" in output:
             raise ApiError(409, "config_mode", "The device entered configuration mode. The session was closed and no further command was sent.")
-        return output[:_OUTPUT_LIMIT]
+        return output[:cap]
 
 
-def _drain(channel, timeout: float) -> str:
+def aireos_login_phase(text: str) -> str:
+    """What an AireOS console is waiting for: username, password, ready, or wait."""
+    lines = [line.strip() for line in (text or "").replace("\r", "").splitlines() if line.strip()]
+    if not lines:
+        return "wait"
+    last = lines[-1]
+    low = last.lower()
+    if low.startswith("user:"):
+        return "username"
+    if low.startswith("password:"):
+        return "password"
+    if last.endswith(">") or last.endswith("#"):
+        return "ready"
+    return "wait"
+
+
+def _aireos_sign_in(channel, username: str, password: str, timeout: float) -> None:
+    """Answer the controller's own User/Password prompts. SSH auth has already succeeded."""
+    seen = _drain(channel, timeout, login_prompts=True)
+    phase = aireos_login_phase(seen)
+    if phase == "username":
+        channel.send(username + "\n")
+        seen = _drain(channel, timeout, login_prompts=True)
+        phase = aireos_login_phase(seen)
+    if phase == "password":
+        channel.send(password + "\n")
+        _drain(channel, timeout, login_prompts=True)
+
+
+def _drain(channel, timeout: float, login_prompts: bool = False, limit: int = _OUTPUT_LIMIT) -> str:
     deadline = time.monotonic() + timeout
     chunks = []
     size = 0
     quiet = 0
-    while time.monotonic() < deadline and size < _OUTPUT_LIMIT:
+    while time.monotonic() < deadline and size < limit:
         try:
             data = channel.recv(4096)
         except Exception:
             quiet += 1
-            if chunks and quiet >= 2 and _prompt_seen(chunks):
+            if chunks and quiet >= 2 and (_prompt_seen(chunks) or (login_prompts and aireos_login_phase("".join(chunks)) != "wait")):
                 break
             continue
         if not data:
@@ -275,9 +320,11 @@ def _drain(channel, timeout: float) -> str:
         text = data.decode("utf-8", "replace").replace("\x00", "")
         chunks.append(text)
         size += len(text)
+        if login_prompts and aireos_login_phase("".join(chunks)) != "wait":
+            break
         if _prompt_seen(chunks):
             break
-    return "".join(chunks)[:_OUTPUT_LIMIT]
+    return "".join(chunks)[:limit]
 
 
 def _prompt_seen(chunks: list[str]) -> bool:
@@ -327,7 +374,7 @@ def mount_device_cli(app, user_of, record, runner=None) -> None:
         }
         if not platform:
             body["message"] = (
-                "This device platform has no allowlisted CLI. Supported platforms are Cisco IOS, NX-OS, FortiGate and PAN-OS."
+                "This device platform has no allowlisted CLI. Supported platforms are Cisco IOS, NX-OS, AireOS, FortiGate and PAN-OS."
             )
         elif not configured:
             body["message"] = (

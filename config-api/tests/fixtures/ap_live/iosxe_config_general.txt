@@ -1,0 +1,50 @@
+Cisco AP Name   : AP-LOBBY-12
+=================================================
+
+Cisco AP Identifier                             : 14
+Cisco AP Name                                   : AP-LOBBY-12
+Country Code                                    : ZA
+Regulatory Domain Allowed by Country            : 802.11bg:-E 802.11a:-E
+AP Country Code                                 : ZA
+AP Regulatory Domain                            : -E
+MAC Address                                     : 00a2.8910.1144
+IP Address Configuration                        : DHCP
+IP Address                                      : 10.20.30.44
+IP Netmask                                      : 255.255.255.0
+Gateway IP Address                              : 10.20.30.1
+Cisco AP Location                               : Floor 2
+Site Tag Name                                   : site-rotterdam
+Policy Tag Name                                 : policy-corp
+RF Tag Name                                     : rf-default
+AP Mode                                         : Local
+AP Model                                        : C9120AXI-E
+IOS Version                                     : 17.9.4.27
+Boot Version                                    : 1.1.2.4
+AP Serial Number                                : FGL2345AB12
+Administrative State                            : Enabled
+Operation State                                 : Registered
+AP Up Time                                      : 3 days 4 hours 12 minutes 8 seconds
+AP Join Date and Time                           : 11/18/2026 08:14:02
+Primary Cisco Controller Name                   : wlc-rot-01
+Primary Cisco Controller IP Address             : 10.20.1.10
+Secondary Cisco Controller Name                 : wlc-rot-02
+Secondary Cisco Controller IP Address           : 10.20.1.11
+Power Type/Mode                                 : PoE/Full Power
+Number Of Slots                                 : 2
+unexpected line without a separator !!!
+
+Radio Slot 0
+  Radio Type                                    : 802.11ax - 2.4 GHz
+  Radio Mode                                    : Serving
+  Administrative State                          : Enabled
+  Operation State                               : Up
+  Current Channel                               : 6
+  Current Tx Power Level                        : 3
+  Tx Power                                      : * 2/8 (15 dBm)
+
+Radio Slot 1
+  Radio Type                                    : 802.11ax - 5 GHz
+  Administrative State                          : Enabled
+  Operation State                               : Up
+  Current Channel                               : 36
+  Tx Power                                      : * 1/8 (17 dBm)

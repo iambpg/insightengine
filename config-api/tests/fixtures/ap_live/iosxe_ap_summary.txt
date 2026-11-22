@@ -1,0 +1,6 @@
+Number of APs: 2
+
+AP Name                         Slots  AP Model              Ethernet MAC    Radio MAC       Location        Country  IP Address      State
+-------------------------------------------------------------------------------------------------------------------------------------------
+AP-LOBBY-12                     2      C9120AXI-E            00a2.8910.1144  00a2.8910.1150  Floor 2         ZA       10.20.30.44     Registered
+AP-CAFE-3                       2      C9115AXI-E            00a2.8910.2201  00a2.8910.2210  Cafe            ZA       10.20.30.45     Registered

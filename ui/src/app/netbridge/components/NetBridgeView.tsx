@@ -7,8 +7,7 @@ import Modal from '@/components/ui/Modal';
 import Link from 'next/link';
 import AddApDialog, { type ApDraft } from '@/components/AddApDialog';
 import { api } from '@/lib/apiClient';
-import { devicePath } from '@/lib/apiMode';
-import { accessPointId } from '@/lib/deviceHealthPath';
+import { accessPointId, accessPointPagePath } from '@/lib/deviceHealthPath';
 import { isApiError } from '@/lib/apiError';
 import NotInNetBoxView from '@/app/not-in-net-box/components/NotInNetBoxView';
 import DeviceParentsView from '@/app/device-parents/components/DeviceParentsView';
@@ -409,7 +408,7 @@ function AccessPoints({ canWrite }: { canWrite: boolean }) {
                     <input type="checkbox" aria-label={`Select ${row.name}`} checked={on} disabled={Boolean(row.inNetbox)} onChange={() => setSelected(on ? selected.filter((item) => item !== id) : [...selected, id])} />
                   </td>
                   <td className="px-3 py-2">
-                    <Link href={devicePath(accessPointId(String(row.netboxId || ''), String(row.name || '')), 'ceiling-ap')} className="font-medium text-primary hover:underline">{String(row.name || '')}</Link>
+                    <Link href={accessPointPagePath(accessPointId(String(row.netboxId || ''), String(row.name || '')), String(row.wlc || ''))} className="font-medium text-primary hover:underline">{String(row.name || '')}</Link>
                     {row.inNetbox ? <span className="ml-2 text-xs text-muted-foreground">In NetBox</span> : canWrite ? (
                       <button type="button" className="ml-2 text-xs font-semibold" onClick={() => setAdding([{
                         name: String(row.name || ''),
