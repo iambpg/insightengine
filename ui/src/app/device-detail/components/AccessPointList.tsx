@@ -6,8 +6,7 @@ import { HealthBadge } from '@/components/ui/Badge';
 import CollapsiblePanel from '@/components/ui/CollapsiblePanel';
 import AddApDialog, { type ApDraft } from '@/components/AddApDialog';
 import { api } from '@/lib/apiClient';
-import { accessPointId, deviceHealthPath } from '@/lib/deviceHealthPath';
-import { devicePath } from '@/lib/apiMode';
+import { accessPointId, accessPointPagePath, deviceHealthPath } from '@/lib/deviceHealthPath';
 import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { allowOperate } from '@/lib/settings/access';
 import { useKnownRole } from '@/lib/useSession';
@@ -114,7 +113,7 @@ export default function AccessPointList({ wlc }: { wlc: string }) {
             {rows.map((row: AccessPointRow) => {
               const health = apHealth(row.status);
               const identity = row.mac || row.name;
-              const href = devicePath(accessPointId(row.netboxId, identity), 'ceiling-ap');
+              const href = accessPointPagePath(accessPointId(row.netboxId, identity), row.wlc);
               const pickedOn = picked.includes(identity);
               return (
                 <tr key={`${row.wlc}-${identity}`} className="border-b border-border/70">

@@ -82,6 +82,66 @@ export async function approveHierarchy(body: {
   );
 }
 
+export interface ApLiveRadio {
+  slot: string;
+  admin: string | null;
+  oper: string | null;
+  channel: string | null;
+  txPower: string | null;
+}
+
+export interface ApLiveInfo {
+  name: string | null;
+  mac: string | null;
+  ip: string | null;
+  model: string | null;
+  serial: string | null;
+  ios: string | null;
+  mode: string | null;
+  adminState: string | null;
+  operState: string | null;
+  uptime: string | null;
+  joinTime: string | null;
+  location: string | null;
+  country: string | null;
+  primaryController: string | null;
+  secondaryController: string | null;
+  siteTag: string | null;
+  policyTag: string | null;
+  rfTag: string | null;
+  apGroup: string | null;
+  flexGroup: string | null;
+  power: string | null;
+  cdpSwitch: string | null;
+  cdpPort: string | null;
+  radios: ApLiveRadio[];
+}
+
+export interface ApLiveAttempt {
+  wlc: string;
+  result: string;
+  code: string;
+  message: string;
+}
+
+export interface ApLiveResponse {
+  accessPoint: ApLiveInfo;
+  wlc: { id: string; name: string; ip: string; platform: string };
+  resolvedBy: 'metrics' | 'netbox' | 'search' | string;
+  fetchedAt: string;
+  cached: boolean;
+  attempts: ApLiveAttempt[];
+  raw?: string;
+}
+
+export async function getAccessPointLive(key: string, wlc = '', refresh = false): Promise<ApLiveResponse> {
+  const params = new URLSearchParams();
+  params.set('key', key);
+  if (wlc) params.set('wlc', wlc);
+  if (refresh) params.set('refresh', '1');
+  return request(`${API}/access-points/live?${params.toString()}`);
+}
+
 export async function getAccessPointDetail(wlc: string, name: string) {
   const params = new URLSearchParams();
   if (wlc) params.set('wlc', wlc);

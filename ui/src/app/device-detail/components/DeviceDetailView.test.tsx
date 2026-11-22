@@ -33,6 +33,14 @@ vi.mock('@/lib/apiClient', () => ({
     getTelemetryConfig: vi.fn(),
     getIpSlaConfig: vi.fn(),
     listAccessPoints: vi.fn(),
+    getAccessPointLive: vi.fn(async () => ({
+      accessPoint: { name: 'ap-42', radios: [] },
+      wlc: { id: '1', name: 'wlc-9800', ip: '10.0.0.8', platform: 'iosxe' },
+      resolvedBy: 'metrics',
+      fetchedAt: '2026-11-22T10:15:04.000Z',
+      cached: false,
+      attempts: [],
+    })),
   },
 }));
 

@@ -2104,9 +2104,16 @@ class FleetService:
                     # Form keys are faceplate samples, not devices. Do not pick a
                     # representative switch or firewall for them.
                     if not is_form_key(key):
-                        snap = netdisco_find(self._netdisco_url(), key, self._suffixes())
-                        if snap is not None:
-                            detail = _detail_from_netdisco(snap, self._now_dt())
+                        lookup = key[3:].strip() if key.lower().startswith("ap:") else key
+                        if lookup:
+                            snap = netdisco_find(self._netdisco_url(), lookup, self._suffixes())
+                            if snap is not None:
+                                detail = _detail_from_netdisco(snap, self._now_dt())
+                                return self._with_degraded(detail, degraded)
+                    if key.lower().startswith("ap:"):
+                        label = key[3:].strip()
+                        if label:
+                            detail = _unknown_ap_detail(label, self._now_dt())
                             return self._with_degraded(detail, degraded)
                     raise ApiError(404, "not_found", "unknown device")
                 try:
@@ -2302,6 +2309,21 @@ class FleetService:
             values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
             same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
             if low in values or same_mac:
+                return row
+        one = self.cache.get("ap-one:" + low)
+        if isinstance(one, dict):
+            return one
+        try:
+            with self._session() as client:
+                snap = self._ap_snapshot(client, only=text)
+        except Exception:
+            log.warning("access point lookup failed for %s", text)
+            return None
+        for row in list((snap or {}).get("rows") or []):
+            values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
+            same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
+            if low in values or same_mac:
+                self.cache.put("ap-one:" + low, row, ttl=60)
                 return row
         return None
 
@@ -4769,6 +4791,31 @@ def _join_ports(oper, admin, speed, inbound, outbound, errors, discards_in=None,
     return ports
 
 
+def _unknown_ap_detail(name: str, now: datetime) -> dict:
+    """AP page for a name that telemetry and NetBox have not seen yet."""
+    detail = _empty_detail("ceiling-ap", now)
+    detail["id"] = "ap:%s" % name
+    detail["hostname"] = name
+    face = detail.get("faceplate") if isinstance(detail.get("faceplate"), dict) else {}
+    face["hostname"] = name
+    face["apState"] = "unknown"
+    detail["faceplate"] = face
+    detail["inNetbox"] = False
+    detail["status"] = "unknown"
+    detail["neighbors"] = []
+    detail["neighborNote"] = ""
+    detail["interfaces"] = []
+    detail["addresses"] = []
+    detail["history"] = []
+    detail["healthPanel"] = build_health_panel("ap")
+    detail["sources"] = [
+        {"name": "netbox", "ok": False, "detail": "Not in NetBox"},
+        {"name": "prometheus", "ok": False, "detail": "Not in Prometheus. Telemetry from this AP is not arriving."},
+        {"name": "alertmanager", "ok": False, "detail": ""},
+    ]
+    return detail
+
+
 def _minimal_detail(row: dict, now: datetime) -> dict:
     return {
         "id": row.get("id") or "",
@@ -5704,6 +5751,18 @@ def events_from_range(result: list[dict], what: str) -> list[dict]:
     return events
 
 
+def _audit_ap_live(request: Request, user, result: str, detail: str) -> None:
+    audit = getattr(request.app.state, "audit", None)
+    sf = getattr(request.app.state, "sf", None)
+    if audit is None or sf is None or user is None:
+        return
+    from .auth import client_ip
+    try:
+        audit(sf, user, "ap-live", client_ip(request), result, "device-cli", "", "", (detail or "")[:500])
+    except Exception:
+        log.warning("access point live audit failed")
+
+
 def mount_fleet(app, user_of) -> None:
     def fleet() -> FleetService:
         service = getattr(app.state, "fleet", None)
@@ -5725,6 +5784,29 @@ def mount_fleet(app, user_of) -> None:
     def summary(request: Request):
         reader(request)
         return fleet().summary()
+
+    @app.get("/api/v1/access-points/live")
+    def access_point_live(request: Request):
+        user = reader(request)
+        params = request.query_params
+        key = (params.get("key") or "")[:200]
+        hint = (params.get("wlc") or "")[:200]
+        refresh = (params.get("refresh") or "").lower() in ("1", "true", "yes")
+        include_raw = False
+        try:
+            from .auth import can_operate
+            include_raw = can_operate(getattr(user, "role", ""))
+        except Exception:
+            include_raw = False
+        from .ap_live import live_access_point
+        try:
+            body = live_access_point(fleet(), key, hint=hint, refresh=refresh, include_raw=include_raw)
+        except ApiError as exc:
+            _audit_ap_live(request, user, "failed", exc.code)
+            raise
+        wlc_name = ((body.get("wlc") or {}).get("name") or "")
+        _audit_ap_live(request, user, "ok", ("%s %s" % (key, wlc_name)).strip())
+        return body
 
     @app.get("/api/v1/access-points/detail")
     def access_point_detail(request: Request):
