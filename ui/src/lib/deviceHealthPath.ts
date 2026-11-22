@@ -15,12 +15,3 @@ export function accessPointId(netboxId: string | undefined, name: string): strin
   if (id) return id;
   return `ap:${name}`;
 }
-
-/** Device page for an access point, with the owning controller as a hint. */
-export function accessPointPagePath(id: string, wlc?: string): string {
-  const base = devicePath(id, 'ceiling-ap');
-  const name = (wlc || '').trim();
-  if (!name) return base;
-  const join = base.includes('?') ? '&' : '?';
-  return `${base}${join}wlc=${encodeURIComponent(name)}`;
-}
