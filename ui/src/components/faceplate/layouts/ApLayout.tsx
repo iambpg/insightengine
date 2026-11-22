@@ -43,7 +43,15 @@ export default function ApLayout({ ports, radios, apState, uid, selectedId, onHo
           className={apState === 'warning' ? 'led-warn-blink' : apState === 'fault' ? 'led-fault-blink' : undefined}
         />
         <circle cx={75} cy={73} r={22} fill="var(--secondary)" stroke="var(--input)" />
-        <circle cx={75} cy={73} r={8} fill="var(--input)" />
+        {/* Status and radio lamps sit on the face, the way a ceiling AP shows them. */}
+        <g aria-label="Access point LEDs">
+          <circle cx={68} cy={73} r={14} fill={c.fill} opacity={0.45} filter={`url(#${uid}-glow-big)`} />
+          <circle cx={68} cy={73} r={7} fill={c.fill} stroke="var(--metal-hi)" strokeWidth={0.8} className={apState === 'warning' ? 'led-warn-blink' : apState === 'down' || apState === 'fault' ? 'led-fault-blink' : undefined} />
+          <text x={68} y={96} textAnchor="middle" fontSize={7} fill="var(--muted-foreground)" fontFamily="var(--font-mono)">STATUS</text>
+          <circle cx={96} cy={73} r={10} fill={radios.some((radio) => radio.state === 'up') ? 'var(--success)' : 'var(--down)'} opacity={0.4} filter={`url(#${uid}-glow-big)`} />
+          <circle cx={96} cy={73} r={4.5} fill={radios.some((radio) => radio.state === 'up') ? 'var(--success)' : 'var(--down)'} stroke="var(--metal-hi)" strokeWidth={0.6} />
+          <text x={96} y={96} textAnchor="middle" fontSize={7} fill="var(--muted-foreground)" fontFamily="var(--font-mono)">RADIO</text>
+        </g>
         <text x={75} y={156} textAnchor="middle" fontSize={6.4} fill={c.fill} fontFamily="var(--font-mono)">
           {apState === 'up' ? '● Up' : apState === 'warning' ? '▲ Warning' : apState === 'fault' ? '✕ Fault' : apState === 'disabled' ? '▬ Disabled' : apState === 'unknown' ? '? Unknown' : '○ Offline'}
         </text>
@@ -56,8 +64,9 @@ export default function ApLayout({ ports, radios, apState, uid, selectedId, onHo
         <g filter={`url(#${uid}-shadow)`}>
           <rect x={10} y={22} width={260} height={64} rx={9} fill={`url(#${uid}-apbody)`} stroke="var(--input)" />
         </g>
-        <circle cx={34} cy={72} r={2.6} fill={c.fill} filter={`url(#${uid}-glow)`} />
-        <text x={42} y={74.5} fontSize={5.6} fill="var(--muted-foreground)" fontFamily="var(--font-mono)">STATUS</text>
+        <circle cx={36} cy={54} r={12} fill={c.fill} opacity={0.4} filter={`url(#${uid}-glow-big)`} />
+        <circle cx={36} cy={54} r={6} fill={c.fill} stroke="var(--metal-hi)" strokeWidth={0.7} className={apState === 'warning' ? 'led-warn-blink' : apState === 'down' || apState === 'fault' ? 'led-fault-blink' : undefined} />
+        <text x={50} y={57} fontSize={8} fill="var(--muted-foreground)" fontFamily="var(--font-mono)">LED</text>
         <rect x={112} y={34} width={116} height={48} rx={5} fill="var(--navy)" opacity={0.92} />
         {ports.map((p, i) => (
           <PortGlyph key={p.id} port={p} x={126 + i * 48} y={42} size={20} uid={uid} selected={selectedId === p.id} onHover={onHover} onSelect={onSelect} showLabel labelBelow labelText={p.type === 'CONSOLE' ? 'CON' : 'ETH0'} />
@@ -80,6 +89,7 @@ export default function ApLayout({ ports, radios, apState, uid, selectedId, onHo
             <g
               key={r.id}
               transform={`translate(${i * 94} 8)`}
+              data-radio-id={r.id}
               role="button"
               tabIndex={0}
               aria-pressed={isSel}
