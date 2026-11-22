@@ -1156,15 +1156,32 @@ def test_netbox_access_point_reads_radio_telemetry(stack):
             "radios": [{"slot": "0", "channel": 1, "snrAvg": 20, "rssiAvg": -67, "clients": 1, "operUp": True}],
         },
     ]})
+    def refuse_snmp(*_args, **_kwargs):
+        raise AssertionError("access point detail must read controller MDT, not SNMP")
+
+    stack["fleet"]._load_ports = refuse_snmp
+    stack["fleet"]._resource_facts = refuse_snmp
+    stack["fleet"]._system_facts = refuse_snmp
     lobby = stack["client"].get("/api/v1/devices/30")
     assert lobby.status_code == 200, lobby.text
     body = lobby.json()
     assert body["faceplate"]["form_factor"] == "ceiling-ap"
+    assert body["faceplate"].get("snmpMissing") is not True
     assert body["healthPanel"]["profile"] == "ap"
+    assert "MDT" in body["healthPanel"]["accessPoint"]["note"]
     assert [item["channel"] for item in body["healthPanel"]["accessPoint"]["radios"]] == [6, 36]
+    assert [item["channel"] for item in body["faceplate"]["radios"]] == [6, 36]
+    assert body["health"] == "healthy"
+    assert body["reachable"] is True
+    joined = [item["title"] + " " + item.get("detail", "") for item in body.get("healthItems") or []]
+    assert not any("SNMP" in text or "probe" in text.lower() for text in joined)
+    assert [item["name"] for item in body["checks"]] == ["Controller MDT", "Approved in NetBox"]
     cafe = stack["client"].get("/api/v1/devices/31")
     assert cafe.status_code == 200, cafe.text
-    assert cafe.json()["healthPanel"]["accessPoint"]["radios"][0]["channel"] == 1
+    cafe_body = cafe.json()
+    assert cafe_body["healthPanel"]["accessPoint"]["radios"][0]["channel"] == 1
+    assert cafe_body["faceplate"].get("snmpMissing") is not True
+    assert not any("SNMP" in item["name"] for item in cafe_body["checks"])
 
 
 def _switch(id_, name, ip, position=None, master=None, vc=None):

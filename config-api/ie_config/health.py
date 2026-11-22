@@ -364,8 +364,8 @@ def build_health_panel(
     if profile.get("access_point"):
         panel["accessPoint"] = {
             "note": (
-                "This AP has no SNMP agent. Status, radios, channel utilization, "
-                "clients and uptime are collected by Telegraf from its wireless controller."
+                "Status, radios, channel utilization, clients and uptime come from "
+                "the wireless controller's MDT telemetry."
             ),
             "status": (ap or {}).get("status") or NOT_SUPPORTED,
             "clients": (ap or {}).get("clients"),
@@ -373,7 +373,7 @@ def build_health_panel(
             "radios": list((ap or {}).get("radios") or []),
         }
         panel["interfacesNote"] = (
-            "Interface counters are not on the AP. Radio channel utilization is on the controller via Telegraf."
+            "Radios, clients and channel utilization come from the controller's MDT telemetry."
         )
     return panel
 
@@ -760,8 +760,8 @@ def explain_health(snapshot: dict | None = None) -> dict:
     item, so the page lists exactly the causes of the badge it shows.
     An empty item list is healthy. Info items are listed and do not move
     the badge. Reachability failures stay unreachable, which outranks
-    critical. Callers omit probe and SNMP keys for an access point that
-    has no SNMP agent of its own.
+    critical. An access point omits probe and SNMP keys; its badge comes
+    from the controller MDT sample.
     """
     snap = snapshot or {}
     since = str(snap.get("since") or "—")

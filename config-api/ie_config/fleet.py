@@ -861,6 +861,13 @@ def _row_health_snapshot(row: dict, alerts: list[dict]) -> dict:
     age = row.get("last_age")
     if age is not None and age >= 10**12:
         age = None
+    # Access-point health comes from the controller MDT sample. The list and
+    # the device page add that as apStatus. ICMP and ifTable are for switches.
+    if str(row.get("formFactor") or "") == "ceiling-ap":
+        return {
+            "since": row.get("lastPoll") or "—",
+            "alerts": [_alert_health(alert) for alert in alerts or []],
+        }
     snap = {
         "probe": row.get("_probe"),
         "snmpUp": row.get("_snmp"),
@@ -1999,8 +2006,33 @@ class FleetService:
             if alert.get("status") != "open":
                 continue
             by_host.setdefault(str(alert.get("deviceHostname") or "").lower(), []).append(alert)
+        ap_index = None
         for row in built:
-            explained = explain_health(_row_health_snapshot(row, by_host.get(row["hostname"].lower(), [])))
+            if row.get("formFactor") != "ceiling-ap":
+                continue
+            if ap_index is None:
+                ap_index = self._ap_rows()
+            found = None
+            for key in (row.get("hostname"), (row.get("_device") or {}).get("serial"), row.get("mgmtIp")):
+                text = str(key or "").strip()
+                if not text or text == "—":
+                    continue
+                for ap in ap_index:
+                    if _ap_row_hit(ap, text, self._suffixes()):
+                        found = ap
+                        break
+                if found:
+                    break
+            if found:
+                row["_ap_status"] = found.get("status") or ""
+                row["_ap_radios"] = list(found.get("radios") or [])
+        for row in built:
+            snap = _row_health_snapshot(row, by_host.get(row["hostname"].lower(), []))
+            if row.get("_ap_status"):
+                snap["apStatus"] = row["_ap_status"]
+                snap["apName"] = row.get("hostname") or ""
+                snap["radios"] = row.get("_ap_radios") or []
+            explained = explain_health(snap)
             row["health"] = explained["health"]
             if explained["health"] == "unreachable":
                 row["portsUp"] = 0
@@ -2769,11 +2801,27 @@ class FleetService:
             },
         )
         self._paint_ap_face(face, detail.get("hostname") or "")
-        face["snmpAt"] = detail.get("_snmp_at") or ""
-        if "_snmp_missing" in detail:
-            face["snmpMissing"] = bool(detail.get("_snmp_missing"))
+        if form == "ceiling-ap":
+            # Radios are MDT from the controller. The AP has no ifTable.
+            panel = detail.get("healthPanel") if isinstance(detail.get("healthPanel"), dict) else {}
+            point = panel.get("accessPoint") if isinstance(panel.get("accessPoint"), dict) else {}
+            face["radios"] = [
+                {
+                    "id": str(radio.get("slot") or index),
+                    "band": str(radio.get("band") or ("Radio %s" % (radio.get("slot") or index))),
+                    "channel": radio.get("channel"),
+                    "clients": radio.get("clients"),
+                    "avgRssi": None if radio.get("rssiAvg") is None else "%s dBm" % radio.get("rssiAvg"),
+                }
+                for index, radio in enumerate(point.get("radios") or [])
+                if isinstance(radio, dict)
+            ]
         else:
-            face["snmpMissing"] = not bool(prom_ports)
+            face["snmpAt"] = detail.get("_snmp_at") or ""
+            if "_snmp_missing" in detail:
+                face["snmpMissing"] = bool(detail.get("_snmp_missing"))
+            else:
+                face["snmpMissing"] = not bool(prom_ports)
         detail["faceplate"] = face
         comparison = dict(classified["comparison"])
         comparison["faceplateSource"] = source
@@ -3033,22 +3081,28 @@ class FleetService:
 
     def _detail(self, client, row: dict, rows: list[dict]) -> dict:
         device = row["_device"]
-        selector = self._selector(device)
-        cached = self.cache.get("ports:" + device["name"])
-        if cached is None:
-            try:
-                cached = self._load_ports(client, selector, device.get("name") or "")
-            except UpstreamError:
-                cached = {"degraded": True, "ports": [], "cpu": None, "mem": None, "temp": None, "fans": [], "psus": [], "rtt": None}
-            self.cache.put("ports:" + device["name"], cached, ttl=60)
-        if cached.get("cpu") is None or cached.get("mem") is None:
-            extra = self._resource_facts(client, device)
-            if cached.get("cpu") is None and extra.get("cpu") is not None:
-                cached["cpu"] = extra["cpu"]
-            if cached.get("mem") is None and extra.get("mem") is not None:
-                cached["mem"] = extra["mem"]
-        ports = cached["ports"]
         form = row["formFactor"]
+        # Access points are not SNMP devices. Radio, join state and uptime
+        # are MDT from the wireless controller. Do not scrape ifTable or the
+        # SNMP exporter for them.
+        if form == "ceiling-ap":
+            cached = {"degraded": False, "ports": [], "cpu": None, "mem": None, "temp": None, "fans": [], "psus": [], "rtt": None, "neighbors": [], "has_if_mib": False}
+        else:
+            selector = self._selector(device)
+            cached = self.cache.get("ports:" + device["name"])
+            if cached is None:
+                try:
+                    cached = self._load_ports(client, selector, device.get("name") or "")
+                except UpstreamError:
+                    cached = {"degraded": True, "ports": [], "cpu": None, "mem": None, "temp": None, "fans": [], "psus": [], "rtt": None}
+                self.cache.put("ports:" + device["name"], cached, ttl=60)
+            if cached.get("cpu") is None or cached.get("mem") is None:
+                extra = self._resource_facts(client, device)
+                if cached.get("cpu") is None and extra.get("cpu") is not None:
+                    cached["cpu"] = extra["cpu"]
+                if cached.get("mem") is None and extra.get("mem") is not None:
+                    cached["mem"] = extra["mem"]
+        ports = cached["ports"]
         faceplate = _faceplate(
             form, row["role"], row["hostname"], device.get("model") or "", ports,
             {
@@ -3109,13 +3163,41 @@ class FleetService:
             except UpstreamError:
                 down_aps = None
         self._paint_ap_face(faceplate, row["hostname"])
-        facts = self._system_facts(client, device)
+        if form == "ceiling-ap":
+            facts = {}
+        else:
+            facts = self._system_facts(client, device)
         part = (device.get("part_number") or "").strip() or (facts.get("part") or "")
+        if form == "ceiling-ap" and ap_row and ap_row.get("model"):
+            part = part or str(ap_row.get("model") or "")
         firmware = (facts.get("firmware") or "").strip() or str(device.get("sw_version") or "").strip().rstrip("$") or (device.get("platform") or "")
+        if form == "ceiling-ap" and ap_row and ap_row.get("ios"):
+            firmware = str(ap_row.get("ios") or "") or firmware
         serial = str(device.get("serial") or "").strip() or str(facts.get("serial") or "").strip()
+        if form == "ceiling-ap" and not serial and ap_row:
+            serial = str(ap_row.get("serial") or "").strip()
         uptime = row["uptime"]
-        if (not uptime or uptime == "—") and facts.get("uptime") is not None:
+        if form == "ceiling-ap" and ap_row and isinstance(ap_row.get("uptimeSeconds"), (int, float)):
+            uptime, _seconds = format_uptime(float(ap_row["uptimeSeconds"]) * 100)
+        elif (not uptime or uptime == "—") and facts.get("uptime") is not None:
             uptime, _seconds = format_uptime(facts["uptime"])
+        if form == "ceiling-ap":
+            status = str((ap_row or {}).get("status") or "").strip().lower()
+            radio_count = len((ap_row or {}).get("radios") or [])
+            if status == "down":
+                joined, joined_detail = "fail", "The wireless controller reports this access point down."
+            elif radio_count:
+                joined = "pass" if status == "up" else "warn"
+                joined_detail = "Controller MDT reports %d radio%s." % (radio_count, "" if radio_count == 1 else "s")
+            elif ap_row:
+                joined, joined_detail = "warn", "The controller has not returned radio readings for this access point."
+            else:
+                joined, joined_detail = "warn", "No MDT sample from the wireless controller matches this access point."
+            checks = [
+                {"id": "c1", "name": "Controller MDT", "result": joined, "detail": joined_detail},
+                {"id": "c6", "name": "Approved in NetBox", "result": "pass", "detail": "Device is present in NetBox"},
+            ]
+            hardware = []
         if part:
             faceplate["partNumber"] = part
         detail = {
@@ -3123,7 +3205,7 @@ class FleetService:
             "hostname": row["hostname"],
             "role": row["role"],
             "roleColor": device.get("role_color") or "",
-            "reachable": row.get("_probe") == 1,
+            "reachable": str((ap_row or {}).get("status") or "").lower() == "up" if form == "ceiling-ap" else row.get("_probe") == 1,
             "site": row["site"],
             "siteId": row["siteId"],
             "mgmtIp": row["mgmtIp"] or "—",
@@ -3142,16 +3224,16 @@ class FleetService:
             "healthPanel": health_panel,
             "checkRunAt": _clock_stamp(self._now_dt()),
             "_port_degraded": bool(cached.get("degraded")),
-            "_snmp_at": cached.get("snmp_at") or "",
-            "_snmp_missing": not bool(cached.get("has_if_mib")),
-            "_snmp_neighbors": cached.get("neighbors") or [],
+            "_snmp_at": "" if form == "ceiling-ap" else (cached.get("snmp_at") or ""),
+            "_snmp_neighbors": [] if form == "ceiling-ap" else (cached.get("neighbors") or []),
+            **({} if form == "ceiling-ap" else {"_snmp_missing": not bool(cached.get("has_if_mib"))}),
             "_health_inputs": {
-                "ports": cached.get("ports") or [],
-                "cpu": cached.get("cpu"),
-                "memoryPercent": cached.get("mem"),
-                "tempC": cached.get("temp"),
-                "fans": fan_clean,
-                "psus": psu_clean,
+                "ports": [] if form == "ceiling-ap" else (cached.get("ports") or []),
+                "cpu": None if form == "ceiling-ap" else cached.get("cpu"),
+                "memoryPercent": None if form == "ceiling-ap" else cached.get("mem"),
+                "tempC": None if form == "ceiling-ap" else cached.get("temp"),
+                "fans": [] if form == "ceiling-ap" else fan_clean,
+                "psus": [] if form == "ceiling-ap" else psu_clean,
                 "since": row.get("lastPoll") or "—",
                 "apStatus": (ap_row or {}).get("status") if ap_row else "",
                 "apName": row["hostname"],
