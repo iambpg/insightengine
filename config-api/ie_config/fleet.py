@@ -1371,12 +1371,26 @@ def _fill_radio(dest: dict, src: dict) -> None:
             dest[field] = src[field]
 
 
-def _radios_need_channel(radios) -> bool:
-    """True when this access point still has no channel sample."""
+def _interference_reading(value):
+    """A percent from the controller. 65535 is the unset sentinel, not a reading."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0 or number > 100:
+        return None
+    return number
+
+
+def _radios_need_signal(radios) -> bool:
+    """True when channel, SNR, RSSI or interference is still missing."""
     found = [item for item in radios or [] if isinstance(item, dict)]
     if not found:
         return True
-    return not any(item.get("channel") not in (None, "") for item in found)
+    for field in ("channel", "snrAvg", "rssiAvg", "interference"):
+        if not any(item.get(field) not in (None, "") for item in found):
+            return True
+    return False
 
 
 def _merge_radio_slots(primary, extra) -> list[dict]:
@@ -2189,6 +2203,7 @@ class FleetService:
                         found = self._inventory_for_ap(rows, ap)
                         if found is None:
                             alerts = self._alerts_raw(client)
+                            ap = self._complete_ap_signal(client, ap)
                             detail = self._detail_from_ap(ap, rows, alerts)
                             return self._with_degraded(detail, degraded)
                 if found is None:
@@ -2519,6 +2534,7 @@ class FleetService:
             })
         face = _faceplate("ceiling-ap", "Access point", name, ap.get("model") or "", [])
         face["apState"] = "down" if str(ap.get("status") or "").lower() == "down" else "up"
+        face["radios"] = _face_radios(ap.get("radios") or [], face["apState"])
         seconds = ap.get("uptimeSeconds")
         uptime = "—"
         if isinstance(seconds, (int, float)) and seconds >= 0:
@@ -3167,7 +3183,7 @@ class FleetService:
         fan_clean = [item for item in fan_states if item]
         psu_clean = [item for item in psu_states if item]
         ap_row = self._ap_for_inventory(row) if profile == "ap" else None
-        if profile == "ap" and _radios_need_channel((ap_row or {}).get("radios")):
+        if profile == "ap" and _radios_need_signal((ap_row or {}).get("radios")):
             direct = self._ap_for_device(client, row["hostname"])
             if direct and direct.get("radios"):
                 if ap_row is None:
@@ -4051,6 +4067,22 @@ class FleetService:
                 return row
         return None
 
+    def _complete_ap_signal(self, client, ap: dict) -> dict:
+        """Fill SNR, RSSI, channel and interference for an access point opened from the controller."""
+        if not isinstance(ap, dict):
+            return ap
+        radios = list(ap.get("radios") or [])
+        if _radios_need_signal(radios):
+            direct = self._ap_for_device(client, str(ap.get("name") or ap.get("mac") or ""))
+            if direct and direct.get("radios"):
+                radios = _merge_radio_slots(radios, direct.get("radios") or [])
+                ap = dict(ap)
+                if ap.get("clients") is None and direct.get("clients") is not None:
+                    ap["clients"] = direct["clients"]
+        ap = dict(ap)
+        ap["radios"] = _label_radios(radios)
+        return ap
+
     def _ap_for_device(self, client, hostname: str) -> dict | None:
         """Telemetry for one AP. MAC and hostname both match. Online comes from the snapshot."""
         wanted = (hostname or "").strip()
@@ -4117,7 +4149,9 @@ class FleetService:
             self._prom(client, _wlc_recent(labeled("ie_wlc_client_radio_snr_avg"))),
             self._prom(client, _wlc_recent(labeled("ie_wlc_client_radio_rssi_avg"))),
             self._prom(client, _wlc_recent(labeled("ie_wlc_radio_oper_up"))),
-            self._prom(client, _wlc_recent(labeled("ie_wlc_radio_interference"))),
+            self._prom(client, _wlc_recent(
+                labeled("ie_wlc_radio_interference") + " or " + labeled("ie_wlc_radio_rx_noise_channel_utilization")
+            )),
         )
         seconds = _first_value(uptime)
         if seconds is not None:
@@ -4164,7 +4198,7 @@ class FleetService:
             value = _sample_value(sample)
             ensure(sample)["operUp"] = None if value is None else bool(float(value) >= 1)
         for sample in interference or []:
-            ensure(sample)["interference"] = _sample_value(sample)
+            ensure(sample)["interference"] = _interference_reading(_sample_value(sample))
         for radio in by_slot.values():
             named = radio_band(radio.get("band"), radio.get("channel"))
             if named:
@@ -4223,7 +4257,7 @@ class FleetService:
                 "radio_clients": "ie_wlc_radio_clients",
                 "info": "ie_wlc_ap_info or ie_wlc_ap_info_info",
                 "noise": "ie_wlc_radio_noise",
-                "interference": "ie_wlc_radio_interference",
+                "interference": "ie_wlc_radio_interference or ie_wlc_radio_rx_noise_channel_utilization",
                 "power": "ie_wlc_radio_tx_power_dbm or ie_wlc_radio_tx_power",
                 "width": "ie_wlc_radio_width",
                 "rssi": "ie_wlc_client_radio_rssi_avg",
@@ -4381,14 +4415,16 @@ class FleetService:
             metric_name = str(metric.get("__name__") or "")
             if metric_name.endswith("channel") and "util" not in metric_name:
                 radio["channel"] = value
+            elif metric_name.endswith("rx_noise_channel_utilization") or "interference" in metric_name:
+                # Channel utilization also contains "util". Read the noise
+                # utilization first so it stays the interference percent.
+                radio["interference"] = _interference_reading(value)
             elif "util" in metric_name:
                 radio["utilization"] = None if value is None else round(float(value) / 100.0, 4)
             elif "clients" in metric_name and "poor" not in metric_name:
                 radio["clients"] = value
             elif metric_name.endswith("noise"):
                 radio["noise"] = value
-            elif "interference" in metric_name:
-                radio["interference"] = value
             elif "tx_power" in metric_name:
                 radio["txPowerDbm"] = value
             elif metric_name.endswith("width"):

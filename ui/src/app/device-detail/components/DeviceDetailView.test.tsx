@@ -345,7 +345,17 @@ describe('DeviceDetailView client navigation', () => {
     vi.mocked(api.getDevice).mockResolvedValue({
       ...device('42', 'ap-42'),
       role: 'Access point',
-      faceplate: { form_factor: 'ceiling-ap', role: 'Access point', ports: [], radios: [], apState: 'up' },
+      faceplate: {
+        form_factor: 'ceiling-ap',
+        role: 'Access point',
+        ports: [],
+        apState: 'up',
+        radios: [
+          { id: '0', band: '2.4 GHz', channel: 6, state: 'up', clients: 7, utilisation: 41 },
+          { id: '1', band: '5 GHz', channel: 36, state: 'up', clients: 11, utilisation: 22 },
+          { id: '2', band: '6 GHz', channel: 37, state: 'up', clients: 2, utilisation: 10 },
+        ],
+      },
       healthPanel: {
         profile: 'ap',
         profileLabel: 'Cisco access point',
@@ -367,10 +377,15 @@ describe('DeviceDetailView client navigation', () => {
         },
       },
     });
+    const user = userEvent.setup();
     render(<DeviceDetailView />);
     const board = await screen.findByRole('region', { name: 'Radio performance' });
-    const drawing = screen.getByTestId('device-faceplate').firstElementChild;
-    expect(drawing?.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const stage = screen.getByTestId('faceplate-stage');
+    expect(stage).toHaveStyle({ height: '168px' });
+    expect(stage).toContainElement(board);
+    const drawing = screen.getByTestId('faceplate-member');
+    expect(stage).toContainElement(drawing);
+    expect(board.compareDocumentPosition(drawing) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const two = screen.getByRole('article', { name: '2.4 GHz radio' });
     const five = screen.getByRole('article', { name: '5 GHz radio' });
     const six = screen.getByRole('article', { name: '6 GHz radio' });
@@ -382,6 +397,19 @@ describe('DeviceDetailView client navigation', () => {
     expect(five).toHaveTextContent('8%');
     expect(five).toHaveTextContent('Clear of noise');
     expect(two).toHaveTextContent('24 dB');
+    await user.click(five);
+    const drawer = await screen.findByRole('dialog', { name: '5 GHz radio details' });
+    expect(drawer).toHaveClass('fixed', 'inset-y-0', 'right-0', 'h-dvh');
+    expect(drawer).toHaveTextContent('30 dB');
+    expect(drawer).toHaveTextContent('-58 dBm');
+    expect(drawer).toHaveTextContent('75%');
+    expect(drawer).toHaveTextContent('8%');
+    expect(drawer).toHaveTextContent('Signal');
+    expect(drawer).toHaveTextContent('Interference');
+    await user.click(screen.getByRole('button', { name: 'Close radio panel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await user.click(five);
+    expect(await screen.findByRole('dialog', { name: '5 GHz radio details' })).toBeInTheDocument();
   });
 
   it('puts the stack badge in the header action box without growing that box', async () => {

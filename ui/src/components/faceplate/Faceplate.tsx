@@ -21,6 +21,8 @@ interface FaceplateProps {
   device: FaceplateDevice;
   selectedPortId?: string | null;
   onSelectPort?: (port: PortInfo | null) => void;
+  selectedRadioId?: string | null;
+  onSelectRadio?: (radio: RadioInfo) => void;
   className?: string;
   compact?: boolean;
   caption?: boolean;
@@ -52,14 +54,15 @@ function memberInk(health: string | undefined): string {
   return '#94a3b8';
 }
 
-export default function Faceplate({ device, selectedPortId = null, onSelectPort, className = '', compact = false, caption = true, health, chassisLabel, activeMember, spanWidth = 0 }: FaceplateProps) {
+export default function Faceplate({ device, selectedPortId = null, onSelectPort, selectedRadioId = null, onSelectRadio, className = '', compact = false, caption = true, health, chassisLabel, activeMember, spanWidth = 0 }: FaceplateProps) {
   const rawId = useId();
   const uid = `fp${rawId.replace(/[^a-zA-Z0-9]/g, '')}`;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState(0);
   const [hover, setHover] = useState<{ port: PortInfo; left: number; top: number } | null>(null);
   const [radioHover, setRadioHover] = useState<{ radio: RadioInfo; left: number; top: number } | null>(null);
-  const [selectedRadioId, setSelectedRadioId] = useState<string | null>(null);
+  const [localRadioId, setLocalRadioId] = useState<string | null>(null);
+  const activeRadioId = onSelectRadio ? selectedRadioId : localRadioId;
 
   const onHover = (port: PortInfo | null, el: SVGGElement | null) => {
     if (!port || !el) {
@@ -82,7 +85,10 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
     const left = Math.min(Math.max(r.left + r.width / 2, half + 8), window.innerWidth - half - 8);
     setRadioHover({ radio, left, top: r.top - 8 });
   };
-  const onRadioSelect = (radio: RadioInfo) => setSelectedRadioId((cur) => (cur === radio.id ? null : radio.id));
+  const onRadioSelect = (radio: RadioInfo) => {
+    if (onSelectRadio) onSelectRadio(radio);
+    else setLocalRadioId((cur) => (cur === radio.id ? null : radio.id));
+  };
 
   useLayoutEffect(() => {
     const el = wrapRef.current;
@@ -128,7 +134,7 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         rowCount: 1,
         body: (
           <g transform={`translate(${x} ${y}) scale(${scale})`}>
-            <ApLayout ports={device.ports ?? []} radios={device.radios ?? []} apState={device.apState ?? 'up'} selectedRadioId={selectedRadioId} onRadioHover={onRadioHover} onRadioSelect={onRadioSelect} {...common} />
+            <ApLayout ports={device.ports ?? []} radios={device.radios ?? []} apState={device.apState ?? 'up'} selectedRadioId={activeRadioId} onRadioHover={onRadioHover} onRadioSelect={onRadioSelect} {...common} />
           </g>
         ),
       };
@@ -197,14 +203,13 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
         return { vbW: 400, vbH: 120, rowCount: 1, body: null };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, art, selectedPortId, selectedRadioId, health, chassisLabel, span]);
+  }, [shown, art, selectedPortId, activeRadioId, health, chassisLabel, span]);
 
   const ports = allPorts(shown);
   const counts = countPorts(ports);
   const summary = faceplateSummaryLine(counts, device.snmpAt);
   const snmpHint = device.snmpMissing ? SNMP_MISSING_HINT : '';
 
-  const selectedRadio = (device.radios ?? []).find((r) => r.id === selectedRadioId) ?? null;
   const stackRows = rowCount || 1;
 
   if (art && art.front && art.source !== 'drawn' && !compact && !isFortiGateModel(art) && device.form_factor !== 'ceiling-ap' && device.form_factor !== 'switch-stack') {
@@ -238,43 +243,6 @@ export default function Faceplate({ device, selectedPortId = null, onSelectPort,
       </div>
       {hover && <PortTooltip port={hover.port} left={hover.left} top={hover.top} />}
       {radioHover && <RadioTooltip radio={radioHover.radio} left={radioHover.left} top={radioHover.top} />}
-      {selectedRadio && (
-        <div className="mt-3 rounded-lg border bg-card p-4" role="region" aria-label={`${selectedRadio.band} radio details`}>
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-foreground">
-              {selectedRadio.band} radio · {STATE_LABEL[selectedRadio.state]}
-            </h3>
-            <button
-              type="button"
-              onClick={() => setSelectedRadioId(null)}
-              className="rounded border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Close
-            </button>
-          </div>
-          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-3">
-            {([
-              ['Standard', selectedRadio.standard],
-              ['Channel', `${selectedRadio.channel}${selectedRadio.channelWidth ? ` (${selectedRadio.channelWidth})` : ''}`],
-              ['Clients', String(selectedRadio.clients)],
-              ['Utilisation', `${selectedRadio.utilisation}%`],
-              ['Throughput', selectedRadio.throughput],
-              ['Tx power', selectedRadio.txPower],
-              ['Noise floor', selectedRadio.noiseFloor],
-              ['Avg client RSSI', selectedRadio.avgRssi],
-              ['Retry rate', selectedRadio.retryRate !== undefined ? `${selectedRadio.retryRate}%` : undefined],
-              ['SSIDs', selectedRadio.ssids?.join(', ')],
-            ] as [string, string | undefined][])
-              .filter(([, v]) => v)
-              .map(([k, v]) => (
-                <div key={k}>
-                  <dt className="text-muted-foreground">{k}</dt>
-                  <dd className="font-mono-data font-medium text-foreground">{v}</dd>
-                </div>
-              ))}
-          </dl>
-        </div>
-      )}
     </div>
   );
 }

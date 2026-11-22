@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import Faceplate from './Faceplate';
 import { CHASSIS_WIDTH, FACEPLATE_HEIGHT, lockedChassis } from './size';
@@ -42,5 +43,28 @@ describe('access point faceplate', () => {
     const svg = document.querySelector('svg');
     expect(svg).toHaveAttribute('viewBox', `0 0 ${frame.vbW} ${frame.vbH}`);
     expect(svg).toHaveStyle({ width: '100%', aspectRatio: `${CHASSIS_WIDTH} / ${FACEPLATE_HEIGHT}` });
+    expect(document.querySelector('[aria-label="Access point LEDs"]')).toBeTruthy();
+    expect(screen.getByText('STATUS')).toBeInTheDocument();
+    expect(screen.getByText('RADIO')).toBeInTheDocument();
+  });
+
+  it('opens the selected radio from the drawing without a panel under the chassis', async () => {
+    const onSelectRadio = vi.fn();
+    const { container } = render(
+      <Faceplate
+        device={{
+          form_factor: 'ceiling-ap',
+          role: 'Access point',
+          hostname: 'ap-1',
+          apState: 'up',
+          ports: [],
+          radios: [{ id: '1', band: '5 GHz', channel: 36, state: 'up', clients: 4, utilisation: 12 }],
+        }}
+        onSelectRadio={onSelectRadio}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /5 GHz radio, channel 36/ }));
+    expect(onSelectRadio).toHaveBeenCalledWith(expect.objectContaining({ id: '1', band: '5 GHz' }));
+    expect(container.querySelector('[aria-label="5 GHz radio details"]')).toBeNull();
   });
 });

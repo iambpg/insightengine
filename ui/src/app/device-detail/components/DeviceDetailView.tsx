@@ -24,7 +24,7 @@ import { useKeyedLoad } from '@/lib/useKeyedLoad';
 import { usePageQuery } from '@/lib/usePageQuery';
 import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
-import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo } from '@/lib/types';
+import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo, RadioInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
 import CdpNeighbourPanel from './CdpNeighbourPanel';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
@@ -119,6 +119,7 @@ export default function DeviceDetailView() {
   const formQuery = params.get('form') ?? '';
   const [pickedForm, setPickedForm] = useState<string | null>(null);
   const [selected, setSelected] = useState<PortInfo | null>(null);
+  const [radioId, setRadioId] = useState<string | null>(null);
   const [rerun, setRerun] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [missingId, setMissingId] = useState(false);
@@ -157,6 +158,7 @@ export default function DeviceDetailView() {
 
   useEffect(() => {
     setSelected(null);
+    setRadioId(null);
     setCable(null);
     setStackPick(null);
   }, [deviceKey]);
@@ -464,14 +466,32 @@ export default function DeviceDetailView() {
                 })}
               </div>
             ) : null}
-            <div ref={greyRef} className="relative flex items-stretch gap-0 overflow-hidden rounded-md bg-gradient-to-b from-secondary to-background p-1" style={{ height: FACEPLATE_HEIGHT }}>
+            <div ref={greyRef} data-testid="faceplate-stage" className="relative flex items-stretch gap-0 overflow-hidden rounded-md bg-gradient-to-b from-secondary to-background p-1" style={{ height: FACEPLATE_HEIGHT }}>
+              {device.faceplate.form_factor === 'ceiling-ap' ? (
+                <ApRadioColumn
+                  device={device}
+                  selectedId={radioId}
+                  onSelect={(id) => {
+                    setSelected(null);
+                    setRadioId((current) => (current === id ? null : id));
+                  }}
+                />
+              ) : null}
               <div ref={localPlateRef} className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
                 <div className="w-full min-w-0">
                   <Faceplate
                     device={device.faceplate}
                     activeMember={activeStackMember}
                     selectedPortId={selected?.id ?? null}
-                    onSelectPort={setSelected}
+                    onSelectPort={(port) => {
+                      setSelected(port);
+                      if (port) setRadioId(null);
+                    }}
+                    selectedRadioId={radioId}
+                    onSelectRadio={(radio: RadioInfo) => {
+                      setSelected(null);
+                      setRadioId((current) => (current === radio.id ? null : radio.id));
+                    }}
                     caption={false}
                     health={device.health}
                     chassisLabel={device.faceplate.modelName || device.modelFamily}
@@ -498,7 +518,6 @@ export default function DeviceDetailView() {
                 <UplinkCable localRef={localPlateRef} greyRef={greyRef} remote={cable.plate} localPortName={cable.localPort} remotePortName={cable.remotePort} flow={cableFlow(selected)} />
               ) : null}
             </div>
-            {device.faceplate.form_factor === 'ceiling-ap' ? <ApRadioBoards device={device} /> : null}
           </section>
           <div role="tablist" aria-label="Device sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card px-3">
             {tabs.map((item) => {
@@ -580,6 +599,7 @@ export default function DeviceDetailView() {
       ) : null}
 
       {selected ? <PortDrawer port={selected} deviceId={device?.id} onClose={() => setSelected(null)} /> : null}
+      {radioId && device ? <RadioDrawer device={device} radioId={radioId} onClose={() => setRadioId(null)} /> : null}
     </div>
   );
 }
@@ -845,10 +865,32 @@ function worstTone(tones: Tone[]): Tone {
   return 'none';
 }
 
-function ApRadioBoards({ device }: { device: DeviceDetailData }) {
+interface RadioBoard {
+  id: string;
+  slot: string;
+  title: string;
+  channel: number | string;
+  clients: number | null;
+  operUp: boolean | null;
+  snr: number | null;
+  rssi: number | null;
+  signal: number | null;
+  interference: number | null;
+  sampled: boolean;
+}
+
+interface RadioRow {
+  label: string;
+  value: string;
+  hint: string;
+  tone: Tone;
+  bar: number;
+}
+
+function radioBoards(device: DeviceDetailData): RadioBoard[] {
   const live = device.healthPanel?.accessPoint?.radios ?? [];
   const drawn = device.faceplate.radios ?? [];
-  const boards = (live.length
+  const boards = live.length
     ? live.map((radio, index) => {
         const snr = radio.snrAvg ?? null;
         const rssi = radio.rssiAvg ?? null;
@@ -866,6 +908,7 @@ function ApRadioBoards({ device }: { device: DeviceDetailData }) {
           rssi,
           signal: fromSnr ?? fromRssi,
           interference,
+          sampled: true,
         };
       })
     : drawn.map((radio) => {
@@ -881,46 +924,55 @@ function ApRadioBoards({ device }: { device: DeviceDetailData }) {
           rssi,
           signal: rssi == null ? null : Math.max(0, Math.min(100, ((rssi + 90) / 50) * 100)),
           interference: null as number | null,
+          sampled: false,
         };
-      })
-  ).sort((left, right) => bandRank(left.title) - bandRank(right.title) || left.title.localeCompare(right.title));
+      });
+  return boards.sort((left, right) => bandRank(left.title) - bandRank(right.title) || left.title.localeCompare(right.title));
+}
 
+function radioRows(board: RadioBoard): RadioRow[] {
+  const down = board.operUp === false;
+  const missing = down ? 'Radio is down' : board.sampled ? 'Not returned for this radio' : 'Not sampled';
+  return [
+    { label: 'SNR', value: reading(board.snr, 'dB'), hint: board.snr == null ? missing : board.snr >= 25 ? 'Clear of noise' : board.snr >= 15 ? 'Some noise' : 'Hard to hear', tone: snrTone(board.snr), bar: board.snr == null ? 0 : Math.max(0, Math.min(100, (board.snr / 40) * 100)) },
+    { label: 'RSSI', value: reading(board.rssi, 'dBm'), hint: board.rssi == null ? missing : board.rssi >= -67 ? 'Strong at the client' : board.rssi >= -75 ? 'Usable' : 'Weak at the client', tone: rssiTone(board.rssi), bar: board.rssi == null ? 0 : Math.max(0, Math.min(100, ((board.rssi + 90) / 50) * 100)) },
+    { label: 'Signal', value: board.signal == null ? '—' : `${Math.round(board.signal)}%`, hint: board.signal == null ? missing : board.signal >= 70 ? 'Strong link' : board.signal >= 40 ? 'Fair link' : 'Weak link', tone: signalTone(board.signal), bar: board.signal ?? 0 },
+    { label: 'Interference', value: board.interference == null ? '—' : `${Math.round(board.interference)}%`, hint: board.interference == null ? missing : board.interference <= 10 ? 'Quiet channel' : board.interference <= 25 ? 'Some competition' : 'Busy channel', tone: interferenceTone(board.interference), bar: board.interference ?? 0 },
+  ];
+}
+
+function ApRadioColumn({ device, selectedId, onSelect }: { device: DeviceDetailData; selectedId: string | null; onSelect: (id: string) => void }) {
+  const boards = radioBoards(device);
   return (
-    <div className="mt-2 grid auto-cols-fr grid-flow-col gap-2" role="region" aria-label="Radio performance">
+    <div className="mr-1 flex h-full w-[17.5rem] shrink-0 flex-col overflow-y-auto rounded-md border border-border bg-card/80" role="region" aria-label="Radio performance">
       {boards.length === 0 ? (
-        <p className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-xs text-muted-foreground">The controller has not returned radio readings for this access point.</p>
+        <p className="px-2 py-2 text-[11px] text-muted-foreground">The controller has not returned radio readings for this access point.</p>
       ) : boards.map((board) => {
         const down = board.operUp === false;
-        const missing = down ? 'Radio is down' : live.length ? 'Not returned for this radio' : 'Not sampled';
         const tones = down ? [] : [snrTone(board.snr), rssiTone(board.rssi), signalTone(board.signal), interferenceTone(board.interference)];
         const verdict = down ? 'poor' : worstTone(tones);
         const verdictLabel = down ? 'Down' : verdict === 'good' ? 'Healthy' : verdict === 'fair' ? 'Watch' : verdict === 'poor' ? 'Poor' : 'No sample';
-        const rows = [
-          { label: 'SNR', value: reading(board.snr, 'dB'), hint: board.snr == null ? missing : board.snr >= 25 ? 'Clear of noise' : board.snr >= 15 ? 'Some noise' : 'Hard to hear', tone: snrTone(board.snr), bar: board.snr == null ? 0 : Math.max(0, Math.min(100, (board.snr / 40) * 100)) },
-          { label: 'RSSI', value: reading(board.rssi, 'dBm'), hint: board.rssi == null ? missing : board.rssi >= -67 ? 'Strong at the client' : board.rssi >= -75 ? 'Usable' : 'Weak at the client', tone: rssiTone(board.rssi), bar: board.rssi == null ? 0 : Math.max(0, Math.min(100, ((board.rssi + 90) / 50) * 100)) },
-          { label: 'Signal', value: board.signal == null ? '—' : `${Math.round(board.signal)}%`, hint: board.signal == null ? missing : board.signal >= 70 ? 'Strong link' : board.signal >= 40 ? 'Fair link' : 'Weak link', tone: signalTone(board.signal), bar: board.signal ?? 0 },
-          { label: 'Interference', value: board.interference == null ? '—' : `${Math.round(board.interference)}%`, hint: board.interference == null ? missing : board.interference <= 10 ? 'Quiet channel' : board.interference <= 25 ? 'Some competition' : 'Busy channel', tone: interferenceTone(board.interference), bar: board.interference ?? 0 },
-        ];
+        const open = selectedId === board.id;
         return (
-          <article key={board.id} className="flex min-w-[9.5rem] flex-col rounded-lg border border-border bg-card px-2.5 py-2 shadow-card" aria-label={`${board.title} radio`}>
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="text-sm font-semibold text-foreground">{board.title}</h3>
-              <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-semibold" style={{ color: toneColor(verdict), borderColor: toneColor(verdict) }}>{verdictLabel}</span>
+          <article
+            key={board.id}
+            data-radio-id={board.id}
+            aria-pressed={open}
+            aria-label={`${board.title} radio`}
+            onClick={() => onSelect(board.id)}
+            className={`cursor-pointer border-b border-border px-2 py-1 last:border-b-0 ${open ? 'bg-primary/10' : 'hover:bg-muted/60'}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[11px] font-semibold leading-tight text-foreground">{board.title}</h3>
+              <span className="rounded-full border px-1 py-0 text-[9px] font-semibold" style={{ color: toneColor(verdict), borderColor: toneColor(verdict) }}>{verdictLabel}</span>
             </div>
-            <p className="mt-0.5 font-mono-data text-[11px] text-muted-foreground">
-              Radio {board.slot} · Channel {board.channel}{board.clients != null ? ` · ${board.clients} clients` : ''}
-            </p>
-            <dl className="mt-2 space-y-1.5">
-              {rows.map((row) => (
-                <div key={row.label}>
-                  <div className="flex items-baseline justify-between gap-2 text-[11px]">
-                    <dt className="text-muted-foreground">{row.label}</dt>
-                    <dd className="font-mono-data font-semibold" style={{ color: toneColor(row.tone) }}>{row.value}</dd>
-                  </div>
-                  <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                    <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, row.bar))}%`, backgroundColor: toneColor(row.tone) }} />
-                  </div>
-                  <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">{row.hint}</p>
+            <p className="font-mono-data text-[10px] leading-tight text-muted-foreground">ch {board.channel}{board.clients != null ? ` · ${board.clients} clients` : ''}</p>
+            <dl className="mt-0.5 grid grid-cols-2 gap-x-2">
+              {radioRows(board).map((row) => (
+                <div key={row.label} className="flex items-baseline justify-between gap-1 text-[10px] leading-tight">
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="font-mono-data font-semibold" style={{ color: toneColor(row.tone) }}>{row.value}</dd>
+                  <span className="sr-only">{row.hint}</span>
                 </div>
               ))}
             </dl>
@@ -928,6 +980,65 @@ function ApRadioBoards({ device }: { device: DeviceDetailData }) {
         );
       })}
     </div>
+  );
+}
+
+function RadioDrawer({ device, radioId, onClose }: { device: DeviceDetailData; radioId: string; onClose: () => void }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const board = radioBoards(device).find((item) => item.id === radioId) ?? null;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || panel.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-radio-id]')) return;
+      onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('click', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('click', onClick);
+    };
+  }, [onClose]);
+  if (!board || typeof document === 'undefined') return null;
+  const down = board.operUp === false;
+  const tones = down ? [] : [snrTone(board.snr), rssiTone(board.rssi), signalTone(board.signal), interferenceTone(board.interference)];
+  const verdict = down ? 'poor' : worstTone(tones);
+  const verdictLabel = down ? 'Down' : verdict === 'good' ? 'Healthy' : verdict === 'fair' ? 'Watch' : verdict === 'poor' ? 'Poor' : 'No sample';
+  return createPortal(
+    <div ref={panel} className="drawer-in fixed inset-y-0 right-0 z-[90] flex h-dvh w-full max-w-[420px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl" role="dialog" aria-modal="false" aria-label={`${board.title} radio details`}>
+      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Radio</p>
+          <h2 className="text-lg font-semibold text-foreground">{board.title}</h2>
+          <p className="mt-0.5 font-mono-data text-xs text-muted-foreground">
+            Radio {board.slot} · Channel {board.channel}{board.clients != null ? ` · ${board.clients} clients` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border px-2 py-0.5 text-xs font-semibold" style={{ color: toneColor(verdict), borderColor: toneColor(verdict) }}>{verdictLabel}</span>
+          <button type="button" onClick={onClose} className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted" aria-label="Close radio panel">Close</button>
+        </div>
+      </div>
+      <dl className="space-y-4 px-4 py-4">
+        {radioRows(board).map((row) => (
+          <div key={row.label}>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm text-muted-foreground">{row.label}</dt>
+              <dd className="font-mono-data text-base font-semibold" style={{ color: toneColor(row.tone) }}>{row.value}</dd>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+              <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, row.bar))}%`, backgroundColor: toneColor(row.tone) }} />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{row.hint}</p>
+          </div>
+        ))}
+      </dl>
+    </div>,
+    document.body,
   );
 }
 
