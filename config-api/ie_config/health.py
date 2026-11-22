@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+from .ap_status import looks_like_mac
+
 NOT_SUPPORTED = "not supported by this device"
 
 # Same models the faceplate treats as an access point. A Cisco C9120 added in
@@ -866,6 +868,13 @@ def page_rows(rows: list[dict], *, page: int, page_size: int, q: str = "", wlc: 
             if needle not in blob:
                 continue
         matched.append(row)
+    # Radio samples are often keyed only by MAC. Those rows sort first and
+    # the controller list opens on addresses instead of hostnames.
+    matched.sort(key=lambda row: (
+        1 if looks_like_mac(str(row.get("name") or "")) or not str(row.get("name") or "").strip() else 0,
+        str(row.get("name") or "").lower(),
+        str(row.get("mac") or "").lower(),
+    ))
     total = len(matched)
     start = (page - 1) * page_size
     return {

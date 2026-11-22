@@ -101,6 +101,16 @@ def test_access_point_pages_do_not_return_the_whole_fleet():
     assert page["rows"] == []
     first = page_rows(rows, page=1, page_size=50, q="ap-0007")
     assert [row["name"] for row in first["rows"]] == ["ap-0007"]
+    mixed = page_rows(
+        [
+            {"name": "00:11:22:33:44:55", "mac": "00:11:22:33:44:55", "wlc": "wlc-a", "status": "up"},
+            {"name": "ap-lobby", "mac": "00:aa:bb:cc:dd:ee", "wlc": "wlc-a", "status": "up"},
+        ],
+        page=1,
+        page_size=50,
+        wlc="wlc-a",
+    )
+    assert [row["name"] for row in mixed["rows"]] == ["ap-lobby", "00:11:22:33:44:55"]
 
 
 def test_explain_health_matches_the_badge_and_lists_every_cause():
