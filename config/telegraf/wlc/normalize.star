@@ -132,6 +132,17 @@ def ap_names():
     return state["ap_names"]
 
 
+def remembered_ap(wlc, ap):
+    # Radio oper often carries only the radio MAC. The AP name map, filled
+    # from capwap and the name subscription, turns that MAC into the hostname.
+    if not ap:
+        return ""
+    key = str(wlc) + "|" + str(ap)
+    if key in ap_names():
+        return ap_names()[key]
+    return str(ap)
+
+
 def mac_place():
     if "mac_place" not in state:
         state["mac_place"] = {}
@@ -292,6 +303,11 @@ def radio_metric(metric, blob):
     idx = leaf_index(metric)
     ap = _pick(idx, ("ap_name", "wtp_mac", "name", "ap-name", "wtp-mac"))
     radio = _pick(idx, ("radio_slot_id", "radio", "slot_id", "radio-slot-id", "slot-id"))
+    wlc = who(metric)
+    if ap:
+        remembered = remembered_ap(wlc, ap)
+        if remembered:
+            ap = remembered
     if not ap:
         ap = "unknown"
     if not radio:
@@ -329,6 +345,11 @@ def radio_metric(metric, blob):
     copy_place(metric, out)
     out.tags["ap"] = str(ap)
     out.tags["radio"] = str(radio)
+    if not _mac_text(ap):
+        out.tags["ap_name"] = str(ap)
+    radio_mac = _pick(idx, ("wtp_mac", "wtp-mac", "ethernet_mac", "eth_mac"))
+    if radio_mac and _mac_text(radio_mac):
+        out.tags["mac"] = str(radio_mac)
     if band:
         out.tags["band"] = str(band)
     util = _first_idx(idx, ("cca_util_percentage", "channel_util", "rx_util_percentage", "cca-util-percentage", "bss_chan_util", "bss-chan-util"))

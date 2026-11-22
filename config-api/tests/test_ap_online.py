@@ -33,6 +33,14 @@ def test_hostname_is_not_a_mac_and_the_key_mac_canonicalises():
     assert name == ""
     assert mac == "00:c8:8b:c1:7e:90"
     assert wlc == "OiOB-Bree-WLC01"
+    named, radio_mac, _wlc, _site = ap_identity({
+        "ap": "00:a2:89:10:11:44",
+        "ap_name": "ap-lobby",
+        "radio": "0",
+        "wlc": "wlc-rot-01",
+    })
+    assert named == "ap-lobby"
+    assert radio_mac == "00:a2:89:10:11:44"
 
 
 def test_capwap_enum_and_freshness_window():

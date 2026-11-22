@@ -8,7 +8,15 @@ not implement is explicit ("not supported by this device"), never blank.
 
 from __future__ import annotations
 
+import re
+
 NOT_SUPPORTED = "not supported by this device"
+
+# Same models the faceplate treats as an access point. A Cisco C9120 added in
+# NetBox must not fall through to the generic IOS profile.
+_AP_MODEL = re.compile(
+    r"(?i)(?:\bair-ap|\bair-cap|\bair-lap|\bc91\d{2}ax|\bcw91\d{2}|\bfap[-\s]?\d|\baruba\s*ap|\bmeraki\s*mr|\bmr\d{2,3}\b)"
+)
 
 # temperature: "value" means degrees C, "status" means a state word is the
 # best the platform usually offers (Catalyst 2960 ENVMON).
@@ -120,9 +128,9 @@ def classify_profile(role: str = "", platform: str = "", manufacturer: str = "",
     """Pick the health profile from NetBox role, platform, manufacturer and model."""
     role_l = (role or "").strip().lower().replace("_", "-")
     text = _blob(role, platform, manufacturer, model)
-    if role_l in ("ap", "access-point", "wireless-ap", "access-ap") or any(
-        token in text for token in ("ceiling-ap", "air-ap", "air-cap", "access point", "wireless ap")
-    ):
+    if role_l in ("ap", "access-point", "access-points", "wireless-ap", "access-ap") or any(
+        token in text for token in ("ceiling-ap", "air-ap", "air-cap", "access point", "access-point", "wireless ap")
+    ) or _AP_MODEL.search(text):
         return "ap"
     if any(token in text for token in ("fortigate", "fortios", "fortinet")):
         return "fortigate"

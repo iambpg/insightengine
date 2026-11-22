@@ -26,7 +26,6 @@ import { FACEPLATE_SAMPLES } from '@/lib/mockData';
 import type { DeviceDiscoveryJob } from '@/lib/contract';
 import type { AccessPointRadio, DeviceDetailData, HealthCause, InventorySide, PortInfo } from '@/lib/types';
 import AccessPointList from './AccessPointList';
-import ApLivePanel from './ApLivePanel';
 import CdpNeighbourPanel from './CdpNeighbourPanel';
 import HealthCauses, { type HealthFilter } from './HealthCauses';
 import HealthChecks from './HealthChecks';
@@ -46,12 +45,6 @@ const BASE_TABS = [
   { id: 'logs', label: 'Logs' },
 ] as const;
 type DetailTab = (typeof BASE_TABS)[number]['id'] | 'access-points';
-
-function isAccessPoint(device: DeviceDetailData | null | undefined): boolean {
-  if (!device) return false;
-  if (device.faceplate?.form_factor === 'ceiling-ap') return true;
-  return /access point/i.test(device.role || '');
-}
 
 function isWirelessController(device: DeviceDetailData | null | undefined): boolean {
   if (!device) return false;
@@ -448,15 +441,6 @@ export default function DeviceDetailView() {
 
       {device ? (
         <div ref={stageRef} data-testid="device-stage" className="sticky top-16 z-20 flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden bg-background">
-          {isAccessPoint(device) ? (
-            <div className="shrink-0 border-b border-border bg-background px-3 py-3">
-              <ApLivePanel
-                apKey={device.hostname && device.hostname !== '—' ? device.hostname : device.id}
-                wlcHint={params.get('wlc') ?? ''}
-                telemetryMissing={(device.sources ?? []).some((source) => source.name === 'prometheus' && source.ok === false)}
-              />
-            </div>
-          ) : null}
           <section aria-label="Faceplate" data-testid="device-faceplate" className="shrink-0 rounded-none border-x-0 border-y border-border bg-card px-3 py-2 shadow-card">
             {isMockMode() ? (
               <div role="tablist" aria-label="Devices at this site" className="scroll-thin mb-2 flex gap-2 overflow-x-auto">

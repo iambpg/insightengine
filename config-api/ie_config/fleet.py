@@ -226,7 +226,7 @@ def _role_form(role_slug: str, role_name: str, model: str) -> tuple[str, str]:
     slug = (role_slug or "").strip().lower()
     name = (role_name or "").strip()
     blob = " ".join((slug, name.lower(), (model or "").lower()))
-    if slug in ("access-point", "ap") or "access point" in blob or "access-point" in blob:
+    if slug in ("access-point", "access-points", "access_points", "ap", "wireless-ap") or "access point" in blob or "access-point" in blob:
         return "Access point", "ceiling-ap"
     if "wireless" in blob or slug in ("wlc", "wireless-controller"):
         return "Wireless controller", "wireless-controller"
@@ -771,7 +771,7 @@ def classify_device(netbox: dict | None, netdisco: dict | None) -> dict:
     if form == "ceiling-ap" and not ap_model:
         if _switch_sized(evidence) or port_count_hint >= 12:
             display, form = "Access switch", _switch_form_from_ports(evidence, model or nd_model) if evidence else _size_from_model(model or nd_model)
-        elif not (role_slug.lower() in ("access-point", "ap") or "access point" in role_blob or "access-point" in role_blob):
+        elif not (role_slug.lower() in ("access-point", "access-points", "access_points", "ap", "wireless-ap") or "access point" in role_blob or "access-point" in role_blob):
             display, form = "Unclassified", "generic"
     elif form == "generic" and _ap_shaped(evidence):
         display, form = "Access point", "ceiling-ap"
@@ -1458,6 +1458,26 @@ def _loki_hostname_query(name: str) -> str:
     return '{hostname=~"(?i)%s(\\\\..*)?"}' % literal
 
 
+def _ap_row_hit(row: dict, key: str, suffixes: list[str] | None = None) -> bool:
+    """True when a telemetry row is this access point.
+
+    Name, serial, MAC and IP match. A configured DNS suffix is ignored, so a
+    NetBox name of ap-1.example.com hits the controller name ap-1.
+    """
+    text = (key or "").strip()
+    if not text or not isinstance(row, dict):
+        return False
+    low = text.lower()
+    wanted_mac = canon_mac(text)
+    for field in ("name", "serial", "mac", "ip"):
+        value = str(row.get(field) or "").strip()
+        if value and value.lower() == low:
+            return True
+    if wanted_mac and canon_mac(str(row.get("mac") or "")) == wanted_mac:
+        return True
+    return names_match(str(row.get("name") or ""), text, suffixes)
+
+
 def _syslog_text(raw: str) -> str:
     """Telegraf writes the syslog line as logfmt: message=\"...\"."""
     match = re.match(r'^message="(.*)"\s*$', raw, re.DOTALL)
@@ -2104,16 +2124,9 @@ class FleetService:
                     # Form keys are faceplate samples, not devices. Do not pick a
                     # representative switch or firewall for them.
                     if not is_form_key(key):
-                        lookup = key[3:].strip() if key.lower().startswith("ap:") else key
-                        if lookup:
-                            snap = netdisco_find(self._netdisco_url(), lookup, self._suffixes())
-                            if snap is not None:
-                                detail = _detail_from_netdisco(snap, self._now_dt())
-                                return self._with_degraded(detail, degraded)
-                    if key.lower().startswith("ap:"):
-                        label = key[3:].strip()
-                        if label:
-                            detail = _unknown_ap_detail(label, self._now_dt())
+                        snap = netdisco_find(self._netdisco_url(), key, self._suffixes())
+                        if snap is not None:
+                            detail = _detail_from_netdisco(snap, self._now_dt())
                             return self._with_degraded(detail, degraded)
                     raise ApiError(404, "not_found", "unknown device")
                 try:
@@ -2277,6 +2290,46 @@ class FleetService:
             return match
         return self._find_device(rows, str(match.get("id") or match.get("name") or ""))
 
+    def _ap_for_inventory(self, row: dict) -> dict | None:
+        """Telemetry row for a NetBox access point: name, serial, then management IP."""
+        device = row.get("_device") if isinstance(row.get("_device"), dict) else {}
+        keys = []
+        for value in (row.get("hostname"), device.get("name"), device.get("serial"), device.get("ip"), row.get("mgmtIp")):
+            text = str(value or "").strip()
+            if text and text not in ("—", "-") and text not in keys:
+                keys.append(text)
+        found = None
+        for key in keys:
+            found = self._find_ap(key)
+            if found is not None:
+                break
+        if found is None:
+            return None
+        if found.get("radios"):
+            return found
+        return self._with_sibling_radios(found)
+
+    def _with_sibling_radios(self, found: dict) -> dict:
+        """Radio samples are sometimes stored on the MAC row, not the hostname row."""
+        cached = self.cache.get("ap-snapshot")
+        rows = list((cached or {}).get("rows") or []) if isinstance(cached, dict) else []
+        suffixes = self._suffixes()
+        name = str(found.get("name") or "")
+        mac = canon_mac(str(found.get("mac") or ""))
+        radios = []
+        for other in rows:
+            if other is found:
+                continue
+            same_name = names_match(str(other.get("name") or ""), name, suffixes)
+            same_mac = bool(mac) and canon_mac(str(other.get("mac") or "")) == mac
+            if (same_name or same_mac) and other.get("radios"):
+                radios.extend(other.get("radios") or [])
+        if not radios:
+            return found
+        merged = dict(found)
+        merged["radios"] = radios
+        return merged
+
     def _find_ap(self, key: str) -> dict | None:
         text = unquote(key or "").strip()
         if text.lower().startswith("ap:"):
@@ -2284,7 +2337,7 @@ class FleetService:
         if not text:
             return None
         low = text.lower()
-        wanted_mac = canon_mac(text)
+        suffixes = self._suffixes()
         cached = self.cache.get("ap-snapshot")
         rows = list((cached or {}).get("rows") or []) if isinstance(cached, dict) else []
         if not rows:
@@ -2299,31 +2352,12 @@ class FleetService:
                 return None
             rows = list((snap or {}).get("rows") or [])
             for row in rows:
-                values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
-                same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
-                if low in values or same_mac:
+                if _ap_row_hit(row, text, suffixes):
                     self.cache.put("ap-one:" + low, row, ttl=60)
                     return row
             return None
         for row in rows:
-            values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
-            same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
-            if low in values or same_mac:
-                return row
-        one = self.cache.get("ap-one:" + low)
-        if isinstance(one, dict):
-            return one
-        try:
-            with self._session() as client:
-                snap = self._ap_snapshot(client, only=text)
-        except Exception:
-            log.warning("access point lookup failed for %s", text)
-            return None
-        for row in list((snap or {}).get("rows") or []):
-            values = [str(row.get(field) or "").lower() for field in ("name", "serial", "mac", "ip")]
-            same_mac = bool(wanted_mac) and canon_mac(str(row.get("mac") or "")) == wanted_mac
-            if low in values or same_mac:
-                self.cache.put("ap-one:" + low, row, ttl=60)
+            if _ap_row_hit(row, text, suffixes):
                 return row
         return None
 
@@ -3032,13 +3066,23 @@ class FleetService:
             device.get("manufacturer") or "",
             device.get("model") or "",
         )
+        if form == "ceiling-ap":
+            profile = "ap"
         mem = cached.get("mem")
         fan_states = [_env_state(sample, "ciscoEnvMonFanState") or _env_state(sample, "cefcFanTrayOperStatus") or _env_state(sample, "state") for sample in cached.get("fans") or []]
         psu_states = [_env_state(sample, "ciscoEnvMonSupplyState") or _env_state(sample, "cefcFRUPowerOperStatus") or _env_state(sample, "state") for sample in cached.get("psus") or []]
         psu_states.extend(aireos_psu_states(cached.get("aireos_psu") or []))
         fan_clean = [item for item in fan_states if item]
         psu_clean = [item for item in psu_states if item]
-        ap_row = self._find_ap(row["hostname"]) if profile == "ap" else None
+        ap_row = self._ap_for_inventory(row) if profile == "ap" else None
+        if profile == "ap" and (ap_row is None or not ap_row.get("radios")):
+            direct = self._ap_for_device(client, row["hostname"])
+            if direct and direct.get("radios"):
+                if ap_row is None:
+                    ap_row = direct
+                else:
+                    ap_row = dict(ap_row)
+                    ap_row["radios"] = direct["radios"]
         health_panel = build_health_panel(
             profile,
             cpu=None if cached.get("cpu") is None else float(cached["cpu"]),
@@ -3873,12 +3917,8 @@ class FleetService:
         cached = self.cache.get("ap-snapshot")
         if not cached:
             return None
-        wanted = (hostname or "").strip()
-        mac = canon_mac(wanted)
         for row in cached.get("rows") or []:
-            same_name = str(row.get("name") or "").lower() == wanted.lower()
-            same_mac = bool(mac) and canon_mac(str(row.get("mac") or "")) == mac
-            if same_name or same_mac:
+            if _ap_row_hit(row, hostname, self._suffixes()):
                 return row
         return None
 
@@ -3894,33 +3934,50 @@ class FleetService:
             except Exception:
                 cached = None
             cached = self.cache.get("ap-snapshot") or cached
-        mac = canon_mac(wanted)
+        matched = None
         for row in (cached or {}).get("rows") or []:
-            same_name = str(row.get("name") or "").lower() == wanted.lower()
-            same_mac = bool(mac) and canon_mac(str(row.get("mac") or "")) == mac
-            if same_name or same_mac:
-                return {
-                    "status": row.get("status") or "",
-                    "clients": row.get("clients"),
-                    "uptimeSeconds": row.get("uptimeSeconds"),
-                    "radios": list(row.get("radios") or []),
-                }
-        safe = prom_escape(wanted)
-        clients = self._prom(client, 'ie_wlc_ap_clients{ap_name="%s"} or sum(ie_wlc_radio_clients{ap_name="%s"})' % (safe, safe))
-        uptime = self._prom(client, 'ie_wlc_ap_uptime_centiseconds{ap_name="%s"}' % safe)
+            if _ap_row_hit(row, wanted, self._suffixes()):
+                matched = self._with_sibling_radios(row)
+                if matched.get("radios"):
+                    return {
+                        "status": matched.get("status") or "",
+                        "clients": matched.get("clients"),
+                        "uptimeSeconds": matched.get("uptimeSeconds"),
+                        "radios": list(matched.get("radios") or []),
+                    }
+                break
+        idents = []
+        for value in (wanted, (matched or {}).get("name"), (matched or {}).get("mac")):
+            text = str(value or "").strip()
+            short = strip_hostname(text, self._suffixes())
+            for item in (text, short):
+                if item and item not in idents:
+                    idents.append(item)
+        def labeled(metric: str) -> str:
+            parts = []
+            for item in idents:
+                safe = prom_escape(item)
+                parts.append('%s{ap="%s"}' % (metric, safe))
+                parts.append('%s{ap_name="%s"}' % (metric, safe))
+            return " or ".join(parts)
+        safe = prom_escape(idents[0] if idents else wanted)
+        clients = self._prom(client, labeled("ie_wlc_ap_clients") + ' or sum(ie_wlc_radio_clients{ap_name="%s"})' % safe)
+        uptime = self._prom(client, 'ie_wlc_ap_uptime_centiseconds{ap_name="%s"} or ie_wlc_ap_uptime_centiseconds{ap="%s"}' % (safe, safe))
         radios = self._join_ap_radios(
-            self._prom(client, 'ie_wlc_radio_channel{ap="%s"} or ie_wlc_radio_channel{ap_name="%s"}' % (safe, safe)),
-            self._prom(client, 'ie_wlc_radio_channel_util{ap="%s"} or ie_wlc_radio_channel_util{ap_name="%s"}' % (safe, safe)),
-            self._prom(client, 'ie_wlc_radio_clients{ap="%s"} or ie_wlc_radio_clients{ap_name="%s"}' % (safe, safe)),
+            self._prom(client, labeled("ie_wlc_radio_channel")),
+            self._prom(client, labeled("ie_wlc_radio_channel_util")),
+            self._prom(client, labeled("ie_wlc_radio_clients")),
         )
         seconds = _first_value(uptime)
         if seconds is not None:
             seconds = float(seconds) / 100.0
+        client_count = _first_value(clients)
+        base = matched or {}
         return {
-            "status": "",
-            "clients": _first_value(clients),
-            "uptimeSeconds": seconds,
-            "radios": radios,
+            "status": base.get("status") or "",
+            "clients": client_count if client_count is not None else base.get("clients"),
+            "uptimeSeconds": seconds if seconds is not None else base.get("uptimeSeconds"),
+            "radios": radios or list(base.get("radios") or []),
         }
 
     def _join_ap_radios(self, channels, utils, clients) -> list[dict]:
@@ -3928,7 +3985,7 @@ class FleetService:
 
         def slot_of(sample: dict) -> str:
             metric = sample.get("metric") or {}
-            return str(metric.get("slot") or metric.get("index") or "")
+            return str(metric.get("slot") or metric.get("radio") or metric.get("index") or "")
 
         for sample in channels or []:
             key = slot_of(sample)
@@ -4789,31 +4846,6 @@ def _join_ports(oper, admin, speed, inbound, outbound, errors, discards_in=None,
         ports.append(port)
     ports.sort(key=lambda item: item["name"].lower())
     return ports
-
-
-def _unknown_ap_detail(name: str, now: datetime) -> dict:
-    """AP page for a name that telemetry and NetBox have not seen yet."""
-    detail = _empty_detail("ceiling-ap", now)
-    detail["id"] = "ap:%s" % name
-    detail["hostname"] = name
-    face = detail.get("faceplate") if isinstance(detail.get("faceplate"), dict) else {}
-    face["hostname"] = name
-    face["apState"] = "unknown"
-    detail["faceplate"] = face
-    detail["inNetbox"] = False
-    detail["status"] = "unknown"
-    detail["neighbors"] = []
-    detail["neighborNote"] = ""
-    detail["interfaces"] = []
-    detail["addresses"] = []
-    detail["history"] = []
-    detail["healthPanel"] = build_health_panel("ap")
-    detail["sources"] = [
-        {"name": "netbox", "ok": False, "detail": "Not in NetBox"},
-        {"name": "prometheus", "ok": False, "detail": "Not in Prometheus. Telemetry from this AP is not arriving."},
-        {"name": "alertmanager", "ok": False, "detail": ""},
-    ]
-    return detail
 
 
 def _minimal_detail(row: dict, now: datetime) -> dict:
@@ -5751,18 +5783,6 @@ def events_from_range(result: list[dict], what: str) -> list[dict]:
     return events
 
 
-def _audit_ap_live(request: Request, user, result: str, detail: str) -> None:
-    audit = getattr(request.app.state, "audit", None)
-    sf = getattr(request.app.state, "sf", None)
-    if audit is None or sf is None or user is None:
-        return
-    from .auth import client_ip
-    try:
-        audit(sf, user, "ap-live", client_ip(request), result, "device-cli", "", "", (detail or "")[:500])
-    except Exception:
-        log.warning("access point live audit failed")
-
-
 def mount_fleet(app, user_of) -> None:
     def fleet() -> FleetService:
         service = getattr(app.state, "fleet", None)
@@ -5784,29 +5804,6 @@ def mount_fleet(app, user_of) -> None:
     def summary(request: Request):
         reader(request)
         return fleet().summary()
-
-    @app.get("/api/v1/access-points/live")
-    def access_point_live(request: Request):
-        user = reader(request)
-        params = request.query_params
-        key = (params.get("key") or "")[:200]
-        hint = (params.get("wlc") or "")[:200]
-        refresh = (params.get("refresh") or "").lower() in ("1", "true", "yes")
-        include_raw = False
-        try:
-            from .auth import can_operate
-            include_raw = can_operate(getattr(user, "role", ""))
-        except Exception:
-            include_raw = False
-        from .ap_live import live_access_point
-        try:
-            body = live_access_point(fleet(), key, hint=hint, refresh=refresh, include_raw=include_raw)
-        except ApiError as exc:
-            _audit_ap_live(request, user, "failed", exc.code)
-            raise
-        wlc_name = ((body.get("wlc") or {}).get("name") or "")
-        _audit_ap_live(request, user, "ok", ("%s %s" % (key, wlc_name)).strip())
-        return body
 
     @app.get("/api/v1/access-points/detail")
     def access_point_detail(request: Request):

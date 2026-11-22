@@ -119,18 +119,9 @@ export async function syncNetbox(_deviceId: string) {
   return { ok: true, updated: ['model', 'serial', 'firmware'], note: '' };
 }
 
-function liveScene(): string {
-  if (typeof window === 'undefined') return '';
-  return new URLSearchParams(window.location.search).get('scene') || '';
-}
-
 export async function getDevice(form: string): Promise<DeviceDetailData> {
   await delay(350);
-  const device = buildDeviceDetail(form);
-  if (liveScene() === 'noprom') {
-    return { ...device, sources: [{ name: 'prometheus', ok: false, detail: 'Not in Prometheus' }] };
-  }
-  return device;
+  return buildDeviceDetail(form);
 }
 
 export async function getHierarchy() {
@@ -162,126 +153,6 @@ const ACCESS_POINTS = [
   { name: 'ap-ams01-115', mac: '0.17.34.1.0.2', wlc: 'wlc-ein02', site: 'Rotterdam', netboxSite: 'Rotterdam', status: 'up', clients: 4, uptimeSeconds: 43200, model: 'C9115AXI', serial: 'FGL000115', ip: '10.8.1.115', neighborSwitch: 'sw-ams01', neighborPort: 'Gi1/0/15', radios: [{ slot: '0', channel: 44, utilization: 0.08, clients: 4 }], ssids: [] },
   { name: 'ap-rot04-002', mac: '0.17.34.1.0.3', wlc: 'wlc-ein02', site: 'Rotterdam', netboxSite: '', status: 'down', clients: 0, uptimeSeconds: null, radios: [], ssids: [] },
 ];
-
-const LIVE_FETCHED = '2026-11-22T10:15:04.000Z';
-
-const IOSXE_LIVE = {
-  name: 'AP-LOBBY-12',
-  mac: '00:a2:89:10:11:44',
-  ip: '10.20.30.44',
-  model: 'C9120AXI-E',
-  serial: 'FGL2345AB12',
-  ios: '17.9.4.27',
-  mode: 'Local',
-  adminState: 'Enabled',
-  operState: 'Registered',
-  uptime: '3 days 4 hours 12 minutes 8 seconds',
-  joinTime: '11/18/2026 08:14:02',
-  location: 'Floor 2',
-  country: 'ZA',
-  primaryController: 'wlc-rot-01',
-  secondaryController: 'wlc-rot-02',
-  siteTag: 'site-rotterdam',
-  policyTag: 'policy-corp',
-  rfTag: 'rf-default',
-  apGroup: null,
-  flexGroup: null,
-  power: 'PoE/Full Power',
-  cdpSwitch: 'sw-rot-01',
-  cdpPort: 'GigabitEthernet1/0/14',
-  radios: [
-    { slot: '0', admin: 'Enabled', oper: 'Up', channel: '6', txPower: '* 2/8 (15 dBm)' },
-    { slot: '1', admin: 'Enabled', oper: 'Up', channel: '36', txPower: '* 1/8 (17 dBm)' },
-  ],
-};
-
-const AIREOS_LIVE = {
-  name: 'AP-CAFE-3',
-  mac: '00:b4:c1:20:30:40',
-  ip: '10.20.30.45',
-  model: 'AIR-AP2802I-E-K9',
-  serial: 'FGL998877665',
-  ios: '8.10.190.0',
-  mode: 'FlexConnect',
-  adminState: 'ADMIN_ENABLED',
-  operState: 'REGISTERED',
-  uptime: '2 days, 03 h 11 m 04 s',
-  joinTime: null,
-  location: 'Cafe',
-  country: 'ZA',
-  primaryController: 'wlc-aireos-01',
-  secondaryController: 'wlc-aireos-02',
-  siteTag: null,
-  policyTag: null,
-  rfTag: null,
-  apGroup: 'default-group',
-  flexGroup: 'flex-rot',
-  power: 'PoE/Full Power',
-  cdpSwitch: 'sw-cafe-1',
-  cdpPort: 'GigabitEthernet1/0/4',
-  radios: [
-    { slot: '0', admin: 'Enabled', oper: 'Up', channel: '1', txPower: '*1/8 (17 dBm)' },
-    { slot: '1', admin: 'Enabled', oper: 'Up', channel: '44', txPower: '*2/8 (14 dBm)' },
-  ],
-};
-
-function liveBody(platform: 'iosxe' | 'aireos', wlc: string) {
-  if (platform === 'aireos') {
-    return {
-      accessPoint: AIREOS_LIVE,
-      wlc: { id: '2', name: wlc || 'wlc-aireos-01', ip: '10.20.1.20', platform: 'aireos' },
-      resolvedBy: 'metrics' as const,
-      fetchedAt: LIVE_FETCHED,
-      cached: false,
-      attempts: [{ wlc: wlc || 'wlc-aireos-01', result: 'ok', code: '', message: '' }],
-    };
-  }
-  return {
-    accessPoint: IOSXE_LIVE,
-    wlc: { id: '1', name: wlc || 'wlc-rot-01', ip: '10.20.1.10', platform: 'iosxe' },
-    resolvedBy: 'metrics' as const,
-    fetchedAt: LIVE_FETCHED,
-    cached: false,
-    attempts: [{ wlc: wlc || 'wlc-rot-01', result: 'ok', code: '', message: '' }],
-  };
-}
-
-export async function getAccessPointLive(key: string, wlc = '', _refresh = false) {
-  const scene = liveScene();
-  if (scene === 'search') {
-    await delay(20000);
-    return liveBody('iosxe', wlc);
-  }
-  if (scene === 'nocreds') {
-    throw new ApiError(409, 'no_ssh_credentials', 'No SSH credentials are saved for wlc-rot-01. Save them in Device CLI for that wireless controller.', { wlc: { id: '42', name: 'wlc-rot-01' } });
-  }
-  if (scene === 'unreachable') {
-    throw new ApiError(502, 'wlc_unreachable', 'Could not open SSH to wlc-rot-01 (10.20.1.10). TCP 22 timed out or was refused.', { attempts: [] });
-  }
-  if (scene === 'auth') {
-    throw new ApiError(502, 'wlc_auth_failed', 'SSH authentication to wlc-rot-01 failed. Check the username and password saved for that wireless controller.', { attempts: [] });
-  }
-  if (scene === 'noip') {
-    throw new ApiError(409, 'no_management_ip', 'wlc-rot-01 has no management IP, so SSH was not attempted.', { attempts: [] });
-  }
-  if (scene === 'notfound') {
-    throw new ApiError(404, 'ap_not_found', 'Access point AP-LOBBY-12 was not found on any wireless controller. Searched 2: wlc-rot-01, wlc-aireos-01.', { attempts: [] });
-  }
-  if (scene === 'onewlc') {
-    throw new ApiError(404, 'ap_not_found_on_wlc', 'Access point AP-LOBBY-12 was not found on wlc-rot-01.', { wlc: { id: '1', name: 'wlc-rot-01' } });
-  }
-  if (scene === 'badname') {
-    throw new ApiError(400, 'bad_ap_name', 'Access point name may only contain letters, numbers, dots, underscores, colons and hyphens, and must be at most 64 characters.', { attempts: [] });
-  }
-  if (scene === 'busy') {
-    throw new ApiError(503, 'busy', 'Live AP lookups are busy. Try again.', { attempts: [] });
-  }
-  await delay(80);
-  if (scene === 'aireos' || wlc.toLowerCase().includes('aireos') || key.toLowerCase().includes('cafe')) {
-    return liveBody('aireos', wlc);
-  }
-  return liveBody('iosxe', wlc);
-}
 
 export async function getAccessPointDetail(wlc: string, name: string) {
   await delay(80);
