@@ -44,6 +44,32 @@ def looks_like_mac(value: str) -> bool:
     return bool(canon_mac(value))
 
 
+def radio_band(band, channel=None) -> str:
+    """Turn a controller radio type into 2.4 GHz, 5 GHz or 6 GHz.
+
+    Catalyst MDT sends words such as ``dot11-radio-type-a``. The page used to
+    print that word with "GHz" stuck on the end.
+    """
+    text = str(band or "").strip().lower().replace("_", "-")
+    if any(token in text for token in ("6ghz", "6-ghz", "type-6", "6 ghz")):
+        return "6 GHz"
+    if any(token in text for token in ("2.4", "2-4", "type-b", "type-g", "type-bg", "802.11b", "802.11g", "24ghz", "24-ghz")):
+        return "2.4 GHz"
+    if text.endswith("-a") or any(token in text for token in ("type-a", "802.11a", "5ghz", "5-ghz")):
+        return "5 GHz"
+    if "5" in text and "ghz" in text:
+        return "5 GHz"
+    try:
+        number = int(float(channel))
+    except (TypeError, ValueError):
+        return ""
+    if 1 <= number <= 14:
+        return "2.4 GHz"
+    if number >= 36:
+        return "5 GHz"
+    return ""
+
+
 def interpret_oper_text(value) -> str | None:
     """Map a capwap / AireOS state word. None when the text is not a state."""
     text = str(value or "").strip().lower().replace("_", "-")

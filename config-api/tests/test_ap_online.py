@@ -13,6 +13,7 @@ from ie_config.ap_status import (  # noqa: E402
     finish_ap_status,
     interpret_oper_text,
     looks_like_mac,
+    radio_band,
     sample_fresh,
 )
 
@@ -41,6 +42,14 @@ def test_hostname_is_not_a_mac_and_the_key_mac_canonicalises():
     })
     assert named == "ap-lobby"
     assert radio_mac == "00:a2:89:10:11:44"
+
+
+def test_controller_radio_type_becomes_a_band():
+    assert radio_band("dot11-radio-type-a") == "5 GHz"
+    assert radio_band("dot11-radio-type-bg") == "2.4 GHz"
+    assert radio_band("", 36) == "5 GHz"
+    assert radio_band("", 6) == "2.4 GHz"
+    assert radio_band("dot11-6ghz") == "6 GHz"
 
 
 def test_capwap_enum_and_freshness_window():

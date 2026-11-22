@@ -1177,7 +1177,11 @@ def test_netbox_access_point_reads_radio_telemetry(stack):
     assert body["healthPanel"]["profile"] == "ap"
     assert "MDT" in body["healthPanel"]["accessPoint"]["note"]
     assert [item["channel"] for item in body["healthPanel"]["accessPoint"]["radios"]] == [6, 36]
-    assert [item["channel"] for item in body["faceplate"]["radios"]] == [6, 36]
+    drawn = body["faceplate"]["radios"]
+    assert [item["channel"] for item in drawn] == [6, 36]
+    assert [item["state"] for item in drawn] == ["up", "up"]
+    assert [item["band"] for item in drawn] == ["2.4 GHz", "5 GHz"]
+    assert all(item["utilisation"] == 0 for item in drawn)
     assert body["health"] == "healthy"
     assert body["reachable"] is True
     joined = [item["title"] + " " + item.get("detail", "") for item in body.get("healthItems") or []]

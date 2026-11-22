@@ -19,7 +19,7 @@ export const AP_W = 470;
 export const AP_H = 190;
 
 export default function ApLayout({ ports, radios, apState, uid, selectedId, onHover, onSelect, selectedRadioId = null, onRadioHover, onRadioSelect }: ApProps) {
-  const c = STATE_COLOR[apState];
+  const c = STATE_COLOR[apState] || STATE_COLOR.unknown;
   return (
     <g>
       {/* TOP VIEW */}
@@ -70,8 +70,12 @@ export default function ApLayout({ ports, radios, apState, uid, selectedId, onHo
       <g transform="translate(180 128)">
         <text x={0} y={0} fontSize={6} fill="var(--down)" fontFamily="var(--font-mono)" letterSpacing="0.1em">RADIOS</text>
         {radios.map((r, i) => {
-          const rc = STATE_COLOR[r.state];
+          const rc = STATE_COLOR[r.state] || STATE_COLOR.unknown;
           const isSel = selectedRadioId === r.id;
+          const channel = r.channel == null || r.channel === '' ? '—' : r.channel;
+          const clients = r.clients == null || r.clients === '' ? '—' : r.clients;
+          const utilisation = Number(r.utilisation);
+          const bar = Number.isFinite(utilisation) ? Math.max(0, Math.min(100, utilisation)) : 0;
           return (
             <g
               key={r.id}
@@ -79,7 +83,7 @@ export default function ApLayout({ ports, radios, apState, uid, selectedId, onHo
               role="button"
               tabIndex={0}
               aria-pressed={isSel}
-              aria-label={`${r.band} radio, channel ${r.channel}, ${r.clients} clients, ${r.utilisation}% utilisation. Press Enter for details.`}
+              aria-label={`${r.band || 'Radio'} radio, channel ${channel}, ${clients} clients, ${bar}% utilisation. Press Enter for details.`}
               style={{ cursor: 'pointer', outline: 'none' }}
               onMouseEnter={(e) => onRadioHover?.(r, e.currentTarget)}
               onMouseLeave={() => onRadioHover?.(null, null)}
@@ -96,9 +100,9 @@ export default function ApLayout({ ports, radios, apState, uid, selectedId, onHo
               <rect width={86} height={42} rx={5} fill="var(--card)" stroke={rc.fill} strokeWidth={isSel ? 2.4 : 1.2} />
               <circle cx={9} cy={10} r={3} fill={rc.fill} filter={`url(#${uid}-glow)`} className={r.state === 'warning' ? 'led-warn-blink' : undefined} />
               <text x={16} y={12.5} fontSize={6.6} fontWeight={600} fill="var(--foreground)" fontFamily="var(--font-sans)">{r.band}</text>
-              <text x={8} y={25} fontSize={5.6} fill="var(--muted-foreground)" fontFamily="var(--font-mono)">{`ch ${r.channel} · ${r.clients} clients`}</text>
+              <text x={8} y={25} fontSize={5.6} fill="var(--muted-foreground)" fontFamily="var(--font-mono)">{`ch ${channel} · ${clients} clients`}</text>
               <rect x={8} y={31} width={70} height={4} rx={2} fill="var(--muted)" />
-              <rect x={8} y={31} width={(70 * r.utilisation) / 100} height={4} rx={2} fill={rc.fill} />
+              <rect x={8} y={31} width={(70 * bar) / 100} height={4} rx={2} fill={rc.fill} />
             </g>
           );
         })}

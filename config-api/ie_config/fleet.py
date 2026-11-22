@@ -40,6 +40,7 @@ from .ap_status import (
     explicit_status,
     finish_ap_status,
     looks_like_mac,
+    radio_band,
     sample_fresh,
 )
 from .health import (
@@ -1368,6 +1369,43 @@ def _fill_radio(dest: dict, src: dict) -> None:
     for field in _RADIO_FIELDS:
         if dest.get(field) in (None, "") and src.get(field) not in (None, ""):
             dest[field] = src[field]
+
+
+def _radios_need_channel(radios) -> bool:
+    """True when this access point still has no channel sample."""
+    found = [item for item in radios or [] if isinstance(item, dict)]
+    if not found:
+        return True
+    return not any(item.get("channel") not in (None, "") for item in found)
+
+
+def _merge_radio_slots(primary, extra) -> list[dict]:
+    """Keep SNR on the hostname row and fill channel from the radio-MAC row."""
+    radios = {str(item.get("slot") or ""): dict(item) for item in primary or [] if isinstance(item, dict)}
+    for radio in extra or []:
+        if not isinstance(radio, dict):
+            continue
+        slot = str(radio.get("slot") or "")
+        dest = radios.get(slot)
+        if dest is None:
+            radios[slot] = dict(radio)
+        else:
+            _fill_radio(dest, radio)
+    return list(radios.values())
+
+
+def _label_radios(radios) -> list[dict]:
+    """Store the band as 2.4 GHz / 5 GHz / 6 GHz when the controller type says so."""
+    labeled = []
+    for radio in radios or []:
+        if not isinstance(radio, dict):
+            continue
+        item = dict(radio)
+        named = radio_band(item.get("band"), item.get("channel"))
+        if named:
+            item["band"] = named
+        labeled.append(item)
+    return labeled
 
 
 def _coalesce_ap_rows(rows: dict) -> None:
@@ -2814,17 +2852,8 @@ class FleetService:
             # Radios are MDT from the controller. The AP has no ifTable.
             panel = detail.get("healthPanel") if isinstance(detail.get("healthPanel"), dict) else {}
             point = panel.get("accessPoint") if isinstance(panel.get("accessPoint"), dict) else {}
-            face["radios"] = [
-                {
-                    "id": str(radio.get("slot") or index),
-                    "band": str(radio.get("band") or ("Radio %s" % (radio.get("slot") or index))),
-                    "channel": radio.get("channel"),
-                    "clients": radio.get("clients"),
-                    "avgRssi": None if radio.get("rssiAvg") is None else "%s dBm" % radio.get("rssiAvg"),
-                }
-                for index, radio in enumerate(point.get("radios") or [])
-                if isinstance(radio, dict)
-            ]
+            ap_status = str(point.get("status") or face.get("apState") or "")
+            face["radios"] = _face_radios(point.get("radios") or [], ap_status)
         else:
             face["snmpAt"] = detail.get("_snmp_at") or ""
             if "_snmp_missing" in detail:
@@ -3138,14 +3167,21 @@ class FleetService:
         fan_clean = [item for item in fan_states if item]
         psu_clean = [item for item in psu_states if item]
         ap_row = self._ap_for_inventory(row) if profile == "ap" else None
-        if profile == "ap" and (ap_row is None or not ap_row.get("radios")):
+        if profile == "ap" and _radios_need_channel((ap_row or {}).get("radios")):
             direct = self._ap_for_device(client, row["hostname"])
             if direct and direct.get("radios"):
                 if ap_row is None:
                     ap_row = direct
                 else:
                     ap_row = dict(ap_row)
-                    ap_row["radios"] = direct["radios"]
+                    ap_row["radios"] = _merge_radio_slots(ap_row.get("radios") or [], direct.get("radios") or [])
+                    if ap_row.get("clients") is None and direct.get("clients") is not None:
+                        ap_row["clients"] = direct["clients"]
+                    if ap_row.get("uptimeSeconds") is None and direct.get("uptimeSeconds") is not None:
+                        ap_row["uptimeSeconds"] = direct["uptimeSeconds"]
+        if ap_row and ap_row.get("radios"):
+            ap_row = dict(ap_row)
+            ap_row["radios"] = _label_radios(ap_row.get("radios") or [])
         health_panel = build_health_panel(
             profile,
             cpu=None if cached.get("cpu") is None else float(cached["cpu"]),
@@ -4081,6 +4117,7 @@ class FleetService:
             self._prom(client, _wlc_recent(labeled("ie_wlc_client_radio_snr_avg"))),
             self._prom(client, _wlc_recent(labeled("ie_wlc_client_radio_rssi_avg"))),
             self._prom(client, _wlc_recent(labeled("ie_wlc_radio_oper_up"))),
+            self._prom(client, _wlc_recent(labeled("ie_wlc_radio_interference"))),
         )
         seconds = _first_value(uptime)
         if seconds is not None:
@@ -4094,7 +4131,7 @@ class FleetService:
             "radios": radios or list(base.get("radios") or []),
         }
 
-    def _join_ap_radios(self, channels, utils, clients, snr=None, rssi=None, oper=None) -> list[dict]:
+    def _join_ap_radios(self, channels, utils, clients, snr=None, rssi=None, oper=None, interference=None) -> list[dict]:
         by_slot: dict[str, dict] = {}
 
         def slot_of(sample: dict) -> str:
@@ -4103,10 +4140,14 @@ class FleetService:
 
         def ensure(sample: dict) -> dict:
             key = slot_of(sample)
-            return by_slot.setdefault(key, {
+            radio = by_slot.setdefault(key, {
                 "slot": key, "channel": None, "utilization": None, "clients": None,
-                "snrAvg": None, "rssiAvg": None, "operUp": None,
+                "snrAvg": None, "rssiAvg": None, "operUp": None, "interference": None, "band": "",
             })
+            named = radio_band((sample.get("metric") or {}).get("band"), radio.get("channel"))
+            if named:
+                radio["band"] = named
+            return radio
 
         for sample in channels or []:
             ensure(sample)["channel"] = _sample_value(sample)
@@ -4122,6 +4163,12 @@ class FleetService:
         for sample in oper or []:
             value = _sample_value(sample)
             ensure(sample)["operUp"] = None if value is None else bool(float(value) >= 1)
+        for sample in interference or []:
+            ensure(sample)["interference"] = _sample_value(sample)
+        for radio in by_slot.values():
+            named = radio_band(radio.get("band"), radio.get("channel"))
+            if named:
+                radio["band"] = named
         return [by_slot[key] for key in sorted(by_slot)]
 
     def list_access_points(self, *, page: int, page_size: int, q: str, wlc: str, site: str, status: str) -> dict:
@@ -5494,6 +5541,62 @@ def _detail_from_netdisco(snap: dict, now: datetime) -> dict:
         ],
         "comparison": comparison,
     }
+
+
+def _face_band(band, channel) -> str:
+    """Band label the access-point drawing can show."""
+    return radio_band(band, channel) or "Radio"
+
+
+def _face_number(value, whole: bool = False):
+    """A number the drawing can print, or an em dash when the sample is missing."""
+    if value in (None, ""):
+        return "—"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if whole:
+        return int(number)
+    return number
+
+
+def _face_radios(radios, ap_status: str) -> list[dict]:
+    """Radios for the ceiling drawing.
+
+    The drawing reads state, channel, clients and utilisation directly. A
+    missing state used to throw in the browser and blank the whole page.
+    """
+    drawn = []
+    status = str(ap_status or "").strip().lower()
+    for index, radio in enumerate(radios or []):
+        if not isinstance(radio, dict):
+            continue
+        slot = str(radio.get("slot") or index)
+        channel = radio.get("channel")
+        util = radio.get("utilization")
+        utilisation = 0
+        if isinstance(util, (int, float)) and not isinstance(util, bool):
+            percent = float(util) * 100.0 if abs(float(util)) <= 1 else float(util)
+            utilisation = max(0, min(100, round(percent)))
+        oper = radio.get("operUp")
+        if oper is False or status == "down":
+            state = "down"
+        elif oper is True or status == "up":
+            state = "up"
+        else:
+            state = "unknown"
+        rssi = radio.get("rssiAvg")
+        drawn.append({
+            "id": slot,
+            "band": _face_band(radio.get("band"), channel),
+            "channel": _face_number(channel, whole=True),
+            "state": state,
+            "clients": _face_number(radio.get("clients"), whole=True),
+            "utilisation": utilisation,
+            "avgRssi": None if rssi is None else "%s dBm" % rssi,
+        })
+    return drawn
 
 
 def _faceplate(form: str, role: str, hostname: str, model: str, ports: list[dict], identity: dict | None = None) -> dict:
