@@ -18,6 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import httpx
+from fastapi import Request
 
 from .errors import ApiError
 from .fleet import UpstreamError, netbox_headers
@@ -592,16 +593,16 @@ def mount_experience(app, user_of) -> None:
         return user
 
     @app.get("/api/v1/experience")
-    def experience(request):
+    def experience(request: Request):
         reader(request)
         return service().summary()
 
     @app.get("/api/v1/devices/{device_id}/ip-sla-config")
-    def ip_sla(device_id: str, request):
+    def ip_sla(device_id: str, request: Request):
         reader(request)
         return service().ip_sla(device_id)
 
     @app.get("/api/v1/devices/{device_id}/telemetry-config")
-    def telemetry(device_id: str, request):
+    def telemetry(device_id: str, request: Request):
         reader(request)
         return service().telemetry(device_id)
