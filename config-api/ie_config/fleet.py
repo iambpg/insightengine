@@ -4414,7 +4414,12 @@ class FleetService:
             if not row.get("name"):
                 row["name"] = row.get("mac") or "unknown"
             ordered.append(row)
-        ordered.sort(key=lambda item: (str(item["wlc"]).lower(), str(item["name"]).lower(), str(item["mac"]).lower()))
+        ordered.sort(key=lambda item: (
+            str(item.get("wlc") or "").lower(),
+            1 if looks_like_mac(str(item.get("name") or "")) or not str(item.get("name") or "").strip() else 0,
+            str(item.get("name") or "").lower(),
+            str(item.get("mac") or "").lower(),
+        ))
         return {"rows": ordered, "degraded": False}
 
     def access_point_detail(self, wlc: str, name: str) -> dict:
